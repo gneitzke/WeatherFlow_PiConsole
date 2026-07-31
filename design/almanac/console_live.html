@@ -39,7 +39,7 @@
   :root[data-theme="night"] {
     --paper:      #14171D;
     --ink:        #ECE6D5;
-    --ink-soft:   #918D7D;
+    --ink-soft:   #A7A290;
     --rule:       rgba(236, 230, 213, 0.30);
     --rule-faint: rgba(236, 230, 213, 0.14);
     --dot:        rgba(236, 230, 213, 0.38);
@@ -59,7 +59,7 @@
     :root:not([data-theme="paper"]):not([data-theme="light"]) {
       --paper:      #14171D;
       --ink:        #ECE6D5;
-      --ink-soft:   #918D7D;
+      --ink-soft:   #A7A290;
       --rule:       rgba(236, 230, 213, 0.30);
       --rule-faint: rgba(236, 230, 213, 0.14);
       --dot:        rgba(236, 230, 213, 0.38);
@@ -110,7 +110,7 @@
   .mast-date { font-size: 16px; letter-spacing: 0.10em; text-transform: uppercase; width: 250px; font-variant-numeric: lining-nums; }
   .mast-station { font-size: 20px; letter-spacing: 0.34em; text-transform: uppercase; text-align: center; padding-left: 0.34em; }
   .mast-station .sub { display: block; font-family: var(--sans); font-size: 8.5px; letter-spacing: 0.30em; color: var(--ink-soft); margin-top: 3px; padding-left: 0.05em; }
-  .mast-clock { font-size: 23px; width: 250px; display: flex; justify-content: flex-end; align-items: center; gap: 14px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+  .mast-clock { font-size: 23px; font-weight: 600; width: 250px; display: flex; justify-content: flex-end; align-items: center; gap: 14px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
   .mast-flag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--sans);
     font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--brass);
     opacity: 0; transition: opacity 0.7s ease; }
@@ -132,11 +132,11 @@
 
   .cond { display: flex; align-items: center; gap: 12px; }
   .cond .sun-icon line, .cond .sun-icon circle { stroke: var(--ink); }
-  .cond-name { font-size: 23px; }
+  .cond-name { font-size: 23px; font-weight: 600; }
   .cond-note { font-family: var(--sans); font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; letter-spacing: 0.02em; }
 
   .bigtemp { margin: 10px 0 0 -5px; display: flex; align-items: flex-start; line-height: 0.86; }
-  .bigtemp .num { font-size: 112px; letter-spacing: -0.035em; }
+  .bigtemp .num { font-size: 112px; font-weight: 600; letter-spacing: -0.028em; }
   .bigtemp .unit { font-size: 30px; margin: 9px 0 0 5px; }
   .feels { font-family: var(--sans); font-size: 12.5px; color: var(--ink-soft); margin: 9px 0 0 1px; letter-spacing: 0.02em; }
   .feels b { color: var(--ink); font-weight: 600; }
@@ -144,14 +144,14 @@
   .trend { margin-top: 13px; display: flex; gap: 9px; align-items: flex-start; }
   .trend .arrow { color: var(--accent); font-size: 15px; line-height: 1.3; }
   .trend-main { font-size: 15px; }
-  .trend-main b { color: var(--accent); font-weight: 400; }
+  .trend-main b { color: var(--accent); font-weight: 600; }
   .trend-sub { font-family: var(--sans); font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
 
   .range { margin-top: 13px; }
   .range-labels { display: flex; justify-content: space-between; align-items: baseline;
     font-family: var(--sans); font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
     color: var(--ink-soft); margin-bottom: 4px; }
-  .range-labels .v { font-family: var(--serif); font-size: 15px; letter-spacing: 0; text-transform: none; color: var(--ink); margin-left: 5px; }
+  .range-labels .v { font-family: var(--serif); font-size: 15px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--ink); margin-left: 5px; }
 
   /* temperature day-curve */
   .spark { display: block; }
@@ -169,16 +169,16 @@
   .pair-row { display: flex; margin-top: 10px; }
   .pair { flex: 1; }
   .pair + .pair { border-left: 1px solid var(--rule-faint); padding-left: 16px; }
-  .pair .k { font-family: var(--sans); font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
-  .pair .v { font-size: 19px; margin-top: 3px; }
-  .pair .v small { font-size: 12px; color: var(--ink-soft); }
+  .pair .k { font-family: var(--sans); font-size: 9px; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
+  .pair .v { font-size: 19px; font-weight: 600; margin-top: 3px; }
+  .pair .v small { font-size: 12px; font-weight: 400; color: var(--ink-soft); }
   .fx-cap { font-family: var(--sans); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); margin-top: 10px; border-top: 1px solid var(--rule-faint); padding-top: 9px; }
   .fx-row { display: flex; margin-top: 6px; margin-bottom: 2px; }
   .fx { flex: 1; }
   .fx + .fx { border-left: 1px solid var(--rule-faint); padding-left: 14px; }
-  .fx .k { font-family: var(--sans); font-size: 8.5px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-soft); }
-  .fx .v { font-size: 15px; margin-top: 2px; }
-  .fx .v small { font-size: 11px; color: var(--ink-soft); }
+  .fx .k { font-family: var(--sans); font-size: 8.5px; font-weight: 500; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-soft); }
+  .fx .v { font-size: 15px; font-weight: 600; margin-top: 2px; }
+  .fx .v small { font-size: 11px; font-weight: 400; color: var(--ink-soft); }
 
   /* ———— Instrument grid ———— */
   .grid { flex: 1 1 auto; min-width: 0; display: grid;
@@ -202,15 +202,15 @@
 
   .p-head { display: flex; justify-content: space-between; align-items: baseline;
     border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 8px; }
-  .p-title { font-family: var(--sans); font-size: 10px; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink); }
-  .p-status { font-family: var(--sans); font-size: 9.5px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); }
+  .p-title { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink); }
+  .p-status { font-family: var(--sans); font-size: 9.5px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); }
 
   .p-body { display: flex; gap: 14px; flex: 1; min-height: 0; align-items: center; }
   .p-col { display: flex; flex-direction: column; flex: 1; min-width: 0; align-self: stretch; }
   .p-col.snug { justify-content: center; }
   .p-col.snug .ledger { margin-top: 13px; }
   .p-value { display: flex; align-items: baseline; gap: 6px; }
-  .p-value .n { font-size: 38px; line-height: 1; letter-spacing: -0.01em; }
+  .p-value .n { font-size: 38px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; }
   .p-value .n.small-n { font-size: 30px; }
   .p-value .u { font-family: var(--sans); font-size: 10.5px; color: var(--ink-soft); letter-spacing: 0.06em; }
   .p-sub { font-family: var(--sans); font-size: 10.5px; color: var(--ink-soft); margin-top: 4px; letter-spacing: 0.04em; }
@@ -219,17 +219,17 @@
 
   .ledger { margin-top: auto; border-top: 1px solid var(--rule-faint); padding-top: 6px; }
   .lrow { display: flex; align-items: baseline; padding: 2px 0; }
-  .lrow .k { font-family: var(--sans); font-size: 9.5px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
+  .lrow .k { font-family: var(--sans); font-size: 9.5px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
   .lrow .dots { flex: 1; margin: 0 7px; border-bottom: 1px dotted var(--dot); transform: translateY(-3px); }
-  .lrow .v { font-size: 13.5px; white-space: nowrap; font-variant-numeric: lining-nums; }
-  .lrow .v small { font-family: var(--sans); font-size: 9.5px; color: var(--ink-soft); }
+  .lrow .v { font-size: 13.5px; font-weight: 600; white-space: nowrap; font-variant-numeric: lining-nums; }
+  .lrow .v small { font-family: var(--sans); font-size: 9.5px; font-weight: 400; color: var(--ink-soft); }
   .lrow .v.word { font-size: 12px; }
 
   /* UV block */
   .uv { margin-top: 5px; }
   .uv-line { display: flex; align-items: baseline; gap: 7px; }
-  .uv-line .k { font-family: var(--sans); font-size: 9.5px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
-  .uv-line .n { font-size: 19px; }
+  .uv-line .k { font-family: var(--sans); font-size: 9.5px; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
+  .uv-line .n { font-size: 19px; font-weight: 600; }
   .uv-line .w { font-family: var(--sans); font-size: 10.5px; color: var(--ink); font-weight: 600; letter-spacing: 0.06em; }
   .uv-track { position: relative; height: 12px; margin-top: 6px; }
   /* Apple-Watch-style WHO UV scale: green(low)→amber→orange→red→violet(extreme) */
@@ -242,8 +242,8 @@
   /* Rainfall dry-spell block — derived from the station's own accumulation record */
   .dry { margin: auto 0; padding: 6px 0; }
   .dry-line { display: flex; align-items: baseline; gap: 7px; }
-  .dry-line .k { font-family: var(--sans); font-size: 9.5px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
-  .dry-line .n { font-size: 19px; }
+  .dry-line .k { font-family: var(--sans); font-size: 9.5px; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
+  .dry-line .n { font-size: 19px; font-weight: 600; }
   .dry-line .u { font-family: var(--sans); font-size: 10.5px; color: var(--ink-soft); letter-spacing: 0.06em; }
   .dry-sub { font-family: var(--sans); font-size: 10.5px; color: var(--ink-soft); margin-top: 3px; letter-spacing: 0.04em; }
 
@@ -297,15 +297,15 @@
   .sc-status { font-family: var(--sans); font-size: 10px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); }
   .sc-body { flex: 1; display: flex; align-items: center; justify-content: center; gap: 64px; min-height: 0; }
 
-  .sc-big { font-size: 34px; }
+  .sc-big { font-size: 34px; font-weight: 600; }
   .sc-sub { font-family: var(--sans); font-size: 12.5px; color: var(--ink-soft); margin-top: 5px; letter-spacing: 0.02em; }
   .sc-ledger { margin-top: 20px; width: 300px; }
   .sc-ledger .lrow { padding: 4px 0; }
   .sc-ledger .lrow .v { font-size: 15px; }
   .sc-note { font-family: var(--sans); font-size: 11px; color: var(--ink-soft); margin-top: 18px; max-width: 300px; line-height: 1.5; }
 
-  .bignum { font-size: 64px; line-height: 1; }
-  .bignum small { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); letter-spacing: 0.06em; }
+  .bignum { font-size: 64px; font-weight: 600; line-height: 1; }
+  .bignum small { font-family: var(--sans); font-size: 12px; font-weight: 400; color: var(--ink-soft); letter-spacing: 0.06em; }
 
   /* Sager bulletin card */
   .bulletin { position: relative; width: 560px; border: 1px solid var(--rule); padding: 26px 44px 24px; text-align: center; }
