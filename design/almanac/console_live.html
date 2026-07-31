@@ -1225,8 +1225,13 @@
     return { fromData: fromData, startSim: startSim };
   })();
 
-  $("simbtn").addEventListener("click", Light.startSim);
-  if (new URLSearchParams(location.search).get("sim")) Light.startSim();
+  /* Simulate strike is DEBUG-ONLY: hidden unless ?debug=1 or ?sim is set.
+     Production kiosk loads without those, so it never shows or fires. */
+  var _dbgParams = new URLSearchParams(location.search);
+  var _debugMode = _dbgParams.has("debug") || _dbgParams.has("sim");
+  $("simbtn").style.display = _debugMode ? "" : "none";
+  if (_debugMode) $("simbtn").addEventListener("click", Light.startSim);
+  if (_dbgParams.has("sim")) Light.startSim();
 
   /* ════════════════════════════════════════════════════════════
      7. Stale mark
