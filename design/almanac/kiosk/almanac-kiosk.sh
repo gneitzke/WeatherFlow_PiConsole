@@ -56,12 +56,12 @@ for _ in $(seq 1 45); do [ -s "$DATA" ] && break; sleep 1; done
 xset s off -dpms s noblank 2>/dev/null || true
 
 # 3) fullscreen touch kiosk on the real screen.
-#    --single-process + memory flags: the Pi 3 (1GB) can't afford Chromium's
-#    multi-process renderer forks alongside the Kivy data engine, so render in
-#    one process. --disable-gpu avoids VC4 GL init; --disable-dev-shm-usage
-#    avoids the tiny /dev/shm. (Swap was also raised to give headroom.)
+#    IMPORTANT: do NOT pass --disable-gpu — software rendering cannot composite a
+#    window on the Pi's VC4 (Chromium runs but no window ever maps); the real GPU
+#    works. Memory headroom for Chromium's multi-process model comes from the 1 GB
+#    swap added at /var/swap2. --disable-dev-shm-usage avoids the tiny /dev/shm.
 exec chromium-browser --kiosk --ozone-platform=x11 --touch-events=enabled \
-  --disable-gpu --disable-dev-shm-usage --disk-cache-size=1 \
+  --disable-dev-shm-usage --disk-cache-size=1 \
   --no-first-run --no-default-browser-check --disable-infobars \
   --disable-session-crashed-bubble --noerrdialogs --disable-features=Translate \
   --password-store=basic --user-data-dir=/tmp/almanac_chrome \
