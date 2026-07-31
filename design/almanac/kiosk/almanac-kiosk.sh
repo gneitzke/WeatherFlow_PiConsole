@@ -21,11 +21,17 @@ WEB="${WFP_WEB:-$HOME/almanac_web}"                 # served dir (index.html + w
 DATA_DIR="/tmp/wfp_data"; DATA="$DATA_DIR/wx.json"
 PORT="${WFP_PORT:-8137}"; VDISP="${WFP_VDISP:-:1}"
 
-# real session env — chromium needs this to map a window + deliver touch
+# real session env — chromium needs the exact session bus to map a window + touch.
+# Force the standard paths (autostart may carry a different/empty value).
 export DISPLAY=":0"
-export XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}"
-export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+export XAUTHORITY="$HOME/.Xauthority"
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
+
+# COLD-BOOT RACE: the autostart fires before the window manager is ready, so
+# chromium launches and its window never maps. Wait for openbox, then a buffer.
+for _ in $(seq 1 40); do pgrep -x openbox >/dev/null 2>&1 && break; sleep 1; done
+sleep 6
 
 mkdir -p "$DATA_DIR" "$WEB"
 cp -f "$APP/design/almanac/console_live.html" "$WEB/index.html"
@@ -60,4 +66,4 @@ exec chromium-browser --kiosk --ozone-platform=x11 --touch-events=enabled \
   --disable-session-crashed-bubble --noerrdialogs --disable-features=Translate \
   --password-store=basic --user-data-dir=/tmp/almanac_chrome \
   --check-for-update-interval=31536000 \
-  "http://127.0.0.1:$PORT/index.html?theme=paper"
+  "http://127.0.0.1:$PORT/index.html?theme=night"
