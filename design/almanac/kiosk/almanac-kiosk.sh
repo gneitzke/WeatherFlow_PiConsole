@@ -61,7 +61,7 @@ xset s off -dpms s noblank 2>/dev/null || true
 #    one process. --disable-gpu avoids VC4 GL init; --disable-dev-shm-usage
 #    avoids the tiny /dev/shm. (Swap was also raised to give headroom.)
 exec chromium-browser --kiosk --ozone-platform=x11 --touch-events=enabled \
-  --single-process --disable-gpu --disable-dev-shm-usage --disk-cache-size=1 \
+  --disable-gpu --disable-dev-shm-usage --disk-cache-size=1 \
   --no-first-run --no-default-browser-check --disable-infobars \
   --disable-session-crashed-bubble --noerrdialogs --disable-features=Translate \
   --password-store=basic --user-data-dir=/tmp/almanac_chrome \
