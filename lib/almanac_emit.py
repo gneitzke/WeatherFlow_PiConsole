@@ -94,6 +94,16 @@ def _get(d, key, default=None):
         return default
 
 
+def _cfg(config, section, option, default=None):
+    """ Safely read a Kivy ConfigParser value. Kivy's ConfigParser needs BOTH
+    section and option to .get() (subscripting a section internally calls the
+    one-arg .get() and raises), so always pass both and guard. """
+    try:
+        return config.get(section, option)
+    except Exception:
+        return default
+
+
 def _clean_str(value):
     """ Strip whitespace and return None for known placeholder strings. """
     if not isinstance(value, str):
@@ -276,7 +286,7 @@ class AlmanacEmitter:
 
         return {
             'ts':      int(time.time()),
-            'station': _text(_get(config['Station'], 'Name')),
+            'station': _text(_cfg(config, 'Station', 'Name')),
             'date':    now_local.strftime('%a, %d %b %Y'),
             'time':    now_local.strftime('%H:%M'),
 
@@ -330,7 +340,7 @@ class AlmanacEmitter:
             'rainYest':     _num(_idx(Obs.get('YesterdayRain'), 0)),
             'rainMonth':    _num(_idx(Obs.get('MonthRain'), 0)),
             'rainYear':     _num(_idx(Obs.get('YearRain'), 0)),
-            'rainUnit':     _text(_get(config['Units'], 'Precip')),
+            'rainUnit':     _text(_cfg(config, 'Units', 'Precip')),
             'rainRate':     _num(_idx(Obs.get('RainRate'), 3), default=_num(_idx(Obs.get('RainRate'), 0))),
             'rainStatus':   _text(_idx(Obs.get('RainRate'), 2)),
             'drySpellDays': None,   # not reliably sourced - see report
@@ -377,7 +387,8 @@ class AlmanacEmitter:
     @staticmethod
     def _station_tz(config):
         try:
-            return pytz.timezone(config['Station']['Timezone'])
+            tzname = _cfg(config, 'Station', 'Timezone')
+            return pytz.timezone(tzname) if tzname else None
         except Exception:                                                 # noqa: BLE001
             return None
 
