@@ -276,7 +276,7 @@ class AlmanacEmitter:
 
         return {
             'ts':      int(time.time()),
-            'station': _text(_get(config.get('Station'), 'Name')),
+            'station': _text(_get(config['Station'], 'Name')),
             'date':    now_local.strftime('%a, %d %b %Y'),
             'time':    now_local.strftime('%H:%M'),
 
@@ -330,7 +330,7 @@ class AlmanacEmitter:
             'rainYest':     _num(_idx(Obs.get('YesterdayRain'), 0)),
             'rainMonth':    _num(_idx(Obs.get('MonthRain'), 0)),
             'rainYear':     _num(_idx(Obs.get('YearRain'), 0)),
-            'rainUnit':     _text(_get(config.get('Units'), 'Precip')),
+            'rainUnit':     _text(_get(config['Units'], 'Precip')),
             'rainRate':     _num(_idx(Obs.get('RainRate'), 3), default=_num(_idx(Obs.get('RainRate'), 0))),
             'rainStatus':   _text(_idx(Obs.get('RainRate'), 2)),
             'drySpellDays': None,   # not reliably sourced - see report
