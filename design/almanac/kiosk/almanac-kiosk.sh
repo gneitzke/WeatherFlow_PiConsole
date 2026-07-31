@@ -59,11 +59,10 @@ xset s off -dpms s noblank 2>/dev/null || true
 #    IMPORTANT: do NOT pass --disable-gpu — software rendering cannot composite a
 #    window on the Pi's VC4 (Chromium runs but no window ever maps); the real GPU
 #    works. Memory headroom for Chromium's multi-process model comes from the 1 GB
-#    swap added at /var/swap2. --disable-dev-shm-usage avoids the tiny /dev/shm.
+#    swap added at /var/swap2 gives RAM headroom. Keep flags MINIMAL: extra flags
+#    like --disable-dev-shm-usage starve renderer IPC (chromium stuck at 1 proc).
 exec chromium-browser --kiosk --ozone-platform=x11 --touch-events=enabled \
-  --disable-dev-shm-usage --disk-cache-size=1 \
   --no-first-run --no-default-browser-check --disable-infobars \
-  --disable-session-crashed-bubble --noerrdialogs --disable-features=Translate \
-  --password-store=basic --user-data-dir=/tmp/almanac_chrome \
-  --check-for-update-interval=31536000 \
+  --disable-session-crashed-bubble --noerrdialogs --password-store=basic \
+  --user-data-dir=/tmp/almanac_chrome \
   "http://127.0.0.1:$PORT/index.html?theme=night"
