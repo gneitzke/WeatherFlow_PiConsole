@@ -1,0 +1,68 @@
+# Almanac overlay — live data contract
+
+The console (data engine) writes this JSON to `wx.json`; the overlay HTML polls it
+(~every 2 s) and updates text + gauges. Flat object, display-ready primitives
+(numbers/strings), **not** the app's `[value, unit, ...]` lists. Missing/None → `null`;
+the HTML shows an em-dash for null. Emitter converts from the app's
+`Obs`/`Astro`/`Met`/`Sager`/`System` DictProperties (see the field map in the code-explorer notes / lib/properties.py).
+
+```jsonc
+{
+  "ts": 1750000000,                 // epoch seconds when written (HTML shows "stale" if too old)
+  "station": "Seattle",             // [Station] Name
+  "date": "Fri, 31 Jul 2026",       // System['date']
+  "time": "12:52",                  // System['time']  (HH:MM)
+
+  // Temperature
+  "temp": 64.0, "tempUnit": "°F",   // Obs['outTemp'][0],[1]
+  "feelsLike": 64, "feelsDesc": "Feeling warm",   // Obs['FeelsLike'][0],[2]
+  "tempTrendPerHr": 4.6,            // Obs['outTempTrend'][0]  (+ = rising)
+  "temp24hDelta": 4.9,             // vs this time yesterday (+ = warmer); null if unknown
+  "obsLow": 49.8,  "obsLowTime": "06:15",   // Obs['outTempMin'][0],[2]
+  "obsHigh": 64.8, "obsHighTime": "08:04",  // Obs['outTempMax'][0],[2]
+  "fcLow": 50, "fcHigh": 82,        // forecast today low/high (Met[...] lowTemp/highTemp)
+  "humidity": 67, "dewPoint": 52.9, // Obs['Humidity'][0], Obs['DewPoint'][0]
+
+  // Conditions / short-term forecast
+  "conditions": "Clear & Sunny",           // Met['Conditions']
+  "conditionsNote": "Clear until 02:00 tomorrow",
+  "fcHour": "10:00", "fcWind": "0 mph NW", "fcPrecipPct": 0, "fcDailyPct": 0,
+
+  // Wind  (dir in degrees; cardinal string; needle rotates to dir)
+  "windSpd": 0.9, "windUnit": "mph", "windAvg": 0.1, "windGust": 2.9, "windMax": 4.3,
+  "windDir": 206, "windCardinal": "SSW", "windStatus": "Calm",
+
+  // Barometer  (needle maps slp on 980..1050)
+  "slp": 1022.1, "slpUnit": "mb", "slpTrendPerHr": 0.4, "slpTrendDesc": "Rising",
+  "slp24High": 1022.1, "slp24HighTime": "08:20",
+  "slp24Low": 1020.2,  "slp24LowTime": "00:00", "slpOutlook": "Unchanged",
+
+  // Rainfall  (rate drives the tube pointer 0..1 in/hr)
+  "rainToday": 0.00, "rainYest": 0.00, "rainMonth": 0.15, "rainYear": 40.0,
+  "rainUnit": "in", "rainRate": 0, "rainStatus": "Currently Dry",
+  "drySpellDays": 12, "lastRainDate": "Sun 19 Jul", "lastRainAmt": 0.11,
+
+  // Sun & UV  (sunFrac 0..1 = elapsed fraction of daylight → sun position on the arc)
+  "uvIndex": 4.0, "uvDesc": "Moderate", "radiation": 468, "radUnit": "W/m²",
+  "sunrise": "05:43", "sunset": "20:43", "sunFrac": 0.29,
+  "daylight": "11h 37m", "peakSun": 0.65,
+
+  // Moon
+  "moonPhase": "Waning Gibbous", "moonIllum": 78,
+  "moonrise": "22:14", "moonset": "09:38", "nextFull": "Aug 8", "nextNew": "Aug 23",
+
+  // Lightning  (distance only — no bearing; null when quiet)
+  "lightningActive": false, "lightningDist": null, "lightningSinceSec": null,
+  "lightning3min": 0, "lightning30min": 0, "lightningToday": 0,
+  "lightningLast": "3 days ago",
+
+  // Sager
+  "sagerCode": "G·2·3·D", "sagerText": "Fair, little temperature change...",
+  "sagerPressure": "1022.1 rising", "sagerWind": "SSW backing", "sagerSky": "Clear"
+}
+```
+
+Rules: numbers are numbers (HTML formats). Times are `"HH:MM"` strings. Angles/fractions
+are numeric so the HTML can drive SVG geometry. The HTML treats any `null`/missing key as
+an em-dash and leaves that gauge at a neutral position. The emitter must never write a
+partial/invalid file (write to a temp path + atomic rename).

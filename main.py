@@ -192,7 +192,10 @@ class wfpiconsole(App):
 
         # Initialise ScreenManager
         self.screen_manager = screenManager(transition=NoTransition())
-        self.screen_manager.add_widget(CurrentConditions())
+        if self.config['Display'].get('LayoutStyle', 'classic') == 'almanac':
+            self.screen_manager.add_widget(AlmanacConditions())
+        else:
+            self.screen_manager.add_widget(CurrentConditions())
 
         # Start Websocket or UDP service
         self.start_connection_service()
@@ -611,6 +614,14 @@ class CurrentConditions(Screen):
             self.button_list[ii][4] = 'secondary'
         elif button_data[4] == 'secondary':
             self.button_list[ii][4] = 'primary'
+
+# ==============================================================================
+# IMPORT ALMANAC ALTERNATE LAYOUT
+# ==============================================================================
+# Additive opt-in layout ([Display] LayoutStyle = almanac). Imported here, after
+# CurrentConditions is defined, because AlmanacConditions subclasses it via
+# `from __main__ import CurrentConditions`.
+from panels.almanac import AlmanacConditions                                     # type: ignore  # noqa: E402
 
 # ==============================================================================
 # RUN APP

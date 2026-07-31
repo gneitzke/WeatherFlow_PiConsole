@@ -28,7 +28,7 @@ import sys
 import os
 
 # Define wfpiconsole version number
-ver = 'v26.4.2'
+ver = 'v26.5.0'
 
 # Define required variables
 TEMPEST       = False
@@ -883,6 +883,7 @@ def default_config_file():
                                                          ('TimeFormat',            {'type': 'default',   'value': '24 hr',            'desc': 'time format'}),
                                                          ('DateFormat',            {'type': 'default',   'value': 'Mon, 01 Jan 0000', 'desc': 'date format'}),
                                                          ('UpdateNotification',    {'type': 'default',   'value': '1',                'desc': 'update notification toggle'}),
+                                                         ('LayoutStyle',           {'type': 'default',   'value': 'classic',          'desc': 'display layout style (classic|almanac)'}),
                                                          ('PanelCount',            {'type': 'default',   'value': '6',                'desc': 'number of display panels'}),
                                                          ('LightningPanel',        {'type': 'default',   'value': '1',                'desc': 'lightning panel toggle'}),
                                                          ('lightning_timeout',     {'type': 'default',   'value': '0',                'desc': 'lightning panel timeout'}),

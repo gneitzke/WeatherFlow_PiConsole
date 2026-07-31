@@ -1,0 +1,531 @@
+## WeatherFlow PiConsole: "almanac" alternate display layout.
+##
+## Additive, opt-in layout ([Display] LayoutStyle = almanac). This file is NEW;
+## the classic layout (.kv/.py) is untouched. Visual target:
+## design/almanac/console.html (paper theme).
+##
+## Architecture note: the <AlmanacConditions> rule below holds ONLY static chrome
+## plus the hidden `panel_six` safety stub. All DATA-bound content lives in
+## <AlmanacBody>, which AlmanacConditions.add_panels() adds AFTER the Obs / Astro
+## / System / Met DictProperties are populated, so the screen rule itself stays
+## data-free.
+##
+## Colours: painted with utils.rgba('rrggbbaa') exactly like the classic root
+## (wfpiconsole.kv <CurrentConditions>) and layout.kv, which is the technique
+## proven to fill correctly on the Pi's VC4 GPU. The Python gauge widgets keep
+## the alm.ALMANAC_THEMES float tuples (they draw via kivy.graphics.Color).
+## Every Label `text:` is normalised through alm.as_text() so a non-str value
+## (Met forecast lists / numbers / None) can never raise 'accept only str'.
+##
+## Copyright (C) 2018-2025 Peter Davis (classic console) / almanac add-on.
+## GNU General Public License v3.0.
+
+## =============================================================================
+## Imports, palette and font tokens (paper theme)
+## =============================================================================
+#:import utils   kivy.utils
+#:import alm     panels.almanac
+#:import Factory kivy.factory.Factory
+
+## Paper-theme pigments as hex strings for utils.rgba() (VC4-safe fills).
+#:set A_BG_HEX    'f2ede2ff'
+#:set A_INK_HEX   '262218ff'
+#:set A_SOFT_HEX  '78705cff'
+#:set A_SOFT_DIM  '78705c8c'
+#:set A_RULE_HEX  '26221847'
+#:set A_FAINT_HEX '26221824'
+#:set A_CLEAR     '00000000'
+
+#:set A_SERIF_B   alm.SERIF_BOLD or 'fonts/Inter-Bold.ttf'
+#:set A_SERIF_R   alm.SERIF_REG  or 'fonts/Inter-Regular.ttf'
+#:set A_SANS_R    'fonts/Inter-Regular.ttf'
+#:set A_SANS_B    'fonts/Inter-Bold.ttf'
+
+## =============================================================================
+## Reusable label / rule helpers
+## =============================================================================
+<AlmSerif@Label>:
+    color: utils.rgba(A_INK_HEX)
+    font_name: A_SERIF_R
+    font_size: dp(15 * app.scaleFactor)
+    markup: True
+    text_size: self.size
+    halign: 'left'
+    valign: 'middle'
+    shorten: True
+    shorten_from: 'right'
+
+<AlmCap@Label>:
+    ## Small uppercase sans caption (the "k" labels)
+    color: utils.rgba(A_SOFT_HEX)
+    font_name: A_SANS_R
+    font_size: dp(9 * app.scaleFactor)
+    markup: True
+    text_size: self.size
+    halign: 'left'
+    valign: 'middle'
+
+<AlmHair@Widget>:
+    ## Horizontal hairline
+    size_hint_y: None
+    height: dp(1)
+    canvas:
+        Color:
+            rgba: utils.rgba(A_RULE_HEX)
+        Rectangle:
+            pos: self.pos
+            size: self.width, dp(1)
+
+<AlmLedgerRow@BoxLayout>:
+    ## key .......... value  (dot leader omitted this slice — TODO)
+    k: ''
+    v: ''
+    size_hint_y: None
+    height: dp(16 * app.scaleFactor)
+    AlmCap:
+        text: str(root.k)
+        size_hint_x: 0.55
+    AlmSerif:
+        text: str(root.v)
+        font_size: dp(13 * app.scaleFactor)
+        halign: 'right'
+        size_hint_x: 0.45
+
+<AlmPanelHead@BoxLayout>:
+    ## Panel title (left) + status (right) with an underline rule
+    title: ''
+    status: ''
+    orientation: 'horizontal'
+    size_hint_y: None
+    height: dp(20 * app.scaleFactor)
+    canvas.after:
+        Color:
+            rgba: utils.rgba(A_RULE_HEX)
+        Rectangle:
+            pos: self.x, self.y
+            size: self.width, dp(1)
+    AlmCap:
+        text: str(root.title).upper()
+        color: utils.rgba(A_INK_HEX)
+        font_name: A_SANS_B
+        font_size: dp(10 * app.scaleFactor)
+    AlmCap:
+        text: str(root.status).upper()
+        halign: 'right'
+
+<AlmTab@Label>:
+    ## Footer tab. active=True highlights it; live=False dims (static for now)
+    active: False
+    live: True
+    color: utils.rgba(A_INK_HEX) if self.active else (utils.rgba(A_SOFT_HEX) if self.live else utils.rgba(A_SOFT_DIM))
+    font_name: A_SANS_B
+    font_size: dp(9 * app.scaleFactor)
+    size_hint_x: None
+    width: self.texture_size[0] + dp(20)
+    canvas.after:
+        Color:
+            rgba: utils.rgba(A_INK_HEX) if self.active else utils.rgba(A_CLEAR)
+        Rectangle:
+            pos: self.x, self.y
+            size: self.texture_size[0], dp(2)
+
+## =============================================================================
+## ALMANAC CONDITIONS SCREEN (static chrome only)
+## =============================================================================
+<AlmanacConditions>:
+    name: 'CurrentConditions'
+    ## Paper ground — painted exactly as the classic root paints its background
+    ## (utils.rgba + Rectangle bound to self.pos/self.size), the technique that
+    ## fills reliably on VC4.
+    canvas.before:
+        Color:
+            rgba: utils.rgba(A_BG_HEX)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    ## Data-bound body is injected here by add_panels(). Fills the whole window.
+    BoxLayout:
+        id: alm_container
+        orientation: 'vertical'
+        size_hint: 1, 1
+        pos: root.pos
+        size: root.size
+        padding: [dp(12 * app.scaleFactor), dp(6 * app.scaleFactor)]
+
+    ## Hidden safety stub so the version-update popup (kvlang/update.kv), which
+    ## positions itself from app.CurrentConditions.ids.panel_six.x / .size, can
+    ## resolve without a classic panel_six on this screen.
+    Widget:
+        id: panel_six
+        opacity: 0
+        disabled: True
+        size_hint: (None, None)
+        width: app.window.width / 3
+        height: dp(76)
+        x: app.window.width / 3
+        y: 0
+
+## =============================================================================
+## ALMANAC BODY (all live data binds here)
+## =============================================================================
+<AlmanacBody@BoxLayout>:
+    orientation: 'vertical'
+    size_hint: 1, 1
+    spacing: dp(2 * app.scaleFactor)
+
+    ## ---- MASTHEAD ----------------------------------------------------------
+    Widget:
+        ## Scotch rule: 3px over 1px
+        size_hint_y: None
+        height: dp(6)
+        canvas:
+            Color:
+                rgba: utils.rgba(A_INK_HEX)
+            Rectangle:
+                pos: self.x, self.top - dp(3)
+                size: self.width, dp(3)
+            Rectangle:
+                pos: self.x, self.y
+                size: self.width, dp(1)
+
+    BoxLayout:
+        size_hint_y: None
+        height: dp(34 * app.scaleFactor)
+        padding: [0, dp(4 * app.scaleFactor)]
+        AlmSerif:
+            text: str(app.CurrentConditions.System['date']).upper() if app.CurrentConditions.System['date'] != '-' else ''
+            font_size: dp(15 * app.scaleFactor)
+            size_hint_x: 0.32
+        BoxLayout:
+            orientation: 'vertical'
+            size_hint_x: 0.36
+            AlmSerif:
+                text: str(app.config['Station']['Name']).split(',')[0].upper()
+                font_name: A_SERIF_B
+                font_size: dp(19 * app.scaleFactor)
+                halign: 'center'
+                valign: 'bottom'
+            AlmCap:
+                text: 'WEATHERFLOW TEMPEST'
+                halign: 'center'
+                valign: 'top'
+                font_size: dp(8 * app.scaleFactor)
+        AlmSerif:
+            text: str(app.CurrentConditions.System['time'])
+            font_size: dp(22 * app.scaleFactor)
+            halign: 'right'
+            size_hint_x: 0.32
+
+    AlmHair:
+
+    ## ---- BODY: hero | vrule | 2x2 grid ------------------------------------
+    BoxLayout:
+        orientation: 'horizontal'
+        size_hint: 1, 1
+        padding: [0, dp(8 * app.scaleFactor), 0, 0]
+
+        ## ===== HERO (left third) =====
+        BoxLayout:
+            orientation: 'vertical'
+            size_hint_x: 0.35
+            spacing: dp(2 * app.scaleFactor)
+
+            AlmSerif:
+                text: alm.as_text(app.CurrentConditions.Met['Conditions']) if app.CurrentConditions.Met['Conditions'] not in ('-', '--') else ''
+                font_size: dp(20 * app.scaleFactor)
+                size_hint_y: None
+                height: dp(26 * app.scaleFactor)
+
+            ## Big temperature
+            BoxLayout:
+                size_hint_y: None
+                height: dp(70 * app.scaleFactor)
+                AlmSerif:
+                    text: alm.as_text(app.CurrentConditions.Obs['outTemp'][0])
+                    font_name: A_SERIF_B
+                    font_size: dp(72 * app.scaleFactor)
+                    valign: 'middle'
+                    size_hint_x: 0.78
+                AlmSerif:
+                    text: alm.as_text(app.CurrentConditions.Obs['outTemp'][1])
+                    font_size: dp(22 * app.scaleFactor)
+                    valign: 'top'
+                    size_hint_x: 0.22
+
+            AlmCap:
+                text: 'Feels like ' + alm.as_text(app.CurrentConditions.Obs['FeelsLike'][0]) + alm.as_text(app.CurrentConditions.Obs['FeelsLike'][1]) + (' · ' + alm.as_text(app.CurrentConditions.Obs['FeelsLike'][2]) if len(app.CurrentConditions.Obs['FeelsLike']) > 2 and app.CurrentConditions.Obs['FeelsLike'][2] not in ('-', '') else '')
+                font_size: dp(11 * app.scaleFactor)
+                size_hint_y: None
+                height: dp(16 * app.scaleFactor)
+
+            ## Temperature trend
+            AlmSerif:
+                text: ('[color=ae3a27ff]↑ ' + alm.as_text(app.CurrentConditions.Obs['outTempTrend'][0]) + '[/color] per hour') if app.CurrentConditions.Obs['outTempTrend'][0] not in ('-', '---') else ''
+                font_size: dp(14 * app.scaleFactor)
+                size_hint_y: None
+                height: dp(20 * app.scaleFactor)
+
+            ## Range labels (low / high)
+            BoxLayout:
+                size_hint_y: None
+                height: dp(16 * app.scaleFactor)
+                AlmCap:
+                    text: 'LOW  [color=262218ff]' + alm.as_text(app.CurrentConditions.Obs['outTempMin'][0]) + '[/color]'
+                AlmCap:
+                    text: 'FORECAST TODAY'
+                    halign: 'center'
+                AlmCap:
+                    text: '[color=262218ff]' + alm.as_text(app.CurrentConditions.Obs['outTempMax'][0]) + '[/color]  HIGH'
+                    halign: 'right'
+
+            ## Temperature day-curve sparkline (static curve + live now-dot TODO)
+            AlmanacSparkline:
+                size_hint_y: None
+                height: dp(64 * app.scaleFactor)
+
+            Widget:
+                ## flexible spacer
+                size_hint_y: 1
+
+            AlmHair:
+
+            ## Humidity / Dew point pair
+            BoxLayout:
+                size_hint_y: None
+                height: dp(38 * app.scaleFactor)
+                BoxLayout:
+                    orientation: 'vertical'
+                    AlmCap:
+                        text: 'HUMIDITY'
+                    AlmSerif:
+                        text: alm.as_text(app.CurrentConditions.Obs['Humidity'][0]) + ' %'
+                        font_size: dp(18 * app.scaleFactor)
+                BoxLayout:
+                    orientation: 'vertical'
+                    AlmCap:
+                        text: 'DEW POINT'
+                    AlmSerif:
+                        text: alm.as_text(app.CurrentConditions.Obs['DewPoint'][0]) + alm.as_text(app.CurrentConditions.Obs['DewPoint'][1])
+                        font_size: dp(18 * app.scaleFactor)
+
+            ## Forecast block
+            AlmCap:
+                text: 'FORECAST'
+                size_hint_y: None
+                height: dp(14 * app.scaleFactor)
+            BoxLayout:
+                size_hint_y: None
+                height: dp(34 * app.scaleFactor)
+                BoxLayout:
+                    orientation: 'vertical'
+                    AlmCap:
+                        text: 'WIND'
+                    AlmSerif:
+                        text: alm.as_text(app.CurrentConditions.Met['WindSpd'], ' ')
+                        font_size: dp(14 * app.scaleFactor)
+                BoxLayout:
+                    orientation: 'vertical'
+                    AlmCap:
+                        text: 'PRECIP'
+                    AlmSerif:
+                        text: alm.as_text(app.CurrentConditions.Met['PrecipPercnt'])
+                        font_size: dp(14 * app.scaleFactor)
+                BoxLayout:
+                    orientation: 'vertical'
+                    AlmCap:
+                        text: 'DAILY'
+                    AlmSerif:
+                        text: alm.as_text(app.CurrentConditions.Met['PrecipDay'])
+                        font_size: dp(14 * app.scaleFactor)
+
+        ## ===== vertical rule =====
+        Widget:
+            size_hint_x: None
+            width: dp(18 * app.scaleFactor)
+            canvas:
+                Color:
+                    rgba: utils.rgba(A_RULE_HEX)
+                Rectangle:
+                    pos: self.center_x, self.y
+                    size: dp(1), self.height
+
+        ## ===== 2x2 INSTRUMENT GRID =====
+        GridLayout:
+            cols: 2
+            size_hint_x: 0.63
+            spacing: dp(10 * app.scaleFactor)
+            canvas.after:
+                Color:
+                    rgba: utils.rgba(A_FAINT_HEX)
+                Line:
+                    points: [self.center_x, self.y, self.center_x, self.top]
+                    width: 1
+                Line:
+                    points: [self.x, self.center_y, self.right, self.center_y]
+                    width: 1
+
+            ## ---- WIND ----
+            BoxLayout:
+                orientation: 'vertical'
+                spacing: dp(3 * app.scaleFactor)
+                AlmPanelHead:
+                    title: 'Wind'
+                BoxLayout:
+                    AlmanacCompass:
+                        size_hint_x: 0.44
+                        wind_dir_deg: alm.safe_float(app.CurrentConditions.Obs['WindDir'][0], 0)
+                    BoxLayout:
+                        orientation: 'vertical'
+                        AlmSerif:
+                            text: alm.as_text(app.CurrentConditions.Obs['WindSpd'][0]) + ' [size=11sp]' + alm.as_text(app.CurrentConditions.Obs['WindSpd'][1]) + '[/size]'
+                            font_size: dp(30 * app.scaleFactor)
+                            size_hint_y: None
+                            height: dp(34 * app.scaleFactor)
+                        AlmCap:
+                            text: alm.as_text(app.CurrentConditions.Obs['WindDir'][0]) + alm.as_text(app.CurrentConditions.Obs['WindDir'][1])
+                            size_hint_y: None
+                            height: dp(14 * app.scaleFactor)
+                        Widget:
+                        AlmLedgerRow:
+                            k: 'Average'
+                            v: alm.as_text(app.CurrentConditions.Obs['AvgWind'], ' ')
+                        AlmLedgerRow:
+                            k: 'Gust'
+                            v: alm.as_text(app.CurrentConditions.Obs['WindGust'], ' ')
+                        AlmLedgerRow:
+                            k: 'Max today'
+                            v: alm.as_text(app.CurrentConditions.Obs['MaxGust'], ' ')
+
+            ## ---- BAROMETER ----
+            BoxLayout:
+                orientation: 'vertical'
+                spacing: dp(3 * app.scaleFactor)
+                AlmPanelHead:
+                    title: 'Barometer'
+                    status: alm.as_text(app.CurrentConditions.Obs['SLPTrend'][2]) if app.CurrentConditions.Obs['SLPTrend'][2] not in ('-', '') else ''
+                BoxLayout:
+                    AlmanacBarometer:
+                        size_hint_x: 0.44
+                        slp: alm.safe_float(app.CurrentConditions.Obs['SLP'][0], 1013)
+                    BoxLayout:
+                        orientation: 'vertical'
+                        AlmSerif:
+                            text: alm.as_text(app.CurrentConditions.Obs['SLP'][0]) + ' [size=11sp]' + alm.as_text(app.CurrentConditions.Obs['SLP'][1]) + '[/size]'
+                            font_size: dp(26 * app.scaleFactor)
+                            size_hint_y: None
+                            height: dp(32 * app.scaleFactor)
+                        AlmCap:
+                            text: alm.as_text(app.CurrentConditions.Obs['SLPTrend'][0]) + alm.as_text(app.CurrentConditions.Obs['SLPTrend'][1])
+                            size_hint_y: None
+                            height: dp(14 * app.scaleFactor)
+                        Widget:
+                        AlmLedgerRow:
+                            k: '24h high'
+                            v: alm.as_text(app.CurrentConditions.Obs['SLPMax'][0])
+                        AlmLedgerRow:
+                            k: '24h low'
+                            v: alm.as_text(app.CurrentConditions.Obs['SLPMin'][0])
+                        AlmLedgerRow:
+                            k: 'Outlook'
+                            v: alm.as_text(app.CurrentConditions.Obs['SLPTrend'][3]) if len(app.CurrentConditions.Obs['SLPTrend']) > 3 else ''
+
+            ## ---- SUN & SKY ----
+            BoxLayout:
+                orientation: 'vertical'
+                spacing: dp(3 * app.scaleFactor)
+                AlmPanelHead:
+                    title: 'Sun & Sky'
+                AlmanacSunArc:
+                    size_hint_y: None
+                    height: dp(46 * app.scaleFactor)
+                BoxLayout:
+                    size_hint_y: None
+                    height: dp(16 * app.scaleFactor)
+                    AlmCap:
+                        text: 'RISE [color=262218ff]' + alm.as_text(app.CurrentConditions.Astro['Sunrise'][1]) + '[/color]'
+                    AlmCap:
+                        text: 'SET [color=262218ff]' + alm.as_text(app.CurrentConditions.Astro['Sunset'][1]) + '[/color]'
+                        halign: 'right'
+                BoxLayout:
+                    size_hint_y: None
+                    height: dp(18 * app.scaleFactor)
+                    AlmCap:
+                        text: 'UV INDEX'
+                        size_hint_x: 0.4
+                    AlmSerif:
+                        text: alm.as_text(app.CurrentConditions.Obs['UVIndex'][0])
+                        font_size: dp(16 * app.scaleFactor)
+                        size_hint_x: 0.25
+                    AlmCap:
+                        text: alm.as_text(app.CurrentConditions.Obs['UVIndex'][2]) if len(app.CurrentConditions.Obs['UVIndex']) > 2 and app.CurrentConditions.Obs['UVIndex'][2] not in ('-', '') else ''
+                        color: utils.rgba(A_INK_HEX)
+                        font_name: A_SANS_B
+                        size_hint_x: 0.35
+                AlmLedgerRow:
+                    k: 'Radiation'
+                    v: alm.as_text(app.CurrentConditions.Obs['Radiation'][0]) + ' W/m²'
+
+            ## ---- RAINFALL ----
+            BoxLayout:
+                orientation: 'vertical'
+                spacing: dp(3 * app.scaleFactor)
+                AlmPanelHead:
+                    title: 'Rainfall'
+                BoxLayout:
+                    BoxLayout:
+                        orientation: 'vertical'
+                        AlmSerif:
+                            text: alm.as_text(app.CurrentConditions.Obs['TodayRain'][0]) + ' [size=11sp]in today[/size]'
+                            font_size: dp(28 * app.scaleFactor)
+                            size_hint_y: None
+                            height: dp(34 * app.scaleFactor)
+                        AlmCap:
+                            text: 'Rate ' + alm.as_text(app.CurrentConditions.Obs['RainRate'][0]) + ' ' + (alm.as_text(app.CurrentConditions.Obs['RainRate'][1]) if len(app.CurrentConditions.Obs['RainRate']) > 1 else '')
+                            size_hint_y: None
+                            height: dp(14 * app.scaleFactor)
+                        Widget:
+                        AlmLedgerRow:
+                            k: 'Yesterday'
+                            v: alm.as_text(app.CurrentConditions.Obs['YesterdayRain'], ' ')
+                        AlmLedgerRow:
+                            k: 'This month'
+                            v: alm.as_text(app.CurrentConditions.Obs['MonthRain'], ' ')
+                        AlmLedgerRow:
+                            k: 'This year'
+                            v: alm.as_text(app.CurrentConditions.Obs['YearRain'], ' ')
+                    AlmanacRainTube:
+                        size_hint_x: 0.3
+                        rain_rate: alm.safe_float(app.CurrentConditions.Obs['RainRate'][0], 0)
+
+    ## ---- FOOTER TAB BAR ----------------------------------------------------
+    AlmHair:
+    BoxLayout:
+        size_hint_y: None
+        height: dp(24 * app.scaleFactor)
+        padding: [0, dp(4 * app.scaleFactor), 0, 0]
+        AlmTab:
+            text: 'OBSERVATIONS'
+            active: True
+        AlmTab:
+            text: 'MOON & SKY'
+            live: False
+        AlmTab:
+            text: 'LIGHTNING'
+            live: False
+        AlmTab:
+            text: 'SAGER'
+            live: False
+        Widget:
+        ## Menu remains reachable so Settings (and the classic layout) stay
+        ## accessible from the almanac screen.
+        Button:
+            text: 'MENU'
+            size_hint_x: None
+            width: dp(70 * app.scaleFactor)
+            background_normal: ''
+            background_color: utils.rgba(A_CLEAR)
+            color: utils.rgba(A_SOFT_HEX)
+            font_name: A_SANS_B
+            font_size: dp(9 * app.scaleFactor)
+            on_release: Factory.mainMenu().open()
