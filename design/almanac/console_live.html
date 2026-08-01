@@ -105,18 +105,18 @@
   .masthead { flex: 0 0 auto; }
   .scotch { border-top: 3px solid var(--ink); border-bottom: 1px solid var(--ink); height: 6px; }
   .mast-row { display: flex; align-items: baseline; justify-content: space-between; padding: 8px 2px 7px; }
-  .mast-date { font-size: 16px; letter-spacing: 0.10em; text-transform: uppercase; width: 250px; font-variant-numeric: lining-nums; }
-  .mast-station { font-size: 20px; letter-spacing: 0.34em; text-transform: uppercase; text-align: center; padding-left: 0.34em; }
-  .mast-station .sub { display: block; font-family: var(--sans); font-size: 8.5px; letter-spacing: 0.30em; color: var(--ink-soft); margin-top: 3px; padding-left: 0.05em; }
-  .mast-clock { font-size: 23px; font-weight: 600; width: 250px; display: flex; justify-content: flex-end; align-items: center; gap: 14px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+  .mast-date { font-size: 17px; letter-spacing: 0.10em; text-transform: uppercase; width: 250px; font-variant-numeric: lining-nums; }
+  .mast-station { font-size: 21px; letter-spacing: 0.34em; text-transform: uppercase; text-align: center; padding-left: 0.34em; }
+  .mast-station .sub { display: block; font-family: var(--sans); font-size: 9px; letter-spacing: 0.30em; color: var(--ink-soft); margin-top: 3px; padding-left: 0.05em; }
+  .mast-clock { font-size: 24px; font-weight: 600; width: 250px; display: flex; justify-content: flex-end; align-items: center; gap: 14px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
   .mast-flag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--sans);
-    font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--brass);
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--brass);
     opacity: 0; transition: opacity 0.7s ease; }
   .mast-flag.on { opacity: 1; }
   .bolt-ic { fill: var(--brass); }
   .hair { border-bottom: 1px solid var(--rule); }
   /* unobtrusive stale mark — only shows when the feed goes quiet */
-  .mast-stale { font-family: var(--sans); font-size: 9px; letter-spacing: 0.16em;
+  .mast-stale { font-family: var(--sans); font-size: 9.5px; letter-spacing: 0.16em;
     text-transform: uppercase; color: var(--accent); opacity: 0; transition: opacity 0.4s ease; }
   .mast-stale.on { opacity: 0.85; }
 
@@ -130,26 +130,26 @@
 
   .cond { display: flex; align-items: center; gap: 12px; }
   .cond .sun-icon line, .cond .sun-icon circle { stroke: var(--ink); }
-  .cond-name { font-size: 23px; font-weight: 600; }
-  .cond-note { font-family: var(--sans); font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; letter-spacing: 0.02em; }
+  .cond-name { font-size: 24px; font-weight: 600; }
+  .cond-note { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: 2px; letter-spacing: 0.02em; }
 
   .bigtemp { margin: 10px 0 0 -5px; display: flex; align-items: flex-start; line-height: 0.86; }
-  .bigtemp .num { font-size: 112px; font-weight: 600; letter-spacing: -0.028em; }
-  .bigtemp .unit { font-size: 30px; margin: 9px 0 0 5px; }
-  .feels { font-family: var(--sans); font-size: 12.5px; color: var(--ink-soft); margin: 9px 0 0 1px; letter-spacing: 0.02em; }
+  .bigtemp .num { font-size: 117.5px; font-weight: 600; letter-spacing: -0.028em; }
+  .bigtemp .unit { font-size: 31.5px; margin: 9px 0 0 5px; }
+  .feels { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); margin: 9px 0 0 1px; letter-spacing: 0.02em; }
   .feels b { color: var(--ink); font-weight: 600; }
 
   .trend { margin-top: 13px; display: flex; gap: 9px; align-items: flex-start; }
-  .trend .arrow { color: var(--accent); font-size: 15px; line-height: 1.3; }
-  .trend-main { font-size: 15px; }
+  .trend .arrow { color: var(--accent); font-size: 16px; line-height: 1.3; }
+  .trend-main { font-size: 16px; }
   .trend-main b { color: var(--accent); font-weight: 600; }
-  .trend-sub { font-family: var(--sans); font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
+  .trend-sub { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
 
   .range { margin-top: 13px; }
   .range-labels { display: flex; justify-content: space-between; align-items: baseline;
-    font-family: var(--sans); font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    font-family: var(--sans); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
     color: var(--ink-soft); margin-bottom: 4px; }
-  .range-labels .v { font-family: var(--serif); font-size: 15px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--ink); margin-left: 5px; }
+  .range-labels .v { font-family: var(--serif); font-size: 16px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--ink); margin-left: 5px; }
 
   /* temperature day-curve */
   .spark { display: block; }
@@ -157,7 +157,7 @@
   .spark-tick { stroke: var(--rule); stroke-width: 1; }
   .spark-obs  { fill: none; stroke: var(--ink); stroke-width: 1.5; }
   .spark-fx   { fill: none; stroke: var(--ink-soft); stroke-width: 1.2; stroke-dasharray: 0.5 4.5; stroke-linecap: round; }
-  .spark-lbl  { fill: var(--ink-soft); font-size: 7.5px; letter-spacing: 0.06em; }
+  .spark-lbl  { fill: var(--ink-soft); font-size: 8px; letter-spacing: 0.06em; }
   .spark-pt   { fill: var(--paper); stroke: var(--ink); stroke-width: 1.2; }
   .spark-drop { stroke: var(--rule-faint); stroke-width: 1; }
   .spark-now  { fill: var(--accent); }
@@ -167,16 +167,16 @@
   .pair-row { display: flex; margin-top: 10px; }
   .pair { flex: 1; }
   .pair + .pair { border-left: 1px solid var(--rule-faint); padding-left: 16px; }
-  .pair .k { font-family: var(--sans); font-size: 9px; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
-  .pair .v { font-size: 19px; font-weight: 600; margin-top: 3px; }
-  .pair .v small { font-size: 12px; font-weight: 400; color: var(--ink-soft); }
-  .fx-cap { font-family: var(--sans); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); margin-top: 10px; border-top: 1px solid var(--rule-faint); padding-top: 9px; }
+  .pair .k { font-family: var(--sans); font-size: 9.5px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
+  .pair .v { font-size: 20px; font-weight: 600; margin-top: 3px; }
+  .pair .v small { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+  .fx-cap { font-family: var(--sans); font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); margin-top: 10px; border-top: 1px solid var(--rule-faint); padding-top: 9px; }
   .fx-row { display: flex; margin-top: 6px; margin-bottom: 2px; }
   .fx { flex: 1; }
   .fx + .fx { border-left: 1px solid var(--rule-faint); padding-left: 14px; }
-  .fx .k { font-family: var(--sans); font-size: 8.5px; font-weight: 500; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-soft); }
-  .fx .v { font-size: 15px; font-weight: 600; margin-top: 2px; }
-  .fx .v small { font-size: 11px; font-weight: 400; color: var(--ink-soft); }
+  .fx .k { font-family: var(--sans); font-size: 9px; font-weight: 600; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-soft); }
+  .fx .v { font-size: 16px; font-weight: 600; margin-top: 2px; }
+  .fx .v small { font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
 
   /* ———— Instrument grid ———— */
   .grid { flex: 1 1 auto; min-width: 0; display: grid;
@@ -200,50 +200,50 @@
 
   .p-head { display: flex; justify-content: space-between; align-items: baseline;
     border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 8px; }
-  .p-title { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink); }
-  .p-status { font-family: var(--sans); font-size: 9.5px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); }
+  .p-title { font-family: var(--sans); font-size: 10.5px; font-weight: 600; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink); }
+  .p-status { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); }
 
   .p-body { display: flex; gap: 14px; flex: 1; min-height: 0; align-items: center; }
   .p-col { display: flex; flex-direction: column; flex: 1; min-width: 0; align-self: stretch; }
   .p-col.snug { justify-content: center; }
   .p-col.snug .ledger { margin-top: 13px; }
   .p-value { display: flex; align-items: baseline; gap: 6px; }
-  .p-value .n { font-size: 38px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; }
-  .p-value .n.small-n { font-size: 30px; }
-  .p-value .u { font-family: var(--sans); font-size: 10.5px; color: var(--ink-soft); letter-spacing: 0.06em; }
-  .p-sub { font-family: var(--sans); font-size: 10.5px; color: var(--ink-soft); margin-top: 4px; letter-spacing: 0.04em; }
+  .p-value .n { font-size: 40px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; }
+  .p-value .n.small-n { font-size: 31.5px; }
+  .p-value .u { font-family: var(--sans); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.06em; }
+  .p-sub { font-family: var(--sans); font-size: 11px; color: var(--ink-soft); margin-top: 4px; letter-spacing: 0.04em; }
   .p-sub b { color: var(--ink); font-weight: 600; letter-spacing: 0.08em; }
   .up-w { color: var(--water); }
 
   .ledger { margin-top: auto; border-top: 1px solid var(--rule-faint); padding-top: 6px; }
   .lrow { display: flex; align-items: baseline; padding: 2px 0; }
-  .lrow .k { font-family: var(--sans); font-size: 9.5px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
+  .lrow .k { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
   .lrow .dots { flex: 1; margin: 0 7px; border-bottom: 1px dotted var(--dot); transform: translateY(-3px); }
-  .lrow .v { font-size: 13.5px; font-weight: 600; white-space: nowrap; font-variant-numeric: lining-nums; }
-  .lrow .v small { font-family: var(--sans); font-size: 9.5px; font-weight: 400; color: var(--ink-soft); }
-  .lrow .v.word { font-size: 12px; }
+  .lrow .v { font-size: 14px; font-weight: 600; white-space: nowrap; font-variant-numeric: lining-nums; }
+  .lrow .v small { font-family: var(--sans); font-size: 10px; font-weight: 600; color: var(--ink-soft); }
+  .lrow .v.word { font-size: 12.5px; }
 
   /* UV block */
   .uv { margin-top: 5px; }
   .uv-line { display: flex; align-items: baseline; gap: 7px; }
-  .uv-line .k { font-family: var(--sans); font-size: 9.5px; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
-  .uv-line .n { font-size: 19px; font-weight: 600; }
-  .uv-line .w { font-family: var(--sans); font-size: 10.5px; color: var(--ink); font-weight: 600; letter-spacing: 0.06em; }
+  .uv-line .k { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
+  .uv-line .n { font-size: 20px; font-weight: 600; }
+  .uv-line .w { font-family: var(--sans); font-size: 11px; color: var(--ink); font-weight: 600; letter-spacing: 0.06em; }
   .uv-track { position: relative; height: 12px; margin-top: 6px; }
   /* Apple-Watch-style WHO UV scale: green(low)→amber→orange→red→violet(extreme) */
   .uv-bar { position: absolute; left: 0; right: 0; top: 3px; height: 6px; border-radius: 3px;
     background: linear-gradient(to right, #4E9E5B 5%, #D8BE44 32%, #E28C33 56%, #C43E2B 80%, #8E5AA8 100%); }
   .uv-track .marker { position: absolute; top: 0; left: 36.4%; width: 12px; height: 12px; margin-left: -6px;
     background: var(--paper); border: 2px solid var(--ink); border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.28); }
-  .uv-ends { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 8px; color: var(--ink-soft); letter-spacing: 0.1em; margin-top: 2px; }
+  .uv-ends { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 8.5px; color: var(--ink-soft); letter-spacing: 0.1em; margin-top: 2px; }
 
   /* Rainfall dry-spell block — derived from the station's own accumulation record */
   .dry { margin: auto 0; padding: 6px 0; }
   .dry-line { display: flex; align-items: baseline; gap: 7px; }
-  .dry-line .k { font-family: var(--sans); font-size: 9.5px; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
-  .dry-line .n { font-size: 19px; font-weight: 600; }
-  .dry-line .u { font-family: var(--sans); font-size: 10.5px; color: var(--ink-soft); letter-spacing: 0.06em; }
-  .dry-sub { font-family: var(--sans); font-size: 10.5px; color: var(--ink-soft); margin-top: 3px; letter-spacing: 0.04em; }
+  .dry-line .k { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
+  .dry-line .n { font-size: 20px; font-weight: 600; }
+  .dry-line .u { font-family: var(--sans); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.06em; }
+  .dry-sub { font-family: var(--sans); font-size: 11px; color: var(--ink-soft); margin-top: 3px; letter-spacing: 0.04em; }
 
   /* ———— SVG instrument styling ———— */
   svg text { font-family: var(--sans); }
@@ -254,65 +254,65 @@
   .dial-face.baro { fill: var(--water-tint); }
   .arc-fill    { fill: var(--brass-tint); }
   .gauge-fill  { fill: var(--water-tint); }
-  .dial-num    { fill: var(--ink-soft); font-size: 7px; }
-  .dial-word   { fill: var(--ink-soft); font-size: 6px; letter-spacing: 0.12em; }
-  .dial-mb     { fill: var(--ink-soft); font-size: 6.5px; letter-spacing: 0.22em; }
+  .dial-num    { fill: var(--ink-soft); font-size: 7.5px; }
+  .dial-word   { fill: var(--ink-soft); font-size: 6.5px; letter-spacing: 0.12em; }
+  .dial-mb     { fill: var(--ink-soft); font-size: 7px; letter-spacing: 0.22em; }
   .needle-baro { fill: var(--water); }
   .needle-wind { fill: var(--verdigris); }
   .needle-set  { stroke: var(--ink-soft); stroke-width: 1.5; }
   .hub         { fill: var(--ink); }
   .hub-dot     { fill: var(--paper); }
   .rose-star   { stroke: var(--rule); fill: none; stroke-width: 0.75; }
-  .rose-letter { fill: var(--ink); font-family: var(--serif); font-size: 11px; }
+  .rose-letter { fill: var(--ink); font-family: var(--serif); font-size: 11.5px; }
   .arc-past    { stroke: var(--ink); stroke-width: 1.5; fill: none; }
   .arc-future  { stroke: var(--ink-soft); stroke-width: 1.2; fill: none; stroke-dasharray: 0.5 4.5; stroke-linecap: round; }
   .horizon     { stroke: var(--rule); stroke-width: 1; }
   .sun-dot     { fill: var(--brass); }
   .sun-ray     { stroke: var(--brass); stroke-width: 1; }
   .arc-tick    { stroke: var(--rule); stroke-width: 1; }
-  .arc-lbl     { fill: var(--ink-soft); font-size: 6.5px; letter-spacing: 0.16em; }
-  .gauge-lbl   { fill: var(--ink-soft); font-size: 6.5px; }
-  .gauge-cap   { fill: var(--ink-soft); font-size: 6px; letter-spacing: 0.14em; }
+  .arc-lbl     { fill: var(--ink-soft); font-size: 7px; letter-spacing: 0.16em; }
+  .gauge-lbl   { fill: var(--ink-soft); font-size: 7px; }
+  .gauge-cap   { fill: var(--ink-soft); font-size: 6.5px; letter-spacing: 0.14em; }
   .gauge-ptr   { fill: var(--water); }
   .moon-base   { fill: var(--moon-lit); stroke: var(--rule); stroke-width: 1; }
   .moon-crater { fill: none; stroke: var(--rule-faint); stroke-width: 0.8; }
   .moon-dark   { fill: var(--moon-shade); }
   .ring        { fill: none; stroke: var(--rule); stroke-width: 1; stroke-dasharray: 0.5 4; stroke-linecap: round; }
-  .ring-lbl    { fill: var(--ink-soft); font-size: 7px; letter-spacing: 0.1em; }
+  .ring-lbl    { fill: var(--ink-soft); font-size: 7.5px; letter-spacing: 0.1em; }
   .spark       { fill: var(--brass); opacity: 0.75; }
-  .spark-lbl   { fill: var(--ink-soft); font-size: 7px; }
+  .spark-lbl   { fill: var(--ink-soft); font-size: 7.5px; }
   .strike-ring { fill: none; stroke: var(--brass); stroke-width: 1.1; }
   .station-dot { fill: var(--ink); }
 
-  .sun-times { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 10px; color: var(--ink-soft); margin: 1px 2px 0; letter-spacing: 0.03em; }
+  .sun-times { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 10.5px; color: var(--ink-soft); margin: 1px 2px 0; letter-spacing: 0.03em; }
   .sun-times b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 
   /* ═════════ SECONDARY SCREENS ═════════ */
   .sc { flex-direction: column; }
   .sc-head { display: flex; justify-content: space-between; align-items: baseline;
     border-bottom: 1px solid var(--rule); padding-bottom: 6px; }
-  .sc-title { font-family: var(--sans); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; }
-  .sc-status { font-family: var(--sans); font-size: 10px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); }
+  .sc-title { font-family: var(--sans); font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase; }
+  .sc-status { font-family: var(--sans); font-size: 10.5px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); }
   .sc-body { flex: 1; display: flex; align-items: center; justify-content: center; gap: 64px; min-height: 0; }
 
-  .sc-big { font-size: 34px; font-weight: 600; }
-  .sc-sub { font-family: var(--sans); font-size: 12.5px; color: var(--ink-soft); margin-top: 5px; letter-spacing: 0.02em; }
+  .sc-big { font-size: 35.5px; font-weight: 600; }
+  .sc-sub { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); margin-top: 5px; letter-spacing: 0.02em; }
   .sc-ledger { margin-top: 20px; width: 300px; }
   .sc-ledger .lrow { padding: 4px 0; }
-  .sc-ledger .lrow .v { font-size: 15px; }
-  .sc-note { font-family: var(--sans); font-size: 11px; color: var(--ink-soft); margin-top: 18px; max-width: 300px; line-height: 1.5; }
+  .sc-ledger .lrow .v { font-size: 16px; }
+  .sc-note { font-family: var(--sans); font-size: 11.5px; color: var(--ink-soft); margin-top: 18px; max-width: 300px; line-height: 1.5; }
 
-  .bignum { font-size: 64px; font-weight: 600; line-height: 1; }
-  .bignum small { font-family: var(--sans); font-size: 12px; font-weight: 400; color: var(--ink-soft); letter-spacing: 0.06em; }
+  .bignum { font-size: 67px; font-weight: 600; line-height: 1; }
+  .bignum small { font-family: var(--sans); font-size: 12.5px; font-weight: 600; color: var(--ink-soft); letter-spacing: 0.06em; }
 
   /* Sager bulletin card */
   .bulletin { position: relative; width: 560px; border: 1px solid var(--rule); padding: 26px 44px 24px; text-align: center; }
   .bulletin::before { content: ""; position: absolute; inset: 4px; border: 1px solid var(--rule-faint); pointer-events: none; }
-  .bul-cap { font-family: var(--sans); font-size: 9px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--ink-soft); }
-  .bul-code { font-size: 46px; letter-spacing: 0.14em; margin-top: 10px; }
-  .bul-issued { font-family: var(--sans); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); margin-top: 6px; }
+  .bul-cap { font-family: var(--sans); font-size: 9.5px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--ink-soft); }
+  .bul-code { font-size: 48.5px; letter-spacing: 0.14em; margin-top: 10px; }
+  .bul-issued { font-family: var(--sans); font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); margin-top: 6px; }
   .bul-rule { width: 64px; margin: 14px auto; border-bottom: 1px solid var(--rule); }
-  .bul-text { font-size: 19px; line-height: 1.5; max-width: 430px; margin: 0 auto; }
+  .bul-text { font-size: 20px; line-height: 1.5; max-width: 430px; margin: 0 auto; }
   .bul-inputs { display: flex; justify-content: center; gap: 36px; margin-top: 18px; }
   .bul-inputs .fx { flex: none; text-align: center; }
   .bul-inputs .fx + .fx { border-left: 1px solid var(--rule-faint); padding-left: 36px; }
@@ -321,7 +321,7 @@
   .foot { flex: 0 0 auto; padding-top: 6px; }
   .tabs { display: flex; align-items: baseline; gap: 26px; padding-top: 7px; }
   .tab { background: none; border: none; cursor: pointer; font-family: var(--sans);
-    font-size: 9px; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink-soft);
+    font-size: 9.5px; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink-soft);
     padding: 0 0 3px; border-bottom: 2px solid transparent;
     position: relative; touch-action: manipulation;
     -webkit-user-select: none; user-select: none;
@@ -333,7 +333,7 @@
   .tab:not(.dim):active { opacity: 0.5; color: var(--ink); }
   .tab.tap-flash { color: var(--ink); }
   .tabs .spacer { flex: 1; }
-  .foot-station { font-family: var(--sans); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); }
+  .foot-station { font-family: var(--sans); font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); }
 
   /* ———— Touchscreen kiosk behaviour ———— */
   html { -webkit-text-size-adjust: 100%; }
@@ -1000,13 +1000,34 @@
   }
 
   /* ———— Temperature sparkline: rebuild from live points ———— */
+  /* CENTRIPETAL Catmull-Rom (alpha=0.5) -> cubic Bezier. Distance-weighted
+     tangents can't loop or overshoot when points are unevenly spaced — e.g.
+     obsHigh and "now" landing a pixel apart no longer flings the curve off. */
   function smooth(pts) {
     if (pts.length < 2) return "";
+    if (pts.length === 2)
+      return "M " + pts[0][0].toFixed(1) + " " + pts[0][1].toFixed(1) +
+             " L " + pts[1][0].toFixed(1) + " " + pts[1][1].toFixed(1);
+    function chord(a, b) { var dx = b[0] - a[0], dy = b[1] - a[1]; return Math.pow(dx * dx + dy * dy, 0.25); }
     var d = "M " + pts[0][0].toFixed(1) + " " + pts[0][1].toFixed(1);
     for (var i = 0; i < pts.length - 1; i++) {
       var p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || pts[i + 1];
-      var c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
-      var c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+      var d1 = chord(p0, p1), d2 = chord(p1, p2), d3 = chord(p2, p3);
+      var c1x, c1y, c2x, c2y;
+      if (d1 < 1e-4) {                       // first segment (p0==p1): simple tangent
+        c1x = p1[0] + (p2[0] - p1[0]) / 3; c1y = p1[1] + (p2[1] - p1[1]) / 3;
+      } else {
+        var N = 3 * d1 * (d1 + d2);
+        c1x = (d1 * d1 * p2[0] - d2 * d2 * p0[0] + (2 * d1 * d1 + 3 * d1 * d2 + d2 * d2) * p1[0]) / N;
+        c1y = (d1 * d1 * p2[1] - d2 * d2 * p0[1] + (2 * d1 * d1 + 3 * d1 * d2 + d2 * d2) * p1[1]) / N;
+      }
+      if (d3 < 1e-4) {                       // last segment (p2==p3): simple tangent
+        c2x = p2[0] - (p2[0] - p1[0]) / 3; c2y = p2[1] - (p2[1] - p1[1]) / 3;
+      } else {
+        var M = 3 * d3 * (d3 + d2);
+        c2x = (d3 * d3 * p1[0] - d2 * d2 * p3[0] + (2 * d3 * d3 + 3 * d3 * d2 + d2 * d2) * p2[0]) / M;
+        c2y = (d3 * d3 * p1[1] - d2 * d2 * p3[1] + (2 * d3 * d3 + 3 * d3 * d2 + d2 * d2) * p2[1]) / M;
+      }
       d += " C " + c1x.toFixed(1) + " " + c1y.toFixed(1) + " " + c2x.toFixed(1) + " " + c2y.toFixed(1) +
            " " + p2[0].toFixed(1) + " " + p2[1].toFixed(1);
     }
