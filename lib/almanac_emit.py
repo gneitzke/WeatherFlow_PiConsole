@@ -283,6 +283,7 @@ class AlmanacEmitter:
 
         strike_delta_t = Obs.get('StrikeDeltaT')
         lightning_since_sec = _num(_idx(strike_delta_t, 4))
+        lightning_active = self._lightning_active(config, lightning_since_sec)
 
         return {
             'ts':      int(time.time()),
@@ -369,7 +370,7 @@ class AlmanacEmitter:
             'nextNew':    _text(_idx(Astro.get('NewMoon'), 0)),
 
             # Lightning
-            'lightningActive':   lightning_since_sec is not None,
+            'lightningActive':   lightning_active,
             'lightningDist':     _text(_idx(Obs.get('StrikeDist'), 0)),
             'lightningSinceSec': lightning_since_sec,
             'lightning3min':     None,   # not sourced - only 3hr/day/month/year counts exist
@@ -393,6 +394,23 @@ class AlmanacEmitter:
             return pytz.timezone(tzname) if tzname else None
         except Exception:                                                 # noqa: BLE001
             return None
+
+    @staticmethod
+    def _lightning_active(config, since_sec):
+        """ True only while lightning is RECENT — mirrors the core console, which
+        swaps Panel Six from Rainfall to Lightning on a strike and reverts after
+        Display/lightning_timeout minutes (the core also flags the bolt icon for
+        strikes < 360 s). This emitter is poll-based, so we show Lightning while
+        the last strike is inside that window and Rainfall otherwise. Window =
+        lightning_timeout if configured, else 30 min. Never raises. """
+        if since_sec is None:
+            return False
+        try:
+            timeout_min = int(_cfg(config, 'Display', 'lightning_timeout') or 0)
+        except Exception:                                                 # noqa: BLE001
+            timeout_min = 0
+        window_sec = timeout_min * 60 if timeout_min > 0 else 1800
+        return since_sec < window_sec
 
     @staticmethod
     def _location_line(config):
