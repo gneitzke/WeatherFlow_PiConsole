@@ -111,6 +111,17 @@
      whole page (white) when rasterized on the Pi's VC4 GPU. Purely decorative. */
   .page::after { content: none; }
 
+  /* update-available dropdown — slides down from the top when the emitter
+     reports a newer release is available (hidden otherwise) */
+  .update-drop { position: absolute; top: 0; left: 50%; z-index: 30;
+    transform: translateX(-50%) translateY(-100%); transition: transform 0.55s ease;
+    background: var(--brass); color: var(--paper); font-family: var(--sans);
+    font-size: 14px; font-weight: 800; letter-spacing: 0.10em; text-transform: uppercase;
+    padding: 7px 22px; border-radius: 0 0 10px 10px; white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.45); }
+  .update-drop.on { transform: translateX(-50%) translateY(0); }
+  .update-drop b { font-weight: 800; letter-spacing: 0.04em; }
+
   /* ———— Masthead ———— */
   .masthead { flex: 0 0 auto; }
   .scotch { border-top: 3px solid var(--ink); border-bottom: 1px solid var(--ink); height: 6px; }
@@ -386,6 +397,9 @@
 <body>
 <div class="page">
 
+  <!-- update-available dropdown (mirrors the classic console's notification) -->
+  <div class="update-drop" id="update-drop">↑ Update available · <b id="update-ver"></b></div>
+
   <!-- ————— MASTHEAD ————— -->
   <header class="masthead">
     <div class="scotch"></div>
@@ -553,7 +567,7 @@
           <div class="p-head"><span class="p-title">Lightning</span><span class="p-status brass">Active</span></div>
           <div class="p-body">
             <div class="p-col snug">
-              <div class="p-value"><span class="n" id="bolt-dist">6</span><span class="u">mi to last strike</span></div>
+              <div class="p-value"><span class="n" id="bolt-dist">6</span><span class="u">mi away</span></div>
               <div class="p-sub">Last strike <b id="bolt-since">0:00</b> ago</div>
               <div class="ledger">
                 <div class="lrow"><span class="k">Last 3 min</span><span class="dots"></span><span class="v" id="bolt-3min">1</span></div>
@@ -909,6 +923,17 @@
     if (data.locationLine) {
       var fs = document.querySelector(".foot-station");
       if (fs) fs.textContent = data.locationLine;
+    }
+
+    /* update-available dropdown */
+    var drop = $("update-drop");
+    if (drop) {
+      if (data.updateAvailable && data.latestVersion) {
+        $("update-ver").textContent = data.latestVersion;
+        drop.classList.add("on");
+      } else {
+        drop.classList.remove("on");
+      }
     }
 
     /* temperature trend arrow + word */

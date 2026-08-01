@@ -45,6 +45,7 @@ import pytz
 # into lib/config.py. Override by editing this constant.
 OUTPUT_PATH   = '/tmp/wfp_data/wx.json'
 EMIT_INTERVAL = 2.0     # seconds, per DATA_CONTRACT.md ("~every 2 s")
+VERSION_CHECK_INTERVAL = 900   # seconds (15 min) — how often we poll GitHub for a newer release
 
 # Placeholder strings used throughout properties.py / observation_format.py to
 # mean "no data yet" ('-', '--', '---', ...). Any of these should collapse to
@@ -203,7 +204,12 @@ class AlmanacEmitter:
         self.output_path = output_path
         self.interval    = interval
         self._event      = None
+        self._ver_event  = None
         self._warned     = False
+        # update-check state (populated off-thread; read on the emit tick)
+        self._update_available = False
+        self._latest_version   = None
+        self._current_version  = None
 
     def start(self):
         """ Schedule the periodic emit. Idempotent - calling twice (e.g. if
@@ -216,12 +222,47 @@ class AlmanacEmitter:
         except OSError as error:
             Logger.warning(f'almanac_emit: could not create output directory - {error}')
         self._event = Clock.schedule_interval(self._emit, self.interval)
+        # update check: soon after start, then periodically (off the main thread)
+        Clock.schedule_once(self._check_version, 8)
+        self._ver_event = Clock.schedule_interval(self._check_version, VERSION_CHECK_INTERVAL)
         return self._event
 
     def stop(self):
         if self._event is not None:
             self._event.cancel()
             self._event = None
+        if self._ver_event is not None:
+            self._ver_event.cancel()
+            self._ver_event = None
+
+    def _check_version(self, _dt=None):
+        """ Kick off a non-blocking GitHub version check on a daemon thread so a
+        slow/failed request never stalls the Kivy main loop or the emit tick. """
+        try:
+            import threading
+            threading.Thread(target=self._do_version_check, daemon=True).start()
+        except Exception:                                                 # noqa: BLE001
+            pass
+
+    def _do_version_check(self):
+        """ Compare the installed version to the latest GitHub release tag and
+        cache the result. Never raises. """
+        try:
+            from lib.request_api import github_api
+            from packaging import version as _v
+            config = getattr(self.app, 'config', None)
+            current = _cfg(config, 'System', 'Version')
+            resp = github_api.version(config)
+            if not github_api.verify_response(resp, 'tag_name'):
+                return
+            latest = resp.json()['tag_name']
+            self._latest_version  = latest
+            self._current_version = current
+            if current and latest:
+                self._update_available = (
+                    _v.parse(str(latest).lstrip('vV')) > _v.parse(str(current).lstrip('vV')))
+        except Exception:                                                 # noqa: BLE001
+            pass
 
     # --------------------------------------------------------------------
     def _emit(self, dt):
@@ -289,6 +330,9 @@ class AlmanacEmitter:
             'ts':      int(time.time()),
             'station': _text(_cfg(config, 'Station', 'Name')),
             'locationLine': self._location_line(config),
+            'updateAvailable': self._update_available,
+            'latestVersion':   self._latest_version,
+            'currentVersion':  self._current_version,
             'date':    now_local.strftime('%a, %d %b %Y'),
             'time':    now_local.strftime('%H:%M'),
 
