@@ -140,26 +140,26 @@
 
   .cond { display: flex; align-items: center; gap: 12px; }
   .cond .sun-icon line, .cond .sun-icon circle { stroke: var(--ink); }
-  .cond-name { font-size: 24px; font-weight: 700; }
-  .cond-note { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: 2px; letter-spacing: 0.02em; }
+  .cond-name { font-size: 27px; font-weight: 700; }
+  .cond-note { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); margin-top: 2px; letter-spacing: 0.02em; }
 
   .bigtemp { margin: 4px 0 0 -5px; display: flex; align-items: flex-start; line-height: 0.86; }
   .bigtemp .num { font-size: 117.5px; font-weight: 700; letter-spacing: -0.028em; }
   .bigtemp .unit { font-size: 31.5px; margin: 9px 0 0 5px; }
-  .feels { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); margin: 5px 0 0 1px; letter-spacing: 0.02em; }
+  .feels { font-family: var(--sans); font-size: 15.5px; color: var(--ink-soft); margin: 5px 0 0 1px; letter-spacing: 0.02em; }
   .feels b { color: var(--ink); font-weight: 700; }
 
   .trend { margin-top: 8px; display: flex; gap: 9px; align-items: flex-start; }
-  .trend .arrow { color: var(--accent); font-size: 16px; line-height: 1.3; }
-  .trend-main { font-size: 16px; }
+  .trend .arrow { color: var(--accent); font-size: 19px; line-height: 1.3; }
+  .trend-main { font-size: 19px; }
   .trend-main b { color: var(--accent); font-weight: 700; }
-  .trend-sub { font-family: var(--sans); font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+  .trend-sub { font-family: var(--sans); font-size: 14.5px; color: var(--ink-soft); margin-top: 2px; }
 
   .range { margin-top: 8px; }
   .range-labels { display: flex; justify-content: space-between; align-items: baseline;
     font-family: var(--sans); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
     color: var(--ink-soft); margin-bottom: 4px; }
-  .range-labels .v { font-family: var(--serif); font-size: 16px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--ink); margin-left: 5px; }
+  .range-labels .v { font-family: var(--serif); font-size: 20px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--ink); margin-left: 5px; }
 
   /* temperature day-curve */
   .spark { display: block; }
@@ -177,9 +177,9 @@
   .pair-row { display: flex; margin-top: 4px; }
   .pair { flex: 1; }
   .pair + .pair { border-left: 1px solid var(--rule-faint); padding-left: 16px; }
-  .pair .k { font-family: var(--sans); font-size: 11.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
-  .pair .v { font-size: 20px; font-weight: 700; margin-top: 3px; }
-  .pair .v small { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+  .pair .k { font-family: var(--sans); font-size: 13.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
+  .pair .v { font-size: 25px; font-weight: 700; margin-top: 3px; }
+  .pair .v small { font-size: 15px; font-weight: 700; color: var(--ink-soft); }
   .fx-cap { font-family: var(--sans); font-size: 11.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); margin-top: 10px; border-top: 1px solid var(--rule-faint); padding-top: 9px; }
   .fx-row { display: flex; margin-top: 6px; margin-bottom: 2px; }
   .fx { flex: 1; }
@@ -210,37 +210,38 @@
 
   .p-head { display: flex; justify-content: space-between; align-items: baseline;
     border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 8px; }
-  .p-title { font-family: var(--sans); font-size: 12.5px; font-weight: 700; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink); }
-  .p-status { font-family: var(--sans); font-size: 11.5px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); }
+  .p-title { font-family: var(--sans); font-size: 15px; font-weight: 700; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink); }
+  .p-status { font-family: var(--sans); font-size: 13px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); }
 
   .p-body { display: flex; gap: 14px; flex: 1; min-height: 0; align-items: center; }
   .p-col { display: flex; flex-direction: column; flex: 1; min-width: 0; align-self: stretch; }
   .p-col.snug { justify-content: center; }
   .p-col.snug .ledger { margin-top: 13px; }
   .p-value { display: flex; align-items: baseline; gap: 6px; }
-  .p-value .n { font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: -0.01em; }
-  .p-value .n.small-n { font-size: 31.5px; }
-  .p-value .u { font-family: var(--sans); font-size: 11.5px; color: var(--ink-soft); letter-spacing: 0.06em; }
-  .p-sub { font-family: var(--sans); font-size: 11.5px; color: var(--ink-soft); margin-top: 4px; letter-spacing: 0.04em; }
+  .p-value .n { font-size: 46px; font-weight: 700; line-height: 1; letter-spacing: -0.01em; }
+  .p-value .n.small-n { font-size: 37px; }
+  .p-value .u { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); letter-spacing: 0.06em; }
+  .p-sub { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); margin-top: 4px; letter-spacing: 0.04em; }
   .p-sub b { color: var(--ink); font-weight: 700; letter-spacing: 0.08em; }
   .up-w { color: var(--water); }
 
   .ledger { margin-top: auto; border-top: 1px solid var(--rule-faint); padding-top: 6px; }
   /* barometer is the tightest ledger (4-digit pressures + times beside the dial):
      keep its value + time from overflowing the panel's right edge */
-  .baro .lrow .k { letter-spacing: 0.06em; }
-  .baro .lrow .v small { font-size: 8.5px; }
+  .baro .lrow .k { letter-spacing: 0.05em; }
+  .baro .lrow .v { font-size: 13.5px; }        /* 4-digit pressures are wide */
+  .baro .lrow .v small { font-size: 11.5px; }
   /* rain tile: when dry the left column is short, leaving a big mid gap — center
      the group and give the ledger even breathing room instead of pinning it low */
   #tile-rain .p-col { justify-content: center; }
   #tile-rain .ledger { margin-top: 20px; }
   #tile-rain .p-sub { margin-top: 4px; }
   .lrow { display: flex; align-items: baseline; padding: 1px 0; }
-  .lrow .k { font-family: var(--sans); font-size: 11.5px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
+  .lrow .k { font-family: var(--sans); font-size: 13.5px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
   .lrow .dots { flex: 1; margin: 0 7px; border-bottom: 1px dotted var(--dot); transform: translateY(-3px); }
-  .lrow .v { font-size: 14px; font-weight: 700; white-space: nowrap; font-variant-numeric: lining-nums; }
-  .lrow .v small { font-family: var(--sans); font-size: 11px; font-weight: 700; color: var(--ink-soft); }
-  .lrow .v.word { font-size: 11.5px; white-space: normal; text-align: right; line-height: 1.18; }
+  .lrow .v { font-size: 18px; font-weight: 700; white-space: nowrap; font-variant-numeric: lining-nums; }
+  .lrow .v small { font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+  .lrow .v.word { font-size: 13px; white-space: normal; text-align: right; line-height: 1.18; }
   .lrow.out { align-items: baseline; }
   .lrow.out .dots { display: none; }
   .lrow.out .v.word { margin-left: auto; }
@@ -248,9 +249,9 @@
   /* UV block */
   .uv { margin-top: 5px; }
   .uv-line { display: flex; align-items: baseline; gap: 7px; }
-  .uv-line .k { font-family: var(--sans); font-size: 11.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
-  .uv-line .n { font-size: 20px; font-weight: 700; }
-  .uv-line .w { font-family: var(--sans); font-size: 11.5px; color: var(--ink); font-weight: 700; letter-spacing: 0.06em; }
+  .uv-line .k { font-family: var(--sans); font-size: 13.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
+  .uv-line .n { font-size: 24px; font-weight: 700; }
+  .uv-line .w { font-family: var(--sans); font-size: 13.5px; color: var(--ink); font-weight: 700; letter-spacing: 0.06em; }
   .uv-track { position: relative; height: 13px; margin-top: 3px; }
   /* Apple-Watch-style WHO UV scale: green(low)→amber→orange→red→violet(extreme) */
   .uv-bar { position: absolute; left: 0; right: 0; top: 2.5px; height: 8px; border-radius: 4px;
@@ -318,7 +319,7 @@
   .strike-ring { fill: none; stroke: var(--brass); stroke-width: 1.1; }
   .station-dot { fill: var(--ink); }
 
-  .sun-times { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 11.5px; color: var(--ink-soft); margin: 1px 2px 0; letter-spacing: 0.03em; }
+  .sun-times { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 13.5px; color: var(--ink-soft); margin: 1px 2px 0; letter-spacing: 0.03em; }
   .sun-times b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 
   /* ═════════ SECONDARY SCREENS ═════════ */
@@ -435,19 +436,19 @@
           <span>High<span class="v" data-k="fcHigh">82°</span></span>
         </div>
         <!-- today's temperature curve · 00:00→24:00 · observed solid, forecast dotted -->
-        <svg class="spark" width="350" height="74" viewBox="0 0 350 74">
+        <svg class="spark" width="350" height="104" viewBox="0 0 350 104">
           <defs>
             <linearGradient id="tempfill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0" style="stop-color:var(--accent); stop-opacity:0.20"/>
               <stop offset="1" style="stop-color:var(--accent); stop-opacity:0"/>
             </linearGradient>
           </defs>
-          <line class="spark-base" x1="0" y1="62" x2="350" y2="62"/>
-          <line class="spark-tick" x1="0.5"   y1="62" x2="0.5"   y2="65.5"/>
-          <line class="spark-tick" x1="87.5"  y1="62" x2="87.5"  y2="65.5"/>
-          <line class="spark-tick" x1="175"   y1="62" x2="175"   y2="65.5"/>
-          <line class="spark-tick" x1="262.5" y1="62" x2="262.5" y2="65.5"/>
-          <line class="spark-tick" x1="349.5" y1="62" x2="349.5" y2="65.5"/>
+          <line class="spark-base" x1="0" y1="88" x2="350" y2="88"/>
+          <line class="spark-tick" x1="0.5"   y1="88" x2="0.5"   y2="93"/>
+          <line class="spark-tick" x1="87.5"  y1="88" x2="87.5"  y2="93"/>
+          <line class="spark-tick" x1="175"   y1="88" x2="175"   y2="93"/>
+          <line class="spark-tick" x1="262.5" y1="88" x2="262.5" y2="93"/>
+          <line class="spark-tick" x1="349.5" y1="88" x2="349.5" y2="93"/>
           <!-- dynamic curve rebuilt from live obs/forecast points -->
           <g id="spark-dyn"></g>
         </svg>
@@ -458,12 +459,6 @@
         <div class="pair-row">
           <div class="pair"><div class="k">Humidity</div><div class="v"><span data-k="humidity">67</span><small> %</small></div></div>
           <div class="pair"><div class="k">Dew Point</div><div class="v"><span data-k="dewPoint">52.9</span><small> <span data-k="tempUnit">°F</span></small></div></div>
-        </div>
-        <div class="fx-cap">Forecast for <span data-k="fcHour">10:00</span></div>
-        <div class="fx-row">
-          <div class="fx"><div class="k">Wind</div><div class="v" id="fx-wind">0 <small>mph NW</small></div></div>
-          <div class="fx"><div class="k">Precip</div><div class="v"><span data-k="fcPrecipPct">0</span><small> %</small></div></div>
-          <div class="fx"><div class="k">Daily</div><div class="v"><span data-k="fcDailyPct">0</span><small> %</small></div></div>
         </div>
       </div>
     </section>
@@ -483,7 +478,6 @@
             <div class="ledger">
               <div class="lrow"><span class="k">Average</span><span class="dots"></span><span class="v"><span data-k="windAvg">0.1</span> <small data-k="windUnit">mph</small></span></div>
               <div class="lrow"><span class="k">Gust</span><span class="dots"></span><span class="v"><span data-k="windGust">2.9</span> <small data-k="windUnit">mph</small></span></div>
-              <div class="lrow"><span class="k">Max today</span><span class="dots"></span><span class="v"><span data-k="windMax">4.3</span> <small data-k="windUnit">mph</small></span></div>
             </div>
           </div>
         </div>
@@ -498,8 +492,8 @@
             <div class="p-value"><span class="n small-n" data-k="slp">1022.1</span><span class="u" data-k="slpUnit">mb</span></div>
             <div class="p-sub"><span class="up-w" id="baro-arrow">↑</span> <span data-k="slpTrendDesc">Rising</span> <span data-k="slpTrendPerHr">0.4</span> <span data-k="slpUnit">mb</span>/hr</div>
             <div class="ledger">
-              <div class="lrow"><span class="k">24h high</span><span class="dots"></span><span class="v"><span data-k="slp24High">1022.1</span> <small data-k="slp24HighTime">08:20</small></span></div>
-              <div class="lrow"><span class="k">24h low</span><span class="dots"></span><span class="v"><span data-k="slp24Low">1020.2</span> <small data-k="slp24LowTime">00:00</small></span></div>
+              <div class="lrow"><span class="k">24h high</span><span class="dots"></span><span class="v"><span data-k="slp24High">1022.1</span> <small data-k="slpUnit">mb</small></span></div>
+              <div class="lrow"><span class="k">24h low</span><span class="dots"></span><span class="v"><span data-k="slp24Low">1020.2</span> <small data-k="slpUnit">mb</small></span></div>
               <div class="lrow out"><span class="k">Outlook</span><span class="dots"></span><span class="v word" data-k="slpOutlook">Unchanged</span></div>
             </div>
           </div>
@@ -533,7 +527,6 @@
           <div class="ledger">
             <div class="lrow"><span class="k">Radiation</span><span class="dots"></span><span class="v"><span data-k="radiation">468</span> <small data-k="radUnit">W/m²</small></span></div>
             <div class="lrow"><span class="k">Till sunset</span><span class="dots"></span><span class="v" id="sun-tillset">2<small>h</small> 24<small>m</small></span></div>
-            <div class="lrow"><span class="k">Peak sun</span><span class="dots"></span><span class="v"><span data-k="peakSun">0.65</span> <small>hr</small></span></div>
           </div>
         </div>
       </div>
@@ -550,7 +543,6 @@
               <div class="ledger">
                 <div class="lrow"><span class="k">Yesterday</span><span class="dots"></span><span class="v"><span data-k="rainYest">0.00</span> <small data-k="rainUnit">in</small></span></div>
                 <div class="lrow"><span class="k">This month</span><span class="dots"></span><span class="v"><span data-k="rainMonth">0.15</span> <small data-k="rainUnit">in</small></span></div>
-                <div class="lrow"><span class="k">This year</span><span class="dots"></span><span class="v"><span data-k="rainYear">40.0</span> <small data-k="rainUnit">in</small></span></div>
               </div>
             </div>
             <svg width="58" height="164" viewBox="0 0 58 164" id="raingauge" style="flex:none"></svg>
@@ -940,15 +932,6 @@
     var sp = data.slpTrendPerHr;
     $("baro-arrow").textContent = !isNum(sp) ? "" : (sp > 0.02 ? "↑" : sp < -0.02 ? "↓" : "→");
 
-    /* forecast wind — "0 mph NW" -> number + small remainder */
-    var fw = data.fcWind;
-    if (typeof fw === "string" && fw.length) {
-      var sp0 = fw.indexOf(" ");
-      if (sp0 > 0) {
-        $("fx-wind").innerHTML = escapeHtml(fw.slice(0, sp0)) + " <small>" + escapeHtml(fw.slice(sp0 + 1)) + "</small>";
-      } else { $("fx-wind").textContent = fw; }
-    } else { $("fx-wind").textContent = DASH; }
-
     /* "2h 24m" -> small unit markers (time remaining until sunset) */
     function hmMarkers(id, val) {
       var node = $(id);
@@ -1079,7 +1062,7 @@
     var g = $("spark-dyn");
     while (g.firstChild) g.removeChild(g.firstChild);
 
-    var W = 350, base = 62, yTop = 16, yBot = 59;
+    var W = 350, base = 88, yTop = 20, yBot = 84;
     function X(hours) { return clamp(hours / 24, 0, 1) * W; }
 
     /* collect temps for the vertical scale */
@@ -1134,7 +1117,7 @@
       var ox = X(o.h), oy = Y(o.T);
       el("circle", { class: "spark-pt", cx: ox.toFixed(1), cy: oy.toFixed(1), r: 2.7 }, g);
       if (o.tag === "low") {
-        el("text", { class: "spark-lbl", x: ox.toFixed(1), y: 71.5, "text-anchor": "middle" }, g)
+        el("text", { class: "spark-lbl", x: ox.toFixed(1), y: 100, "text-anchor": "middle" }, g)
           .textContent = o.T.toFixed(1) + "° · " + (data.obsLowTime || "");
       } else {
         el("text", { class: "spark-lbl", x: (ox - 5).toFixed(1), y: (oy - 6).toFixed(1), "text-anchor": "end" }, g)
