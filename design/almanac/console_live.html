@@ -117,8 +117,8 @@
   .mast-row { display: flex; align-items: baseline; justify-content: space-between; padding: 4px 2px 4px; }
   .mast-date { font-size: 17px; letter-spacing: 0.10em; text-transform: uppercase; width: 250px; font-variant-numeric: lining-nums; }
   .mast-station { font-size: 26px; letter-spacing: 0.34em; text-transform: uppercase; text-align: center; padding-left: 0.34em; }
-  .mast-station .sub { display: block; font-family: var(--sans); font-size: 11px; letter-spacing: 0.30em; color: var(--ink-soft); margin-top: 3px; padding-left: 0.05em; }
-  .mast-clock { font-size: 30px; font-weight: 700; width: 250px; display: flex; justify-content: flex-end; align-items: center; gap: 14px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+  .mast-station .sub { display: block; font-family: var(--sans); font-size: 12px; letter-spacing: 0.30em; color: var(--ink-soft); margin-top: 3px; padding-left: 0.05em; }
+  .mast-clock { font-size: 30px; font-weight: 800; width: 250px; display: flex; justify-content: flex-end; align-items: center; gap: 14px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
   .mast-flag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--sans);
     font-size: 12.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--brass);
     opacity: 0; transition: opacity 0.7s ease; }
@@ -126,7 +126,7 @@
   .bolt-ic { fill: var(--brass); }
   .hair { border-bottom: 1px solid var(--rule); }
   /* unobtrusive stale mark — only shows when the feed goes quiet */
-  .mast-stale { font-family: var(--sans); font-size: 11.5px; letter-spacing: 0.16em;
+  .mast-stale { font-family: var(--sans); font-size: 12.5px; letter-spacing: 0.16em;
     text-transform: uppercase; color: var(--accent); opacity: 0; transition: opacity 0.4s ease; }
   .mast-stale.on { opacity: 0.85; }
 
@@ -140,26 +140,26 @@
 
   .cond { display: flex; align-items: center; gap: 12px; }
   .cond .sun-icon line, .cond .sun-icon circle { stroke: var(--ink); }
-  .cond-name { font-size: 27px; font-weight: 700; }
+  .cond-name { font-size: 27px; font-weight: 800; }
   .cond-note { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); margin-top: 2px; letter-spacing: 0.02em; }
 
   .bigtemp { margin: 4px 0 0 -5px; display: flex; align-items: flex-start; line-height: 0.86; }
-  .bigtemp .num { font-size: 117.5px; font-weight: 700; letter-spacing: -0.028em; }
+  .bigtemp .num { font-size: 117.5px; font-weight: 800; letter-spacing: -0.028em; }
   .bigtemp .unit { font-size: 31.5px; margin: 9px 0 0 5px; }
   .feels { font-family: var(--sans); font-size: 15.5px; color: var(--ink-soft); margin: 5px 0 0 1px; letter-spacing: 0.02em; }
-  .feels b { color: var(--ink); font-weight: 700; }
+  .feels b { color: var(--ink); font-weight: 800; }
 
   .trend { margin-top: 8px; display: flex; gap: 9px; align-items: flex-start; }
   .trend .arrow { color: var(--accent); font-size: 19px; line-height: 1.3; }
   .trend-main { font-size: 19px; }
-  .trend-main b { color: var(--accent); font-weight: 700; }
+  .trend-main b { color: var(--accent); font-weight: 800; }
   .trend-sub { font-family: var(--sans); font-size: 14.5px; color: var(--ink-soft); margin-top: 2px; }
 
   .range { margin-top: 8px; }
   .range-labels { display: flex; justify-content: space-between; align-items: baseline;
     font-family: var(--sans); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
     color: var(--ink-soft); margin-bottom: 4px; }
-  .range-labels .v { font-family: var(--serif); font-size: 20px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--ink); margin-left: 5px; }
+  .range-labels .v { font-family: var(--serif); font-size: 20px; font-weight: 800; letter-spacing: 0; text-transform: none; color: var(--ink); margin-left: 5px; }
 
   /* temperature day-curve */
   .spark { display: block; }
@@ -177,16 +177,16 @@
   .pair-row { display: flex; margin-top: 4px; }
   .pair { flex: 1; }
   .pair + .pair { border-left: 1px solid var(--rule-faint); padding-left: 16px; }
-  .pair .k { font-family: var(--sans); font-size: 13.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
-  .pair .v { font-size: 25px; font-weight: 700; margin-top: 3px; }
-  .pair .v small { font-size: 15px; font-weight: 700; color: var(--ink-soft); }
+  .pair .k { font-family: var(--sans); font-size: 14px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
+  .pair .v { font-size: 25px; font-weight: 800; margin-top: 3px; }
+  .pair .v small { font-size: 15px; font-weight: 800; color: var(--ink-soft); }
   .fx-cap { font-family: var(--sans); font-size: 11.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); margin-top: 10px; border-top: 1px solid var(--rule-faint); padding-top: 9px; }
   .fx-row { display: flex; margin-top: 6px; margin-bottom: 2px; }
   .fx { flex: 1; }
   .fx + .fx { border-left: 1px solid var(--rule-faint); padding-left: 14px; }
-  .fx .k { font-family: var(--sans); font-size: 11.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-soft); }
-  .fx .v { font-size: 16px; font-weight: 700; margin-top: 2px; }
-  .fx .v small { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
+  .fx .k { font-family: var(--sans); font-size: 11.5px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-soft); }
+  .fx .v { font-size: 16px; font-weight: 800; margin-top: 2px; }
+  .fx .v small { font-size: 11.5px; font-weight: 800; color: var(--ink-soft); }
 
   /* ———— Instrument grid ———— */
   .grid { flex: 1 1 auto; min-width: 0; display: grid;
@@ -210,37 +210,37 @@
 
   .p-head { display: flex; justify-content: space-between; align-items: baseline;
     border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 8px; }
-  .p-title { font-family: var(--sans); font-size: 15px; font-weight: 700; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink); }
-  .p-status { font-family: var(--sans); font-size: 13px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); }
+  .p-title { font-family: var(--sans); font-size: 15px; font-weight: 800; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink); }
+  .p-status { font-family: var(--sans); font-size: 13.5px; font-weight: 800; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); }
 
   .p-body { display: flex; gap: 14px; flex: 1; min-height: 0; align-items: center; }
   .p-col { display: flex; flex-direction: column; flex: 1; min-width: 0; align-self: stretch; }
   .p-col.snug { justify-content: center; }
   .p-col.snug .ledger { margin-top: 13px; }
   .p-value { display: flex; align-items: baseline; gap: 6px; }
-  .p-value .n { font-size: 46px; font-weight: 700; line-height: 1; letter-spacing: -0.01em; }
+  .p-value .n { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.01em; }
   .p-value .n.small-n { font-size: 37px; }
   .p-value .u { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); letter-spacing: 0.06em; }
   .p-sub { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); margin-top: 4px; letter-spacing: 0.04em; }
-  .p-sub b { color: var(--ink); font-weight: 700; letter-spacing: 0.08em; }
+  .p-sub b { color: var(--ink); font-weight: 800; letter-spacing: 0.08em; }
   .up-w { color: var(--water); }
 
   .ledger { margin-top: auto; border-top: 1px solid var(--rule-faint); padding-top: 6px; }
   /* barometer is the tightest ledger (4-digit pressures + times beside the dial):
      keep its value + time from overflowing the panel's right edge */
   .baro .lrow .k { letter-spacing: 0.05em; }
-  .baro .lrow .v { font-size: 13.5px; }        /* 4-digit pressures are wide */
-  .baro .lrow .v small { font-size: 11.5px; }
+  .baro .lrow .v { font-size: 12.5px; font-weight: 700; }   /* 4-digit pressures are wide */
+  .baro .lrow .v small { font-size: 11px; font-weight: 700; }
   /* rain tile: when dry the left column is short, leaving a big mid gap — center
      the group and give the ledger even breathing room instead of pinning it low */
   #tile-rain .p-col { justify-content: center; }
   #tile-rain .ledger { margin-top: 20px; }
   #tile-rain .p-sub { margin-top: 4px; }
   .lrow { display: flex; align-items: baseline; padding: 1px 0; }
-  .lrow .k { font-family: var(--sans); font-size: 13.5px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
+  .lrow .k { font-family: var(--sans); font-size: 14px; font-weight: 800; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
   .lrow .dots { flex: 1; margin: 0 7px; border-bottom: 1px dotted var(--dot); transform: translateY(-3px); }
-  .lrow .v { font-size: 18px; font-weight: 700; white-space: nowrap; font-variant-numeric: lining-nums; }
-  .lrow .v small { font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+  .lrow .v { font-size: 18px; font-weight: 800; white-space: nowrap; font-variant-numeric: lining-nums; }
+  .lrow .v small { font-family: var(--sans); font-size: 13.5px; font-weight: 800; color: var(--ink-soft); }
   .lrow .v.word { font-size: 13px; white-space: normal; text-align: right; line-height: 1.18; }
   .lrow.out { align-items: baseline; }
   .lrow.out .dots { display: none; }
@@ -249,22 +249,22 @@
   /* UV block */
   .uv { margin-top: 5px; }
   .uv-line { display: flex; align-items: baseline; gap: 7px; }
-  .uv-line .k { font-family: var(--sans); font-size: 13.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
-  .uv-line .n { font-size: 24px; font-weight: 700; }
-  .uv-line .w { font-family: var(--sans); font-size: 13.5px; color: var(--ink); font-weight: 700; letter-spacing: 0.06em; }
+  .uv-line .k { font-family: var(--sans); font-size: 14px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
+  .uv-line .n { font-size: 24px; font-weight: 800; }
+  .uv-line .w { font-family: var(--sans); font-size: 13.5px; color: var(--ink); font-weight: 800; letter-spacing: 0.06em; }
   .uv-track { position: relative; height: 13px; margin-top: 3px; }
   /* Apple-Watch-style WHO UV scale: green(low)→amber→orange→red→violet(extreme) */
   .uv-bar { position: absolute; left: 0; right: 0; top: 2.5px; height: 8px; border-radius: 4px;
     background: linear-gradient(to right, #4E9E5B 5%, #D8BE44 32%, #E28C33 56%, #C43E2B 80%, #8E5AA8 100%); }
   .uv-track .marker { position: absolute; top: 0; left: 36.4%; width: 13px; height: 13px; margin-left: -6.5px;
     background: var(--paper); border: 3px solid var(--ink); border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
-  .uv-ends { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 8.5px; color: var(--ink-soft); letter-spacing: 0.1em; margin-top: 2px; }
+  .uv-ends { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 10px; color: var(--ink-soft); letter-spacing: 0.1em; margin-top: 2px; }
 
   /* Rainfall dry-spell block — derived from the station's own accumulation record */
   .dry { margin: auto 0; padding: 6px 0; }
   .dry-line { display: flex; align-items: baseline; gap: 7px; }
-  .dry-line .k { font-family: var(--sans); font-size: 10px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
-  .dry-line .n { font-size: 20px; font-weight: 700; }
+  .dry-line .k { font-family: var(--sans); font-size: 10px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
+  .dry-line .n { font-size: 20px; font-weight: 800; }
   .dry-line .u { font-family: var(--sans); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.06em; }
   .dry-sub { font-family: var(--sans); font-size: 11px; color: var(--ink-soft); margin-top: 3px; letter-spacing: 0.04em; }
 
@@ -298,7 +298,7 @@
   #rose .tick        { stroke-width: 2; }
   #rose .tick.minor  { stroke-width: 1.1; }
   #rose .rose-star   { stroke-width: 1.6; }
-  #rose .rose-letter { font-size: 13px; font-weight: 700; }
+  #rose .rose-letter { font-size: 13px; font-weight: 800; }
   .arc-past    { stroke: var(--ink); stroke-width: 2.6; fill: none; }
   .arc-future  { stroke: var(--ink-soft); stroke-width: 2; fill: none; stroke-dasharray: 0.5 4; stroke-linecap: round; }
   .horizon     { stroke: var(--rule); stroke-width: 1.4; }
@@ -306,8 +306,8 @@
   .sun-ray     { stroke: var(--brass); stroke-width: 1; }
   .arc-tick    { stroke: var(--rule); stroke-width: 1.4; }
   .arc-lbl     { fill: var(--ink-soft); font-size: 15px; letter-spacing: 0.16em; }
-  .gauge-lbl   { fill: var(--ink-soft); font-size: 10px; font-weight: 700; }
-  .gauge-cap   { fill: var(--ink-soft); font-size: 8px; font-weight: 700; letter-spacing: 0.12em; }
+  .gauge-lbl   { fill: var(--ink-soft); font-size: 10px; font-weight: 800; }
+  .gauge-cap   { fill: var(--ink-soft); font-size: 8px; font-weight: 800; letter-spacing: 0.12em; }
   .gauge-ptr   { fill: var(--water); }
   .moon-base   { fill: var(--moon-lit); stroke: var(--rule); stroke-width: 1; }
   .moon-crater { fill: none; stroke: var(--rule-faint); stroke-width: 0.8; }
@@ -319,8 +319,8 @@
   .strike-ring { fill: none; stroke: var(--brass); stroke-width: 1.1; }
   .station-dot { fill: var(--ink); }
 
-  .sun-times { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 13.5px; color: var(--ink-soft); margin: 1px 2px 0; letter-spacing: 0.03em; }
-  .sun-times b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .sun-times { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 14px; color: var(--ink-soft); margin: 1px 2px 0; letter-spacing: 0.03em; }
+  .sun-times b { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
 
   /* ═════════ SECONDARY SCREENS ═════════ */
   .sc { flex-direction: column; }
@@ -330,15 +330,15 @@
   .sc-status { font-family: var(--sans); font-size: 11.5px; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); }
   .sc-body { flex: 1; display: flex; align-items: center; justify-content: center; gap: 64px; min-height: 0; }
 
-  .sc-big { font-size: 35.5px; font-weight: 700; }
+  .sc-big { font-size: 35.5px; font-weight: 800; }
   .sc-sub { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); margin-top: 5px; letter-spacing: 0.02em; }
   .sc-ledger { margin-top: 20px; width: 300px; }
   .sc-ledger .lrow { padding: 4px 0; }
   .sc-ledger .lrow .v { font-size: 16px; }
   .sc-note { font-family: var(--sans); font-size: 11.5px; color: var(--ink-soft); margin-top: 18px; max-width: 300px; line-height: 1.5; }
 
-  .bignum { font-size: 67px; font-weight: 700; line-height: 1; }
-  .bignum small { font-family: var(--sans); font-size: 12.5px; font-weight: 700; color: var(--ink-soft); letter-spacing: 0.06em; }
+  .bignum { font-size: 67px; font-weight: 800; line-height: 1; }
+  .bignum small { font-family: var(--sans); font-size: 12.5px; font-weight: 800; color: var(--ink-soft); letter-spacing: 0.06em; }
 
   /* Sager bulletin card */
   .bulletin { position: relative; width: 560px; border: 1px solid var(--rule); padding: 26px 44px 24px; text-align: center; }
@@ -368,7 +368,7 @@
   .tab:not(.dim):active { opacity: 0.5; color: var(--ink); }
   .tab.tap-flash { color: var(--ink); }
   .tabs .spacer { flex: 1; }
-  .foot-station { font-family: var(--sans); font-size: 11.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); }
+  .foot-station { font-family: var(--sans); font-size: 12.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); }
 
   /* ———— Touchscreen kiosk behaviour ———— */
   html { -webkit-text-size-adjust: 100%; }
@@ -504,7 +504,7 @@
       <div class="panel">
         <div class="p-head"><span class="p-title">Sun &amp; Sky</span><span class="p-status">Solar · Limited</span></div>
         <div class="p-col">
-          <svg width="100%" height="54" viewBox="0 0 300 88" preserveAspectRatio="xMidYMax meet">
+          <svg width="100%" height="50" viewBox="0 0 300 88" preserveAspectRatio="xMidYMax meet">
             <path class="arc-fill" id="sun-fill" d="M 20 80 A 181 181 0 0 1 72.9 42.2 L 72.9 80 Z"/>
             <path class="arc-future" d="M 20 80 A 181 181 0 0 1 280 80"/>
             <path class="arc-past" id="sun-past" d="M 20 80 A 181 181 0 0 1 72.9 42.2"/>
