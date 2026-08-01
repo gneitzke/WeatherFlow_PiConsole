@@ -37,12 +37,12 @@
     --grain-op:   0.55;
   }
   :root[data-theme="night"] {
-    --paper:      #14171D;
-    --ink:        #ECE6D5;
-    --ink-soft:   #A7A290;
-    --rule:       rgba(236, 230, 213, 0.30);
-    --rule-faint: rgba(236, 230, 213, 0.14);
-    --dot:        rgba(236, 230, 213, 0.38);
+    --paper:      #0B0D11;
+    --ink:        #F8F4EA;
+    --ink-soft:   #D2CDBB;
+    --rule:       rgba(248, 244, 234, 0.42);
+    --rule-faint: rgba(248, 244, 234, 0.22);
+    --dot:        rgba(248, 244, 234, 0.55);
     --accent:     #E07B55;
     --water:      #7EA6BF;
     --brass:      #C6A44E;
@@ -57,12 +57,12 @@
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="paper"]):not([data-theme="light"]) {
-      --paper:      #14171D;
-      --ink:        #ECE6D5;
-      --ink-soft:   #A7A290;
-      --rule:       rgba(236, 230, 213, 0.30);
-      --rule-faint: rgba(236, 230, 213, 0.14);
-      --dot:        rgba(236, 230, 213, 0.38);
+      --paper:      #0B0D11;
+      --ink:        #F8F4EA;
+      --ink-soft:   #D2CDBB;
+      --rule:       rgba(248, 244, 234, 0.42);
+      --rule-faint: rgba(248, 244, 234, 0.22);
+      --dot:        rgba(248, 244, 234, 0.55);
       --accent:     #E07B55;
       --water:      #7EA6BF;
       --brass:      #C6A44E;
@@ -884,6 +884,13 @@
      4. Derived / composite text
   ════════════════════════════════════════════════════════════ */
   function renderDerived(data) {
+    /* footer location: only overwrite when the emitter supplies it, so the
+       committed prototype keeps its generic placeholder (no home location in git) */
+    if (data.locationLine) {
+      var fs = document.querySelector(".foot-station");
+      if (fs) fs.textContent = data.locationLine;
+    }
+
     /* temperature trend arrow + word */
     var tt = data.tempTrendPerHr;
     var arrow = $("trend-arrow"), word = $("trend-word");

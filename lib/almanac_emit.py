@@ -287,6 +287,7 @@ class AlmanacEmitter:
         return {
             'ts':      int(time.time()),
             'station': _text(_cfg(config, 'Station', 'Name')),
+            'locationLine': self._location_line(config),
             'date':    now_local.strftime('%a, %d %b %Y'),
             'time':    now_local.strftime('%H:%M'),
 
@@ -391,6 +392,26 @@ class AlmanacEmitter:
             return pytz.timezone(tzname) if tzname else None
         except Exception:                                                 # noqa: BLE001
             return None
+
+    @staticmethod
+    def _location_line(config):
+        """ Footer location for THIS station, e.g. "Seattle / 47.61d N / 122.33d W",
+        built from the local station config. Returns '' when unknown so the HTML
+        keeps its generic committed placeholder (no home location ever in git).
+        Never raises (the emitter must not crash the app). """
+        try:
+            name = _cfg(config, 'Station', 'Name')
+            lat = _cfg(config, 'Station', 'Latitude')
+            lon = _cfg(config, 'Station', 'Longitude')
+            if lat in (None, '') or lon in (None, ''):
+                return name or ''
+            latf, lonf = float(lat), float(lon)
+            coords = u'%.2f° %s · %.2f° %s' % (
+                abs(latf), 'N' if latf >= 0 else 'S',
+                abs(lonf), 'E' if lonf >= 0 else 'W')
+            return (u'%s · %s' % (name, coords)) if name else coords
+        except Exception:                                                 # noqa: BLE001
+            return ''
 
     @staticmethod
     def _parse_hhmm(text, today, tz):
