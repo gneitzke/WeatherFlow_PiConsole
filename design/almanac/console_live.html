@@ -226,6 +226,15 @@
   .up-w { color: var(--water); }
 
   .ledger { margin-top: auto; border-top: 1px solid var(--rule-faint); padding-top: 6px; }
+  /* barometer is the tightest ledger (4-digit pressures + times beside the dial):
+     keep its value + time from overflowing the panel's right edge */
+  .baro .lrow .k { letter-spacing: 0.06em; }
+  .baro .lrow .v small { font-size: 8.5px; }
+  /* rain tile: when dry the left column is short, leaving a big mid gap — center
+     the group and give the ledger even breathing room instead of pinning it low */
+  #tile-rain .p-col { justify-content: center; }
+  #tile-rain .ledger { margin-top: 20px; }
+  #tile-rain .p-sub { margin-top: 4px; }
   .lrow { display: flex; align-items: baseline; padding: 1px 0; }
   .lrow .k { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
   .lrow .dots { flex: 1; margin: 0 7px; border-bottom: 1px dotted var(--dot); transform: translateY(-3px); }
@@ -279,6 +288,13 @@
   .hub-dot     { fill: var(--paper); }
   .rose-star   { stroke: var(--rule); fill: none; stroke-width: 0.75; }
   .rose-letter { fill: var(--ink); font-family: var(--serif); font-size: 11.5px; }
+  /* wind compass: nudged up a touch and bolded for the 7" panel */
+  #rose { transform: translateY(-7px); }
+  #rose .dial-ring   { stroke-width: 2.2; }
+  #rose .tick        { stroke-width: 2; }
+  #rose .tick.minor  { stroke-width: 1.1; }
+  #rose .rose-star   { stroke-width: 1.6; }
+  #rose .rose-letter { font-size: 13px; font-weight: 600; }
   .arc-past    { stroke: var(--ink); stroke-width: 2.6; fill: none; }
   .arc-future  { stroke: var(--ink-soft); stroke-width: 2; fill: none; stroke-dasharray: 0.5 4; stroke-linecap: round; }
   .horizon     { stroke: var(--rule); stroke-width: 1.4; }
@@ -471,10 +487,10 @@
       </div>
 
       <!-- BAROMETER -->
-      <div class="panel">
+      <div class="panel baro">
         <div class="p-head"><span class="p-title">Barometer</span><span class="p-status" data-k="slpTrendDesc">Rising</span></div>
         <div class="p-body">
-          <svg width="118" height="118" viewBox="0 0 150 150" id="dial"></svg>
+          <svg width="104" height="104" viewBox="0 0 150 150" id="dial"></svg>
           <div class="p-col snug">
             <div class="p-value"><span class="n small-n" data-k="slp">1022.1</span><span class="u" data-k="slpUnit">mb</span></div>
             <div class="p-sub"><span class="up-w" id="baro-arrow">↑</span> <span data-k="slpTrendDesc">Rising</span> <span data-k="slpTrendPerHr">0.4</span> <span data-k="slpUnit">mb</span>/hr</div>
