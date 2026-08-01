@@ -258,7 +258,7 @@ class AlmanacEmitter:
 
         sunrise_txt = _text(_idx(Astro.get('Sunrise'), 1))
         sunset_txt  = _text(_idx(Astro.get('Sunset'), 1))
-        sun_frac, daylight_txt = self._sun_fraction(sunrise_txt, sunset_txt, now_local, tz)
+        sun_frac, daylight_txt, till_sunset_txt = self._sun_fraction(sunrise_txt, sunset_txt, now_local, tz)
 
         rapid_dir = Obs.get('rapidDir')
         wind_dir  = Obs.get('WindDir')
@@ -357,6 +357,7 @@ class AlmanacEmitter:
             'sunset':    sunset_txt,
             'sunFrac':   sun_frac,
             'daylight':  daylight_txt,
+            'tillSunset': till_sunset_txt,
             'peakSun':   _num(_idx(Obs.get('peakSun'), 0)),
 
             # Moon
@@ -436,17 +437,21 @@ class AlmanacEmitter:
         computed from the already-formatted HH:MM sunrise/sunset labels (the
         Astro DictProperty does not expose raw epoch sun-transit times to the
         display layer). Returns (None, None) if either label is unavailable
-        or unparsable. """
+        or unparsable. Returns (frac, daylight_txt, till_sunset_txt). """
         if tz is None:
-            return None, None
+            return None, None, None
         sunrise_dt = cls._parse_hhmm(sunrise_txt, now_local.date(), tz)
         sunset_dt  = cls._parse_hhmm(sunset_txt, now_local.date(), tz)
         if sunrise_dt is None or sunset_dt is None or sunset_dt <= sunrise_dt:
-            return None, None
+            return None, None, None
         span = (sunset_dt - sunrise_dt).total_seconds()
         elapsed = (now_local - sunrise_dt).total_seconds()
         frac = max(0.0, min(1.0, elapsed / span)) if span > 0 else None
         hours, remainder = divmod(int(span), 3600)
         minutes = remainder // 60
         daylight_txt = f'{hours}h {minutes}m'
-        return frac, daylight_txt
+        # time remaining until today's sunset (0h 0m once the sun has set)
+        till_sec = max(0, int((sunset_dt - now_local).total_seconds()))
+        till_h, till_rem = divmod(till_sec, 3600)
+        till_sunset_txt = f'{till_h}h {till_rem // 60}m'
+        return frac, daylight_txt, till_sunset_txt
