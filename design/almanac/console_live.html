@@ -165,8 +165,8 @@
   .spark { display: block; }
   .spark-base { stroke: var(--rule); stroke-width: 1; }
   .spark-tick { stroke: var(--rule); stroke-width: 1; }
-  .spark-obs  { fill: none; stroke: var(--ink); stroke-width: 2.6; }
-  .spark-fx   { fill: none; stroke: var(--ink-soft); stroke-width: 2; stroke-dasharray: 0.5 4; stroke-linecap: round; }
+  .spark-obs  { fill: none; stroke: var(--ink); stroke-width: 3.4; }
+  .spark-fx   { fill: none; stroke: var(--ink-soft); stroke-width: 2.6; stroke-dasharray: 0.5 4; stroke-linecap: round; }
   .spark-lbl  { fill: var(--ink-soft); font-size: 8px; letter-spacing: 0.06em; }
   .spark-pt   { fill: var(--paper); stroke: var(--ink); stroke-width: 1.7; }
   .spark-drop { stroke: var(--rule-faint); stroke-width: 1; }
@@ -226,7 +226,7 @@
   .up-w { color: var(--water); }
 
   .ledger { margin-top: auto; border-top: 1px solid var(--rule-faint); padding-top: 6px; }
-  .lrow { display: flex; align-items: baseline; padding: 2px 0; }
+  .lrow { display: flex; align-items: baseline; padding: 1px 0; }
   .lrow .k { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
   .lrow .dots { flex: 1; margin: 0 7px; border-bottom: 1px dotted var(--dot); transform: translateY(-3px); }
   .lrow .v { font-size: 14px; font-weight: 600; white-space: nowrap; font-variant-numeric: lining-nums; }
@@ -242,11 +242,11 @@
   .uv-line .k { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
   .uv-line .n { font-size: 20px; font-weight: 600; }
   .uv-line .w { font-family: var(--sans); font-size: 11px; color: var(--ink); font-weight: 600; letter-spacing: 0.06em; }
-  .uv-track { position: relative; height: 18px; margin-top: 7px; }
+  .uv-track { position: relative; height: 16px; margin-top: 5px; }
   /* Apple-Watch-style WHO UV scale: green(low)→amber→orange→red→violet(extreme) */
-  .uv-bar { position: absolute; left: 0; right: 0; top: 4px; height: 10px; border-radius: 5px;
+  .uv-bar { position: absolute; left: 0; right: 0; top: 3.5px; height: 9px; border-radius: 4.5px;
     background: linear-gradient(to right, #4E9E5B 5%, #D8BE44 32%, #E28C33 56%, #C43E2B 80%, #8E5AA8 100%); }
-  .uv-track .marker { position: absolute; top: 0; left: 36.4%; width: 18px; height: 18px; margin-left: -9px;
+  .uv-track .marker { position: absolute; top: 0; left: 36.4%; width: 16px; height: 16px; margin-left: -8px;
     background: var(--paper); border: 3px solid var(--ink); border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
   .uv-ends { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 8.5px; color: var(--ink-soft); letter-spacing: 0.1em; margin-top: 2px; }
 
@@ -277,13 +277,13 @@
   .hub-dot     { fill: var(--paper); }
   .rose-star   { stroke: var(--rule); fill: none; stroke-width: 0.75; }
   .rose-letter { fill: var(--ink); font-family: var(--serif); font-size: 11.5px; }
-  .arc-past    { stroke: var(--ink); stroke-width: 1.5; fill: none; }
-  .arc-future  { stroke: var(--ink-soft); stroke-width: 1.2; fill: none; stroke-dasharray: 0.5 4.5; stroke-linecap: round; }
-  .horizon     { stroke: var(--rule); stroke-width: 1; }
+  .arc-past    { stroke: var(--ink); stroke-width: 2.6; fill: none; }
+  .arc-future  { stroke: var(--ink-soft); stroke-width: 2; fill: none; stroke-dasharray: 0.5 4; stroke-linecap: round; }
+  .horizon     { stroke: var(--rule); stroke-width: 1.4; }
   .sun-dot     { fill: var(--brass); }
   .sun-ray     { stroke: var(--brass); stroke-width: 1; }
-  .arc-tick    { stroke: var(--rule); stroke-width: 1; }
-  .arc-lbl     { fill: var(--ink-soft); font-size: 7px; letter-spacing: 0.16em; }
+  .arc-tick    { stroke: var(--rule); stroke-width: 1.4; }
+  .arc-lbl     { fill: var(--ink-soft); font-size: 9px; letter-spacing: 0.16em; }
   .gauge-lbl   { fill: var(--ink-soft); font-size: 7px; }
   .gauge-cap   { fill: var(--ink-soft); font-size: 6.5px; letter-spacing: 0.14em; }
   .gauge-ptr   { fill: var(--water); }
@@ -489,7 +489,7 @@
       <div class="panel">
         <div class="p-head"><span class="p-title">Sun &amp; Sky</span><span class="p-status">Solar · Limited</span></div>
         <div class="p-col">
-          <svg width="100%" height="50" viewBox="0 0 300 88" preserveAspectRatio="xMidYMax meet">
+          <svg width="100%" height="62" viewBox="0 0 300 88" preserveAspectRatio="xMidYMax meet">
             <path class="arc-fill" id="sun-fill" d="M 20 80 A 181 181 0 0 1 72.9 42.2 L 72.9 80 Z"/>
             <path class="arc-future" d="M 20 80 A 181 181 0 0 1 280 80"/>
             <path class="arc-past" id="sun-past" d="M 20 80 A 181 181 0 0 1 72.9 42.2"/>
@@ -497,7 +497,7 @@
             <line class="arc-tick" x1="150" y1="25" x2="150" y2="19"/>
             <text class="arc-lbl" x="150" y="14" text-anchor="middle">NOON</text>
             <g id="sun-dotg" transform="translate(72.9 42.2)">
-              <circle class="sun-dot" r="4.4"/><g id="sunrays"></g>
+              <circle class="sun-dot" r="5.4"/><g id="sunrays"></g>
             </g>
           </svg>
           <div class="sun-times"><span>Rise <b data-k="sunrise">05:43</b></span><span>Set <b data-k="sunset">20:43</b></span></div>
