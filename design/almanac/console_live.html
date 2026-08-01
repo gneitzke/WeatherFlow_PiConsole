@@ -168,9 +168,9 @@
 
   .range { margin-top: 8px; }
   .range-labels { display: flex; justify-content: space-between; align-items: baseline;
-    font-family: var(--sans); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    font-family: var(--sans); font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
     color: var(--ink-soft); margin-bottom: 4px; }
-  .range-labels .v { font-family: var(--serif); font-size: 20px; font-weight: 800; letter-spacing: 0; text-transform: none; color: var(--ink); margin-left: 5px; }
+  .range-labels .v { font-family: var(--serif); font-size: 23px; font-weight: 800; letter-spacing: 0; text-transform: none; color: var(--ink); margin-left: 5px; }
 
   /* temperature day-curve */
   .spark { display: block; }
@@ -178,7 +178,7 @@
   .spark-tick { stroke: var(--rule); stroke-width: 1; }
   .spark-obs  { fill: none; stroke: var(--ink); stroke-width: 3.4; }
   .spark-fx   { fill: none; stroke: var(--ink-soft); stroke-width: 2.6; stroke-dasharray: 0.5 4; stroke-linecap: round; }
-  .spark-lbl  { fill: var(--ink-soft); font-size: 8px; letter-spacing: 0.06em; }
+  .spark-lbl  { fill: var(--ink-soft); font-size: 11.5px; letter-spacing: 0.04em; }
   .spark-pt   { fill: var(--paper); stroke: var(--ink); stroke-width: 1.7; }
   .spark-drop { stroke: var(--rule-faint); stroke-width: 1; }
   .spark-now  { fill: var(--accent); }
@@ -326,7 +326,7 @@
   .ring        { fill: none; stroke: var(--rule); stroke-width: 1; stroke-dasharray: 0.5 4; stroke-linecap: round; }
   .ring-lbl    { fill: var(--ink-soft); font-size: 7.5px; letter-spacing: 0.1em; }
   .spark       { fill: var(--brass); opacity: 0.75; }
-  .spark-lbl   { fill: var(--ink-soft); font-size: 7.5px; }
+  .spark-lbl   { fill: var(--ink-soft); font-size: 11.5px; }
   .strike-ring { fill: none; stroke: var(--brass); stroke-width: 1.1; }
   .station-dot { fill: var(--ink); }
 
@@ -364,7 +364,9 @@
   .bul-inputs .fx + .fx { border-left: 1px solid var(--rule-faint); padding-left: 36px; }
 
   /* ———— Footer tab bar ———— */
-  .foot { flex: 0 0 auto; padding-top: 6px; }
+  /* tab bar hidden by default (no working touch); ?tabs=1 restores it */
+  .foot { flex: 0 0 auto; padding-top: 6px; display: none; }
+  :root[data-tabs="on"] .foot { display: block; }
   .tabs { display: flex; align-items: baseline; gap: 26px; padding-top: 7px; }
   .tab { background: none; border: none; cursor: pointer; font-family: var(--sans);
     font-size: 9.5px; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink-soft);
@@ -731,6 +733,9 @@
     if (t) document.documentElement.dataset.theme = t;
     var s = q.get("screen");
     if (s && $("s-" + s)) activate("s-" + s);
+    /* tab bar is hidden by default (this kiosk has no working touch); show it
+       only when ?tabs=1 is set */
+    if (q.get("tabs") === "1" || q.has("tabs")) document.documentElement.dataset.tabs = "on";
   })();
 
   /* ════════════════════════════════════════════════════════════
@@ -1139,7 +1144,12 @@
       var ox = X(o.h), oy = Y(o.T);
       el("circle", { class: "spark-pt", cx: ox.toFixed(1), cy: oy.toFixed(1), r: 2.7 }, g);
       if (o.tag === "low") {
-        el("text", { class: "spark-lbl", x: ox.toFixed(1), y: 100, "text-anchor": "middle" }, g)
+        /* keep the label inside the chart: left-align near the left edge,
+           right-align near the right edge, otherwise center it on the point */
+        var lx = ox, la = "middle";
+        if (ox < 62) { lx = 1; la = "start"; }
+        else if (ox > 288) { lx = 349; la = "end"; }
+        el("text", { class: "spark-lbl", x: lx.toFixed(1), y: 100, "text-anchor": la }, g)
           .textContent = o.T.toFixed(1) + "° · " + (data.obsLowTime || "");
       } else {
         el("text", { class: "spark-lbl", x: (ox - 5).toFixed(1), y: (oy - 6).toFixed(1), "text-anchor": "end" }, g)
