@@ -21,10 +21,11 @@ Assistant, MQTT, a web dashboard, etc.) without a GUI.
 
 * Panel updates in `obs_parser`/`astro`/`forecast` are already `hasattr`-guarded,
   so they are simply skipped when no panels exist.
-* `HeadlessConditions` intentionally mirrors `CurrentConditions.__init__` minus
-  `add_panels()`. **Suggested maintainer follow-up:** factor the shared
-  data-service wiring into one method both classes call, to remove the small
-  duplication.
+* The data pipeline is wired in **one** function, `start_conditions_core(cc)`,
+  called by both the classic Kivy screen (`CurrentConditions`) and the headless
+  holder (`HeadlessConditions`). It is the single source of truth for the core —
+  a core change (new service, different schedule) reaches every UI at once.
+  Presentation (panels, kv, animation) lives entirely in the UI layer on top.
 
 ## 2. An almanac UX that consumes the core
 
