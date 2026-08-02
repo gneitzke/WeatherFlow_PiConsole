@@ -60,8 +60,11 @@ Xvfb "$VDISP" -screen 0 1024x600x24 -nolisten tcp >/tmp/almanac_xvfb.log 2>&1 & 
 sleep 2
 ( cd "$APP" && DISPLAY="$VDISP" WFP_HEADLESS=1 KCFG_GRAPHICS_MAXFPS=10 "$PY" main.py ) >/tmp/almanac_data.log 2>&1 & pids+=($!)
 
-# 2) local web server (page + live feed). Its access log is our render health signal.
-( cd "$WEB" && "$PY" -m http.server "$PORT" --bind 127.0.0.1 ) >"$HTTP_LOG" 2>&1 & pids+=($!)
+# 2) local web server (page + live feed + /health endpoint). Its access log is
+#    also our render health signal (wx.json polls). Bind 127.0.0.1 by default;
+#    set WFP_BIND=0.0.0.0 to expose /health to the LAN for remote monitoring.
+( cd "$WEB" && WFP_PORT="$PORT" WFP_WEB="$WEB" WFP_DATA="$DATA" WFP_BIND="${WFP_BIND:-127.0.0.1}" \
+    "$PY" "$APP/design/almanac/kiosk/serve.py" ) >"$HTTP_LOG" 2>&1 & pids+=($!)
 
 # wait for first data frame (up to 45s) so the page opens populated
 for _ in $(seq 1 45); do [ -s "$DATA" ] && break; sleep 1; done
