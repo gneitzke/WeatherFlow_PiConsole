@@ -210,6 +210,11 @@ class wfpiconsole(App):
         else:
             self.screen_manager.add_widget(CurrentConditions())
 
+        # One-time notice offering the new Almanac layout (classic GUI only; the
+        # notice self-gates on [Display] LayoutPrompt and LayoutStyle == classic)
+        from lib.almanac_prompt import maybe_show_almanac_prompt
+        Clock.schedule_once(maybe_show_almanac_prompt, 2)
+
         # Start Websocket or UDP service
         self.start_connection_service()
 

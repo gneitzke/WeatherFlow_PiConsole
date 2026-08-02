@@ -884,6 +884,7 @@ def default_config_file():
                                                          ('DateFormat',            {'type': 'default',   'value': 'Mon, 01 Jan 0000', 'desc': 'date format'}),
                                                          ('UpdateNotification',    {'type': 'default',   'value': '1',                'desc': 'update notification toggle'}),
                                                          ('LayoutStyle',           {'type': 'default',   'value': 'classic',          'desc': 'display layout style (classic|almanac)'}),
+                                                         ('LayoutPrompt',          {'type': 'default',   'value': '1',                'desc': 'show the one-time almanac-layout notice'}),
                                                          ('PanelCount',            {'type': 'default',   'value': '6',                'desc': 'number of display panels'}),
                                                          ('LightningPanel',        {'type': 'default',   'value': '1',                'desc': 'lightning panel toggle'}),
                                                          ('lightning_timeout',     {'type': 'default',   'value': '0',                'desc': 'lightning panel timeout'}),

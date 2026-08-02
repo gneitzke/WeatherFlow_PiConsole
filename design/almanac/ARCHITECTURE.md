@@ -47,6 +47,26 @@ a tiny server (`design/almanac/kiosk/serve.py`) serves the page + `/health`, and
 503 stale) for monitoring; binds `127.0.0.1` by default, `WFP_BIND=0.0.0.0` to
 expose it.
 
+## Upgrading a customised install
+
+The stock `wfpiconsole update` fetches the upstream installer and hard-resets the
+repo to the upstream tag — that discards local commits. The updater now detects a
+customised install (non-`main` branch or a non-upstream `origin`) and does an
+**inline, fork-preserving upgrade** instead: `git pull --ff-only` on the current
+branch (local commits kept), the usual dependency refresh, and it never
+re-enables `wfpiconsole.service` (leaving a kiosk setup intact). Stock installs
+are unaffected. `run_update_inline` / `update_repo_inline` / `is_custom_install`
+in `wfpiconsole.sh`.
+
+## Upgrade prompt for the new UX
+
+After the almanac layout first becomes available, the classic GUI shows a
+**one-time notice** (`lib/almanac_prompt.py`, gated by `[Display] LayoutPrompt`)
+offering to switch to it or keep classic. It only fires in the classic layout —
+the headless engine and the almanac layout never call it — and the config
+migration seeds `LayoutPrompt=1` on upgrade so existing users see it once. The
+updater also prints where to find the new UX on completion.
+
 ## Files
 
 **Modified (upstream, minimal + opt-in):**

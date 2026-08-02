@@ -860,11 +860,63 @@ install() {
 
 # UPDATE THE WeatherFlow PiConsole TO THE LATEST STABLE VERSION
 # ------------------------------------------------------------------------------
+# DETECT A CUSTOMISED INSTALL (fork or non-main branch)
+# ------------------------------------------------------------------------------
+is_custom_install() {
+    is_repo "${CONSOLEDIR}" || return 1
+    local branch remote
+    branch=$(git -C "${CONSOLEDIR}" rev-parse --abbrev-ref HEAD 2>/dev/null)
+    remote=$(git -C "${CONSOLEDIR}" config --get remote.origin.url 2>/dev/null)
+    [[ "${branch}" != "main" ]] || [[ "${remote}" != *"peted-davis/WeatherFlow_PiConsole"* ]]
+}
+
+# INLINE (fork-preserving) GIT UPGRADE — fast-forward the current branch from its
+# own remote, keeping local commits. No checkout/reset/clean (those discard forks).
+# ------------------------------------------------------------------------------
+update_repo_inline() {
+    local directory=${1}
+    find "${directory}" -type d -name __pycache__ -exec rm -r {} + 2>/dev/null
+    local branch
+    branch=$(git -C "${directory}" rev-parse --abbrev-ref HEAD)
+    printf "\\n  %b Inline upgrade: git pull --ff-only on %b%s%b (local commits kept)" "${INFO}" "${COL_LIGHT_GREEN}" "${branch}" "${COL_NC}"
+    if ! git -C "${directory}" pull --ff-only &> error_log; then
+        printf "\\n  %b Cannot fast-forward %s. Resolve manually:  cd %s && git pull\\n" "${CROSS}" "${branch}" "${directory}"
+        return 1
+    fi
+}
+
+# FORK-SAFE INLINE UPDATE — same dependency steps as run_update, but pulls the
+# current branch in place instead of hard-resetting to the upstream tag, and never
+# re-enables wfpiconsole.service (leaves a kiosk setup intact).
+# ------------------------------------------------------------------------------
+run_update_inline() {
+    process_starting run_update
+    update_packages
+    install_packages
+    install_python_venv
+    update_python_modules
+    install_kivy
+    update_repo_inline "${CONSOLEDIR}"
+    install_service_file
+    clean_up
+    printf "\\n  %b The Almanac UX is available: set [Display] LayoutStyle = almanac for the" "${INFO}"
+    printf "\\n     native Kivy layout, or run the HTML kiosk (see design/almanac/kiosk/README.md).\\n"
+    process_complete run_update
+}
+
 update() {
 
-    # Fetch the latest update code directly from the main Github branch. This
-    # ensures that changes in dependencies are addressed during this update
-    curl -sSL $WFPICONSOLE_MAIN_UPDATE | bash -s run_update
+    # A customised install (a fork, or any non-main branch) cannot use the stock
+    # updater: it fetches the upstream script and hard-resets the repo to the
+    # upstream tag, which discards local commits. Detect that and upgrade in
+    # place (git pull --ff-only) instead, preserving the fork.
+    if is_custom_install; then
+        printf "\\n  %b Customised install detected -> inline (fork-preserving) upgrade" "${INFO}"
+        run_update_inline
+    else
+        # Stock install: fetch and run the latest upstream updater
+        curl -sSL $WFPICONSOLE_MAIN_UPDATE | bash -s run_update
+    fi
 }
 
 run_update() {
@@ -1133,6 +1185,7 @@ case "${1}" in
     "beta"                ) beta;;
     "run_update"          ) run_update;;
     "runUpdate"           ) run_update;;
+    "run_update_inline"   ) run_update_inline;;
     "run_beta"            ) run_beta;;
     "runBeta"             ) run_beta;;
     "autostart-enable"    ) autostart-enable;;
