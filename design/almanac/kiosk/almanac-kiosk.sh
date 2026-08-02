@@ -15,7 +15,7 @@
 # and autostart this instead (see README.md). Revert = re-enable wfpiconsole.service.
 set -u
 
-APP="${WFP_APP:-/home/garyneitzke/wfpiconsole}"     # console install dir
+APP="${WFP_APP:-$HOME/wfpiconsole}"                 # console install dir
 PY="$APP/venv/bin/python3"
 WEB="${WFP_WEB:-$HOME/almanac_web}"                 # served dir (index.html + wx.json)
 DATA_DIR="/tmp/wfp_data"; DATA="$DATA_DIR/wx.json"

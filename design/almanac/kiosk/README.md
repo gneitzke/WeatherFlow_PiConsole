@@ -11,7 +11,7 @@ the Pi, fed live by the console. See `almanac-kiosk.sh` for the architecture.
 
 The kiosk **replaces** the on-screen Kivy console, so we stop its service and run this.
 
-## One-time setup (run at the Pi as `garyneitzke`)
+## One-time setup (run at the Pi as your desktop login user)
 ```bash
 sudo apt-get install -y xvfb                       # only new dependency
 # emitter must run -> almanac layout in the ini:
@@ -28,7 +28,7 @@ cat > ~/.config/autostart/almanac-kiosk.desktop <<EOF
 [Desktop Entry]
 Type=Application
 Name=Almanac Kiosk
-Exec=/home/garyneitzke/wfpiconsole/design/almanac/kiosk/almanac-kiosk.sh
+Exec=$HOME/wfpiconsole/design/almanac/kiosk/almanac-kiosk.sh
 X-GNOME-Autostart-enabled=true
 EOF
 ```
