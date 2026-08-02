@@ -108,6 +108,8 @@ kivyconfig.write()
 # IMPORT REQUIRED CORE KIVY MODULES
 # ==============================================================================
 from kivy.uix.boxlayout      import BoxLayout
+from kivy.uix.widget         import Widget
+from kivy.event              import EventDispatcher
 from kivy.properties         import StringProperty
 from kivy.properties         import DictProperty, NumericProperty
 from kivy.core.window        import Window
@@ -180,6 +182,14 @@ class wfpiconsole(App):
     # --------------------------------------------------------------------------
     def build(self):
 
+        # HEADLESS DATA-ENGINE MODE (WFP_HEADLESS=1): run the full data pipeline
+        # (websocket -> parse -> derive -> astro/sager) and emit wx.json, but build
+        # NO GUI panels. On a display-less Xvfb the gauges are software-rendered by
+        # llvmpipe (~70% CPU for frames nobody sees); with no panels there is
+        # nothing to rasterize. The classic GUI path below is untouched.
+        if os.environ.get('WFP_HEADLESS') == '1':
+            return self.build_headless()
+
         # Calculate initial ScaleFactor and bind self.set_scale_factor to Window
         # on_resize
         self.window = Window
@@ -212,6 +222,36 @@ class wfpiconsole(App):
 
         # Return ScreenManager
         return self.screen_manager
+
+    # BUILD HEADLESS DATA ENGINE (no GUI)
+    # --------------------------------------------------------------------------
+    def build_headless(self):
+
+        """ Run the data pipeline + wx.json emitter with no panels. Reuses the
+        exact station/astro/forecast/sager/websocket/parser code via a Kivy-free
+        data holder (HeadlessConditions); returns an empty root so nothing is
+        software-rendered. """
+
+        self.settings_cls = SettingsWithSidebar
+
+        # Data holder + data services (device status, astronomy, forecast, sager)
+        HeadlessConditions()
+
+        # Websocket / UDP ingestion -> obsParser -> CurrentConditions.Obs
+        self.start_connection_service()
+
+        # Version check + realtime clock (as in the classic path)
+        self.system = system()
+        Clock.schedule_once(self.system.check_version)
+        self.Sched.realtimeClock = Clock.schedule_interval(self.system.realtime_clock, 1.0)
+
+        # wx.json emitter for the almanac HTML overlay
+        from lib.almanac_emit import AlmanacEmitter
+        self.almanac_emitter = AlmanacEmitter(self.CurrentConditions)
+        self.almanac_emitter.start()
+
+        Logger.info('wfpiconsole: headless data engine running (no GUI panels)')
+        return Widget()
 
     # DISCONNECT connection_client WHEN CLOSING APP
     # --------------------------------------------------------------------------
@@ -467,6 +507,57 @@ class screenManager(ScreenManager):
 # ==============================================================================
 # CurrentConditions CLASS
 # ==============================================================================
+# ==============================================================================
+# HeadlessConditions CLASS  (data holder for the headless data engine)
+# ==============================================================================
+class HeadlessConditions(EventDispatcher):
+
+    """ Kivy-free twin of CurrentConditions: the same DictProperties the parsers,
+    astro, forecast and sager write to, wired to the same data services — but it
+    is NOT a Screen and builds NO panels, so nothing is software-rendered. Mirrors
+    CurrentConditions.__init__ minus add_panels(). """
+
+    System = DictProperty()
+    Status = DictProperty()
+    Sager  = DictProperty()
+    Astro  = DictProperty()
+    Obs    = DictProperty()
+    Met    = DictProperty()
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.app = App.get_running_app()
+        self.app.CurrentConditions = self
+        self.button_list = []                       # panel-swap iterates this; empty = no-op headless
+        self.System = properties.System()
+        self.Status = properties.Status()
+        self.Sager  = properties.Sager()
+        self.Astro  = properties.Astro()
+        self.Met    = properties.Met()
+        self.Obs    = properties.Obs()
+
+        # Device status
+        self.app.station = station()
+        self.app.Sched.deviceStatus = Clock.schedule_interval(self.app.station.get_device_status, 1.0)
+
+        # Astronomy (sun/moon times + transit/phase schedules)
+        self.app.astro = astro()
+        self.app.astro.get_sunrise_sunset()
+        self.app.astro.get_moonrise_moonset()
+        self.app.astro.get_full_new_moon()
+        self.app.Sched.sun_transit = Clock.schedule_interval(self.app.astro.sun_transit, 1.0)
+        self.app.Sched.moon_phase  = Clock.schedule_interval(self.app.astro.moon_phase, 1.0)
+
+        # WeatherFlow forecast (Met) + Sager Weathercaster forecast
+        self.app.forecast = forecast()
+        self.app.Sched.metDownload = Clock.schedule_once(self.app.forecast.fetch_forecast)
+        self.app.sager = sager_forecast()
+        self.app.Sched.sager = Clock.schedule_once(self.app.sager.fetch_forecast)
+
+    def switchPanel(self, *args):                   # no-op headless (button_list is empty)
+        pass
+
+
 class CurrentConditions(Screen):
 
     System = DictProperty()

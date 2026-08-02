@@ -51,10 +51,14 @@ pids=()
 cleanup(){ kill "${pids[@]}" 2>/dev/null; pkill -9 chromium 2>/dev/null; pkill -f "Xvfb $VDISP" 2>/dev/null; }
 trap cleanup EXIT INT TERM
 
-# 1) data engine on a virtual display (invisible)
+# 1) data engine on a virtual display (invisible).
+#    WFP_HEADLESS=1 runs the console's data pipeline with NO GUI panels, so the
+#    software GL rasterizer (llvmpipe) has nothing to draw — cuts the engine from
+#    ~70% of a core to near-idle. Empty window still needs a display (Xvfb); cap
+#    its frame rate low since nothing is shown.
 Xvfb "$VDISP" -screen 0 1024x600x24 -nolisten tcp >/tmp/almanac_xvfb.log 2>&1 & pids+=($!)
 sleep 2
-( cd "$APP" && DISPLAY="$VDISP" "$PY" main.py ) >/tmp/almanac_data.log 2>&1 & pids+=($!)
+( cd "$APP" && DISPLAY="$VDISP" WFP_HEADLESS=1 KCFG_GRAPHICS_MAXFPS=10 "$PY" main.py ) >/tmp/almanac_data.log 2>&1 & pids+=($!)
 
 # 2) local web server (page + live feed). Its access log is our render health signal.
 ( cd "$WEB" && "$PY" -m http.server "$PORT" --bind 127.0.0.1 ) >"$HTTP_LOG" 2>&1 & pids+=($!)
