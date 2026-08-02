@@ -210,6 +210,10 @@ class AlmanacEmitter:
         self._update_available = False
         self._latest_version   = None
         self._current_version  = None
+        # barograph 24h SLP series cache (refreshed every BARO_SERIES_TTL s so we
+        # don't re-parse the 1440-point REST payload on every 2 s emit tick)
+        self._baro_series_cache = []
+        self._baro_series_t     = 0.0
 
     def start(self):
         """ Schedule the periodic emit. Idempotent - calling twice (e.g. if
@@ -285,6 +289,59 @@ class AlmanacEmitter:
         with open(tmp_path, 'w') as tmp_file:
             json.dump(payload, tmp_file, allow_nan=False)
         os.replace(tmp_path, self.output_path)
+
+    # --------------------------------------------------------------------
+    def _baro_series(self):
+        """ 24 h sea-level-pressure trace for the barograph, downsampled to
+        ~48 points [[epoch_s, slp_mb], ...] oldest->newest.
+
+        Sourced from the core's cached WeatherFlow REST 24 h obs
+        (app.obsParser.api_data[device]['24Hrs']) — the same payload the core
+        already uses for SLPTrend/Max/Min, so no extra network calls. Fully
+        self-contained (no upstream files touched) and guarded so a missing or
+        malformed payload just yields [] (HTML then hides the barograph).
+        Cached for BARO_SERIES_TTL s: the 24 h data changes slowly and the JSON
+        is large, so we must not re-parse it every 2 s emit. """
+        BARO_SERIES_TTL = 300.0
+        now = time.time()
+        if self._baro_series_cache and (now - self._baro_series_t) < BARO_SERIES_TTL:
+            return self._baro_series_cache
+        series = []
+        try:
+            from lib import derived_variables as derive
+            config   = self.app.config
+            parser   = getattr(self.app, 'obsParser', None)
+            api_data = getattr(parser, 'api_data', None) or {}
+            st       = config['Station']
+            device, idx = None, None
+            for dev, blob in api_data.items():
+                if not isinstance(blob, dict) or '24Hrs' not in blob:
+                    continue
+                if str(dev) in (st['OutAirID'], st['OutAirSN']):
+                    device, idx = dev, 1                    # AIR pressure bucket
+                    break
+                if str(dev) in (st['TempestID'], st['TempestSN']):
+                    device, idx = dev, 6                    # TEMPEST pressure bucket
+                    break
+            if device is not None:
+                obs = (api_data[device]['24Hrs'].json() or {}).get('obs') or []
+                raw = [(ob[0], ob[idx]) for ob in obs
+                       if ob and ob[0] is not None and len(ob) > idx and ob[idx] is not None]
+                raw.sort(key=lambda p: p[0])
+                for t, p in raw:
+                    slp = derive.SLP([p, 'mb'], device, config)[0]
+                    if slp is not None:
+                        series.append([int(t), round(slp, 1)])
+                target = 48
+                if len(series) > target:
+                    step   = (len(series) - 1) / (target - 1)
+                    series = [series[int(round(i * step))] for i in range(target)]
+        except Exception as error:                                            # noqa: BLE001
+            Logger.warning(f'almanac_emit: barograph series unavailable - {error}')
+            series = []
+        self._baro_series_cache = series
+        self._baro_series_t     = now
+        return series
 
     # --------------------------------------------------------------------
     def _build_payload(self):
@@ -380,6 +437,7 @@ class AlmanacEmitter:
             'slp24Low':       _num(_idx(Obs.get('SLPMin'), 0)),
             'slp24LowTime':   _text(_idx(Obs.get('SLPMin'), 2)),
             'slpOutlook':     _text(_idx(Obs.get('SLPTrend'), 3)),
+            'slpSeries':      self._baro_series(),   # 24h [[t,slp],...] for the barograph
 
             # Rainfall
             'rainToday':    _num(_idx(Obs.get('TodayRain'), 0)),
