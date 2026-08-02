@@ -200,9 +200,12 @@ class wfpiconsole(App):
         if Path('user/customPanels.py').is_file():
             Builder.load_file('user/customPanels.kv')
 
-        # Initialise ScreenManager
+        # Initialise ScreenManager. LayoutStyle is an additive opt-in ('classic'
+        # by default, so existing users are unaffected); the almanac layout is
+        # imported lazily so the classic path never loads it.
         self.screen_manager = screenManager(transition=NoTransition())
         if self.config['Display'].get('LayoutStyle', 'classic') == 'almanac':
+            from panels.almanac import AlmanacConditions
             self.screen_manager.add_widget(AlmanacConditions())
         else:
             self.screen_manager.add_widget(CurrentConditions())
@@ -705,14 +708,6 @@ class CurrentConditions(Screen):
             self.button_list[ii][4] = 'secondary'
         elif button_data[4] == 'secondary':
             self.button_list[ii][4] = 'primary'
-
-# ==============================================================================
-# IMPORT ALMANAC ALTERNATE LAYOUT
-# ==============================================================================
-# Additive opt-in layout ([Display] LayoutStyle = almanac). Imported here, after
-# CurrentConditions is defined, because AlmanacConditions subclasses it via
-# `from __main__ import CurrentConditions`.
-from panels.almanac import AlmanacConditions                                     # type: ignore  # noqa: E402
 
 # ==============================================================================
 # RUN APP
