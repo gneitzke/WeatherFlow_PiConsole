@@ -268,7 +268,9 @@
   .uv-bar { position: absolute; left: 0; right: 0; top: 2.5px; height: 8px; border-radius: 4px;
     background: linear-gradient(to right, #4E9E5B 5%, #D8BE44 32%, #E28C33 56%, #C43E2B 80%, #8E5AA8 100%); }
   .uv-track .marker { position: absolute; top: 0; left: 36.4%; width: 13px; height: 13px; margin-left: -6.5px;
-    background: var(--paper); border: 3px solid var(--ink); border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+    background: var(--paper); border: 3px solid var(--ink); border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    transition: left 0.85s ease; }
+  @media (prefers-reduced-motion: reduce) { .uv-track .marker { transition: none; } }
   .uv-ends { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 12px; color: var(--ink-soft); letter-spacing: 0.1em; margin-top: 2px; }
 
   /* Rainfall dry-spell block — derived from the station's own accumulation record */
@@ -989,15 +991,38 @@
   /* ════════════════════════════════════════════════════════════
      5. Gauges
   ════════════════════════════════════════════════════════════ */
+  /* Smoothly swing a needle to a new angle between updates (rAF tween), so the
+     vane eases into place instead of snapping. wrap=true takes the shortest way
+     around a full circle (compass); wrap=false eases linearly (bounded dial).
+     First paint and prefers-reduced-motion jump straight to the value. */
+  var _reduceMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  function animRotate(el, cx, cy, target, wrap) {
+    var set = function (a) { el.setAttribute("transform", "rotate(" + a.toFixed(2) + " " + cx + " " + cy + ")"); };
+    if (_reduceMotion || typeof el._cur !== "number") { el._cur = target; set(target); return; }
+    var from = el._cur;
+    var delta = wrap ? (((target - from + 540) % 360) - 180) : (target - from);
+    if (Math.abs(delta) < 0.2) { el._cur = target; set(target); return; }
+    var dur = 850, t0 = null, token = (el._tok = (el._tok || 0) + 1);
+    function ease(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+    function step(ts) {
+      if (el._tok !== token) return;              /* superseded by a newer update */
+      if (t0 === null) t0 = ts;
+      var p = Math.min(1, (ts - t0) / dur);
+      el._cur = from + delta * ease(p); set(el._cur);
+      if (p < 1) requestAnimationFrame(step); else el._cur = from + delta;
+    }
+    requestAnimationFrame(step);
+  }
+
   function renderGauges(data) {
-    /* WIND compass needle */
+    /* WIND compass needle — swings the short way to the new bearing */
     var dir = isNum(data.windDir) ? data.windDir : 0;
-    windNeedle.setAttribute("transform", "rotate(" + dir.toFixed(1) + " 75 75)");
+    animRotate(windNeedle, 75, 75, dir, true);
     windNeedle.style.opacity = isNum(data.windDir) ? "1" : "0.25";
 
     /* BAROMETER needle (neutral = up / 1015 when missing) */
     var slp = isNum(data.slp) ? clamp(data.slp, 980, 1050) : 1015;
-    baroNeedle.setAttribute("transform", "rotate(" + baroAng(slp).toFixed(1) + " 75 78)");
+    animRotate(baroNeedle, 75, 78, baroAng(slp), false);
     baroNeedle.style.opacity = isNum(data.slp) ? "1" : "0.3";
     /* set-hand parked at 24h low */
     if (isNum(data.slp24Low)) {
