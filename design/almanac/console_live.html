@@ -294,11 +294,13 @@
 
   /* ———— barometer zone bar · stick-barometer scale, 950–1050 mb ———— */
   .baro .p-value .n { font-size: 40px; }          /* dial gone: digits get the space */
-  #barobar   { width: 100%; height: auto; display: block; margin-top: 9px; }
-  .bz-track  { fill: var(--water-tint); }
+  /* centre the panel content so freed space sits at the edges, not mid-panel */
+  .baro .p-col  { justify-content: center; }
+  .baro .ledger { margin-top: 16px; }             /* override the global margin-top:auto */
+  #barobar   { width: 100%; height: auto; display: block; margin-top: 11px; }
+  .bz-track  { fill: var(--ink); opacity: 0.07; }               /* visible vessel on dark */
   .bz-frame  { fill: none; stroke: var(--rule); stroke-width: 1.4; }
   .bz-tick   { stroke: var(--rule); stroke-width: 1.4; }
-  .bz-band   { fill: var(--water); opacity: 0.30; }              /* 24h range */
   .bz-word   { fill: var(--ink-soft); opacity: 0.60; font-size: 13.5px; font-weight: 800; letter-spacing: 0.05em; }
   .bz-word.on{ fill: var(--ink); opacity: 1; }                   /* the glance answer */
   .bz-end    { fill: var(--ink-soft); font-size: 11px; letter-spacing: 0.06em; }
@@ -326,6 +328,9 @@
   .gauge-lbl   { fill: var(--ink-soft); font-size: 14.5px; font-weight: 800; }
   .gauge-cap   { fill: var(--ink-soft); font-size: 12px; font-weight: 800; letter-spacing: 0.12em; }
   .gauge-ptr   { fill: var(--water); }
+  #raingauge   { transition: opacity 0.85s ease; }               /* quiet furniture when dry, */
+  #raingauge.is-dry { opacity: 0.5; }                            /* alight the moment it rains */
+  @media (prefers-reduced-motion: reduce) { #raingauge { transition: none; } }
   .moon-base   { fill: var(--moon-lit); stroke: var(--rule); stroke-width: 1; }
   .moon-crater { fill: none; stroke: var(--rule-faint); stroke-width: 0.8; }
   .moon-dark   { fill: var(--moon-shade); }
@@ -511,7 +516,7 @@
         <div class="p-col">
           <div class="p-value"><span class="n" data-k="slp">1022.1</span><span class="u" data-k="slpUnit">mb</span></div>
           <div class="p-sub"><span class="up-w" id="baro-arrow">↑</span> <span data-k="slpTrendDesc">Rising</span> <span data-k="slpTrendPerHr">0.4</span> <span data-k="slpUnit">mb</span>/hr</div>
-          <svg id="barobar" viewBox="0 0 250 48" preserveAspectRatio="xMidYMid meet"></svg>
+          <svg id="barobar" viewBox="0 0 250 64" preserveAspectRatio="xMidYMid meet"></svg>
           <div class="ledger">
             <div class="lrow"><span class="k">24h range</span><span class="dots"></span><span class="v"><span data-k="slp24Low">1020.2</span>–<span data-k="slp24High">1022.1</span> <small data-k="slpUnit">mb</small></span></div>
             <div class="lrow out"><span class="k">Outlook</span><span class="dots"></span><span class="v word" data-k="slpOutlook">Unchanged</span></div>
@@ -800,29 +805,28 @@
   var baroBar = {};
   (function () {
     var svg = $("barobar");
-    var X0 = 28, X1 = 222, Y0 = 20, Y1 = 36;                       /* bar rect; ~1.94 px/mb */
+    var X0 = 28, X1 = 222, Y0 = 20, Y1 = 44;                       /* bar rect (24 tall); ~1.94 px/mb */
     var ZONES = [["STORMY", 950, 985], ["CHANGE", 985, 1015], ["FAIR", 1015, 1035], ["DRY", 1035, 1050]];
     function x(v) { return X0 + (clamp(v, 950, 1050) - 950) / 100 * (X1 - X0); }
     baroBar.x = x;
 
     el("rect", { class: "bz-track", x: X0, y: Y0, width: X1 - X0, height: Y1 - Y0 }, svg);
-    baroBar.band = el("rect", { class: "bz-band", x: x(1020.2), y: Y0, width: x(1022.1) - x(1020.2), height: Y1 - Y0 }, svg);
 
     baroBar.words = [];
     ZONES.forEach(function (z, i) {
       if (i) el("line", { class: "bz-tick", x1: x(z[1]), y1: Y0 - 3, x2: x(z[1]), y2: Y1 + 3 }, svg);
-      var w = el("text", { class: "bz-word", x: (x(z[1]) + x(z[2])) / 2, y: 12, "text-anchor": "middle" }, svg);
+      var w = el("text", { class: "bz-word", x: (x(z[1]) + x(z[2])) / 2, y: 13, "text-anchor": "middle" }, svg);
       w.textContent = z[0]; w._lo = z[1]; w._hi = z[2];
       baroBar.words.push(w);
     });
     el("rect", { class: "bz-frame", x: X0, y: Y0, width: X1 - X0, height: Y1 - Y0 }, svg);
 
-    el("text", { class: "bz-end", x: X0, y: 47, "text-anchor": "middle" }, svg).textContent = "950";
-    el("text", { class: "bz-end", x: X1, y: 47, "text-anchor": "middle" }, svg).textContent = "1050";
+    el("text", { class: "bz-end", x: X0, y: 58, "text-anchor": "middle" }, svg).textContent = "950";
+    el("text", { class: "bz-end", x: X1, y: 58, "text-anchor": "middle" }, svg).textContent = "1050";
 
     baroBar.marker = el("g", { class: "bz-marker" }, svg);
-    el("polygon", { points: "-5,13 5,13 0,20" }, baroBar.marker);   /* cap points down into the bar */
-    el("line",    { x1: 0, y1: 20, x2: 0, y2: 40 }, baroBar.marker); /* stem through the bar */
+    el("polygon", { points: "-5,14 5,14 0,20" }, baroBar.marker);   /* cap points down into the bar */
+    el("line",    { x1: 0, y1: 20, x2: 0, y2: 48 }, baroBar.marker); /* stem through the bar */
     baroBar.marker.style.transform = "translateX(" + x(1022.1).toFixed(1) + "px)";
   })();
 
@@ -832,7 +836,7 @@
     var svg = $("raingauge");
     var top = rainGeom.top, bot = rainGeom.bot, x1 = rainGeom.x1, x2 = 40, cx = (x1 + x2) / 2;
     el("text", { class: "gauge-cap", x: cx, y: 10, "text-anchor": "middle" }, svg).textContent = "RATE";
-    el("text", { class: "gauge-cap", x: cx, y: 150, "text-anchor": "middle" }, svg).textContent = "IN/HR";
+    el("text", { class: "gauge-cap", x: cx, y: 152, "text-anchor": "middle" }, svg).textContent = "IN/HR";
     el("rect", { class: "gauge-fill", x: x1, y: top, width: x2 - x1, height: bot - top }, svg);
     rainFill = el("rect", { class: "gauge-col", x: x1 + 1, y: bot, width: x2 - x1 - 2, height: 0 }, svg);
     el("line", { class: "tick", x1: x1, y1: top, x2: x1, y2: bot }, svg);
@@ -962,9 +966,11 @@
       ? Math.abs(d24).toFixed(1) + "° " + (d24 >= 0 ? "warmer" : "cooler") + " than this time yesterday"
       : DASH;
 
-    /* barometer trend arrow */
-    var sp = data.slpTrendPerHr;
-    $("baro-arrow").textContent = !isNum(sp) ? "" : (sp > 0.02 ? "↑" : sp < -0.02 ? "↓" : "→");
+    /* barometer trend arrow — derive from the WORD (slpTrendDesc) so the arrow
+       and the word can never contradict (the core calls ~0.1 mb/hr "Steady",
+       which a raw ±0.02 threshold would wrongly draw as a rising arrow) */
+    var td = (data.slpTrendDesc || "").toLowerCase();
+    $("baro-arrow").textContent = !td ? "" : (td.indexOf("ris") >= 0 ? "↑" : td.indexOf("fall") >= 0 ? "↓" : "→");
 
     /* "2h 24m" -> small unit markers (time remaining until sunset) */
     function hmMarkers(id, val) {
@@ -1032,15 +1038,12 @@
     baroBar.words.forEach(function (w) {
       w.classList.toggle("on", isNum(data.slp) && slp >= w._lo && (slp < w._hi || w._hi === 1050));
     });
-    /* 24h range band */
-    if (isNum(data.slp24Low) && isNum(data.slp24High)) {
-      var b0 = baroBar.x(data.slp24Low);
-      baroBar.band.setAttribute("x", b0.toFixed(1));
-      baroBar.band.setAttribute("width", Math.max(2, baroBar.x(data.slp24High) - b0).toFixed(1));
-      baroBar.band.style.opacity = "";
-    } else { baroBar.band.style.opacity = "0"; }
 
-    /* RAIN water fill + pointer 0..1 in/hr */
+    /* RAIN water fill + pointer 0..1 in/hr; dim the whole gauge when bone-dry so
+       it reads as quiet furniture and lights up the moment it rains */
+    var dryGauge = (!isNum(data.rainRate) || data.rainRate === 0) &&
+                   (!isNum(data.rainToday) || data.rainToday === 0);
+    $("raingauge").classList.toggle("is-dry", dryGauge);
     var rr = isNum(data.rainRate) ? clamp(data.rainRate, 0, 1) : 0;
     var ry = rainGeom.bot - rr * (rainGeom.bot - rainGeom.top);
     rainFill.setAttribute("y", ry.toFixed(1));
