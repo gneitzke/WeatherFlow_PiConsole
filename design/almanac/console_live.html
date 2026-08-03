@@ -240,7 +240,7 @@
      the group and give the ledger even breathing room instead of pinning it low */
   #tile-rain .p-col { justify-content: center; }
   #tile-rain .ledger { margin-top: 2px; }
-  #tile-rain .p-sub { margin-top: 4px; }
+  #tile-rain .p-sub { margin-top: 4px; white-space: nowrap; font-size: 14.5px; }
   .lrow { display: flex; align-items: baseline; padding: 1px 0; }
   .lrow .k { font-family: var(--sans); font-size: 15.5px; font-weight: 800; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
   .lrow .dots { flex: 1; margin: 0 7px; border-bottom: 1px dotted var(--dot); transform: translateY(-3px); }
@@ -596,7 +596,7 @@
           <div class="p-body">
             <div class="p-col">
               <div class="p-value"><span class="n" data-k="rainToday">0.00</span><span class="u"><span data-k="rainUnit">in</span> today</span></div>
-              <div class="p-sub">Rate <span data-k="rainRate">0</span> <span data-k="rainUnit">in</span>/hr</div>
+              <div class="p-sub">Rate <span data-k="rainRate">0</span> <span data-k="rainUnit">in</span>/hr<span id="rain-intensity"></span></div>
               <div class="ledger">
                 <div class="lrow"><span class="k">Yesterday</span><span class="dots"></span><span class="v"><span data-k="rainYest">0.00</span> <small data-k="rainUnit">in</small></span></div>
                 <div class="lrow"><span class="k">This month</span><span class="dots"></span><span class="v"><span data-k="rainMonth">0.15</span> <small data-k="rainUnit">in</small></span></div>
@@ -856,10 +856,10 @@
   })();
 
   /* ———— rain-rate gauge · vertical tube, 0–1 in/hr · water fill + pointer ———— */
-  var rainPtr, rainFill, rainGeom = { top: 22, bot: 136, x1: 16 };
+  var rainPtr, rainFill, rainGeom = { top: 22, bot: 136, x1: 24 };
   (function () {
     var svg = $("raingauge");
-    var top = rainGeom.top, bot = rainGeom.bot, x1 = rainGeom.x1, x2 = 40, cx = (x1 + x2) / 2;
+    var top = rainGeom.top, bot = rainGeom.bot, x1 = rainGeom.x1, x2 = 48, cx = (x1 + x2) / 2;
     el("text", { class: "gauge-cap", x: cx, y: 10, "text-anchor": "middle" }, svg).textContent = "RATE";
     el("text", { class: "gauge-cap", x: cx, y: 152, "text-anchor": "middle" }, svg).textContent = "IN/HR";
     el("rect", { class: "gauge-fill", x: x1, y: top, width: x2 - x1, height: bot - top }, svg);
@@ -875,7 +875,7 @@
                    x1: x2, y1: y, x2: x2 + (major ? 8 : 4.5), y2: y }, svg);
       if (major) {
         var lbl = ["0", "¼", "½", "¾", "1"][v / 5];
-        el("text", { class: "gauge-lbl", x: 51, y: y + 4 }, svg).textContent = lbl;
+        el("text", { class: "gauge-lbl", x: 59, y: y + 4 }, svg).textContent = lbl;
       }
     }
     rainPtr = el("g", { class: "gauge-ptr-g" }, svg);              /* group rides the water level */
@@ -1139,6 +1139,13 @@
     rainFill.style.opacity = isNum(data.rainRate) ? "" : "0";
     rainPtr.style.transform = "translateY(" + (-rise).toFixed(1) + "px)";
     rainPtr.style.opacity = isNum(data.rainRate) ? "1" : "0.35";
+    /* rate intensity word (Light / Moderate / Heavy …) from the core's rainStatus */
+    var ri = $("rain-intensity");
+    if (ri) {
+      var st = (data.rainStatus || "").replace(/\s*Rain$/i, "").trim();
+      ri.innerHTML = (isNum(data.rainRate) && data.rainRate > 0 && st && !/dry/i.test(st))
+        ? " · <b>" + st + "</b>" : "";
+    }
 
     /* UV marker 0..11 */
     var mk = $("uv-marker");
