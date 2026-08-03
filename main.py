@@ -109,7 +109,6 @@ kivyconfig.write()
 # ==============================================================================
 from kivy.uix.boxlayout      import BoxLayout
 from kivy.uix.widget         import Widget
-from kivy.event              import EventDispatcher
 from kivy.properties         import StringProperty
 from kivy.properties         import DictProperty, NumericProperty
 from kivy.core.window        import Window
@@ -237,13 +236,16 @@ class wfpiconsole(App):
     def build_headless(self):
 
         """ Run the data pipeline + wx.json emitter with no panels. Reuses the
-        exact station/astro/forecast/sager/websocket/parser code via a Kivy-free
-        data holder (HeadlessConditions); returns an empty root so nothing is
-        software-rendered. """
+        exact station/astro/forecast/sager/websocket/parser code via a
+        HeadlessConditions holder (a CurrentConditions subclass that skips panel
+        construction), so nothing is added to the window or software-rendered. """
 
         self.settings_cls = SettingsWithSidebar
 
-        # Data holder + data services (device status, astronomy, forecast, sager)
+        # Data holder + data services (device status, astronomy, forecast, sager).
+        # HeadlessConditions subclasses CurrentConditions -> it inherits the exact
+        # upstream __init__ (core wiring) and only overrides add_panels to a no-op.
+        from panels.headless import HeadlessConditions
         HeadlessConditions()
 
         # Websocket / UDP ingestion -> obsParser -> CurrentConditions.Obs
@@ -516,76 +518,6 @@ class screenManager(ScreenManager):
 # ==============================================================================
 # CurrentConditions CLASS
 # ==============================================================================
-# ==============================================================================
-# WEATHER-DATA CORE  (single source of truth, shared by every UI)
-# ==============================================================================
-def start_conditions_core(cc):
-
-    """ Initialise the weather-data core on a conditions holder `cc` and start the
-    data services. This is the ONE place the data pipeline is wired, so a core
-    change (new service, different schedule) reaches every UI at once.
-
-    `cc` is any EventDispatcher exposing the six DictProperties (System, Status,
-    Sager, Astro, Obs, Met) and an `app` reference — the classic Kivy screen
-    (CurrentConditions) and the headless holder (HeadlessConditions) both qualify.
-    Presentation (panels, kv, animation) lives entirely in the UI layer on top. """
-
-    app = cc.app
-    app.CurrentConditions = cc
-
-    # Property defaults
-    cc.System = properties.System()
-    cc.Status = properties.Status()
-    cc.Sager  = properties.Sager()
-    cc.Astro  = properties.Astro()
-    cc.Met    = properties.Met()
-    cc.Obs    = properties.Obs()
-
-    # Device status (each second)
-    app.station = station()
-    app.Sched.deviceStatus = Clock.schedule_interval(app.station.get_device_status, 1.0)
-
-    # Astronomy: sunrise/sunset, moonrise/moonset, full/new moon + transit/phase
-    app.astro = astro()
-    app.astro.get_sunrise_sunset()
-    app.astro.get_moonrise_moonset()
-    app.astro.get_full_new_moon()
-    app.Sched.sun_transit = Clock.schedule_interval(app.astro.sun_transit, 1.0)
-    app.Sched.moon_phase  = Clock.schedule_interval(app.astro.moon_phase, 1.0)
-
-    # WeatherFlow forecast (Met) + Sager Weathercaster forecast
-    app.forecast = forecast()
-    app.Sched.metDownload = Clock.schedule_once(app.forecast.fetch_forecast)
-    app.sager = sager_forecast()
-    app.Sched.sager = Clock.schedule_once(app.sager.fetch_forecast)
-
-
-# ==============================================================================
-# HeadlessConditions CLASS  (data core for the headless engine — no UI)
-# ==============================================================================
-class HeadlessConditions(EventDispatcher):
-
-    """ The data core with no presentation: same DictProperties/services as the
-    classic screen (via start_conditions_core), but not a Screen and no panels,
-    so nothing is software-rendered. Used by build_headless() to feed wx.json. """
-
-    System = DictProperty()
-    Status = DictProperty()
-    Sager  = DictProperty()
-    Astro  = DictProperty()
-    Obs    = DictProperty()
-    Met    = DictProperty()
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.app = App.get_running_app()
-        start_conditions_core(self)
-        self.button_list = []                       # panel-swap iterates this; empty = no-op headless
-
-    def switchPanel(self, *args):                   # no-op headless (button_list is empty)
-        pass
-
-
 class CurrentConditions(Screen):
 
     System = DictProperty()
@@ -598,12 +530,39 @@ class CurrentConditions(Screen):
     def __init__(self, **kwargs):
         super(CurrentConditions, self).__init__(**kwargs)
         self.app = App.get_running_app()
+        self.app.CurrentConditions = self
+        self.System = properties.System()
+        self.Status = properties.Status()
+        self.Sager  = properties.Sager()
+        self.Astro  = properties.Astro()
+        self.Met    = properties.Met()
+        self.Obs    = properties.Obs()
 
-        # Weather-data core (shared with the headless engine)
-        start_conditions_core(self)
-
-        # Presentation: build the Kivy display panels
+        # Add display panels
         self.add_panels()
+
+        # Schedule Station.getDeviceStatus to be called each second
+        self.app.station = station()
+        self.app.Sched.deviceStatus = Clock.schedule_interval(self.app.station.get_device_status, 1.0)
+
+        # Initialise sunrise, sunset, moonrise, moonset, full moon and new moon
+        # times
+        self.app.astro = astro()
+        self.app.astro.get_sunrise_sunset()
+        self.app.astro.get_moonrise_moonset()
+        self.app.astro.get_full_new_moon()
+
+        # # Schedule sunTransit and moonPhase functions to be called each second
+        self.app.Sched.sun_transit = Clock.schedule_interval(self.app.astro.sun_transit, 1.0)
+        self.app.Sched.moon_phase  = Clock.schedule_interval(self.app.astro.moon_phase, 1.0)
+
+        # Schedule WeatherFlow weather forecast download
+        self.app.forecast = forecast()
+        self.app.Sched.metDownload = Clock.schedule_once(self.app.forecast.fetch_forecast)
+
+        # Generate Sager Weathercaster forecast
+        self.app.sager = sager_forecast()
+        self.app.Sched.sager = Clock.schedule_once(self.app.sager.fetch_forecast)
 
     # ADD USER SELECTED PANELS TO CURRENT CONDITIONS SCREEN
     # --------------------------------------------------------------------------
