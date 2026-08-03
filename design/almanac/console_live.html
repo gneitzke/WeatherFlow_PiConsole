@@ -259,7 +259,7 @@
   .uv-line .k { font-family: var(--sans); font-size: 16px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-soft); }
   .uv-line .n { font-size: 28px; font-weight: 800; }
   .uv-line .w { font-family: var(--sans); font-size: 16.5px; color: var(--ink); font-weight: 800; letter-spacing: 0.05em; }
-  .uv-track { position: relative; height: 14px; margin-top: 3px; }
+  .uv-track { position: relative; height: 14px; margin-top: 2px; }
   /* Apple-Watch-style WHO UV scale: green(low)→amber→orange→red→violet(extreme) */
   .uv-bar { position: absolute; left: 0; right: 0; top: 2.5px; height: 9px; border-radius: 5px;
     background: linear-gradient(to right, #4E9E5B 5%, #D8BE44 32%, #E28C33 56%, #C43E2B 80%, #8E5AA8 100%); }
@@ -270,7 +270,7 @@
   .uv-ends { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 12px; color: var(--ink-soft); letter-spacing: 0.1em; margin-top: 2px; }
 
   /* Air Quality — EPA US-AQI colour bands (Good→Hazardous), mirrors the UV track */
-  .aq { margin-top: 5px; }
+  .aq { margin-top: 2px; }
   /* keep the AQI line on ONE row even for long categories ("Very Unhealthy") */
   .aq .uv-line { flex-wrap: nowrap; min-width: 0; }
   .aq .uv-line .k { letter-spacing: 0.05em; white-space: nowrap; }
@@ -291,10 +291,10 @@
   .alert-strip.enter { animation: alertIn 0.5s ease both; }
   @keyframes alertIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
   .alert-pennant { flex: none; }
-  .al-event  { font-size: 14px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase;
+  .al-event  { font-size: 15px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
     white-space: nowrap; flex: none; }
   .al-sep    { color: var(--rule); flex: none; }
-  .al-detail { flex: 1 1 auto; min-width: 0; font-size: 13px; letter-spacing: 0.02em; color: var(--ink);
+  .al-detail { flex: 1 1 auto; min-width: 0; font-size: 13.5px; font-weight: 700; letter-spacing: 0.02em; color: var(--ink);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }         /* long-headline safety net */
   .al-more   { flex: none; font-size: 11.5px; font-weight: 800; letter-spacing: 0.10em; text-transform: uppercase;
     padding: 1px 6px; border: 1px solid currentColor; border-radius: 9px; opacity: 0.9; }
@@ -309,9 +309,10 @@
   .aqi-seg { position: absolute; top: 5.5px; height: 2px; border-radius: 1px; opacity: 0.55; display: none; }
   .uv-track .marker.fwd { background: transparent; border-width: 2.5px; box-shadow: none;
     width: 13px; height: 13px; margin-left: -6.5px; opacity: 0.85; display: none; }
-  /* forecast trend rides the AQI line (no extra row) — pushed right, small caps */
-  .aq-fc { font-family: var(--sans); font-size: 11px; font-weight: 800; letter-spacing: 0.04em;
-    margin-left: auto; white-space: nowrap; display: none; }
+  /* forecast trend replaces the category word on the AQI line when rising — bold,
+     no extra row, no overflow (the green value still signals the current band) */
+  .aq-fc { font-family: var(--sans); font-size: 13px; font-weight: 800; letter-spacing: 0.02em;
+    white-space: nowrap; display: none; }
   .aq.stale { opacity: 0.55; }
 
   /* Rainfall dry-spell block — derived from the station's own accumulation record */
@@ -625,7 +626,7 @@
         <div class="p-head"><span class="p-title" id="sky-title">Sun &amp; Sky</span><span class="p-status" id="sky-status">Solar</span></div>
         <div class="p-col">
           <div class="sky-day" id="sky-day">
-            <svg width="100%" height="44" viewBox="0 0 300 88" preserveAspectRatio="xMidYMax meet">
+            <svg width="100%" height="38" viewBox="0 0 300 88" preserveAspectRatio="xMidYMax meet">
               <path class="arc-fill" id="sun-fill" d="M 20 80 A 181 181 0 0 1 72.9 42.2 L 72.9 80 Z"/>
               <path class="arc-future" d="M 20 80 A 181 181 0 0 1 280 80"/>
               <path class="arc-past" id="sun-past" d="M 20 80 A 181 181 0 0 1 72.9 42.2"/>
@@ -1637,20 +1638,23 @@
     box.style.setProperty("--band-tint", elevated ? hexA(b.col, 0.10) : "");
     var stale = !!data.aqiStale;
     box.classList.toggle("stale", stale);
-    var fwd = $("aqi-fwd"), seg = $("aqi-seg"), tr = $("aq-trend");
+    var fwd = $("aqi-fwd"), seg = $("aqi-seg"), tr = $("aq-trend"), catEl = $("aqi-cat");
     var peak = data.aqiPeak;
-    var showFwd = !stale && isNum(peak) && aqiBand(peak).cat !== b.cat && peak > a;
-    if (showFwd) {
+    var rising = !stale && isNum(peak) && aqiBand(peak).cat !== b.cat && peak > a;
+    var falling = !stale && data.aqiTrend === "falling" && !!data.aqiTrendText;
+    if (rising) {
       var pb = aqiBand(peak), pPct = clamp(peak / 300 * 100, 0, 100);
       fwd.style.display = "block"; fwd.style.left = pPct.toFixed(1) + "%"; fwd.style.borderColor = pb.col;
       seg.style.display = "block"; seg.style.left = nowPct + "%"; seg.style.width = Math.max(0, pPct - nowPct) + "%"; seg.style.background = pb.col;
       tr.style.display = "inline"; tr.style.color = pb.col; tr.textContent = "↗ " + (data.aqiTrendText || (pb.cat + " ahead"));
-    } else if (!stale && data.aqiTrend === "falling" && data.aqiTrendText) {
+    } else if (falling) {
       fwd.style.display = "none"; seg.style.display = "none";
       tr.style.display = "inline"; tr.style.color = "var(--ink-soft)"; tr.textContent = "↘ " + data.aqiTrendText;
     } else {
       fwd.style.display = "none"; seg.style.display = "none"; tr.style.display = "none";
     }
+    // when a trend is shown it takes the category slot (green value already reads "Good")
+    catEl.style.display = (rising || falling) ? "none" : "";
   }
 
   function render(data) {
