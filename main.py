@@ -205,6 +205,7 @@ class wfpiconsole(App):
         # imported lazily so the classic path never loads it.
         self.screen_manager = screenManager(transition=NoTransition())
         if self.config['Display'].get('LayoutStyle', 'classic') == 'almanac':
+            Builder.load_file('kvlang/almanac.kv')      # lazy: only the almanac layout needs it
             from panels.almanac import AlmanacConditions
             self.screen_manager.add_widget(AlmanacConditions())
         else:

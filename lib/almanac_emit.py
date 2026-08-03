@@ -341,6 +341,7 @@ class AlmanacEmitter:
         try:
             payload = self._build_payload()
             self._write_atomic(payload)
+            self._warned = False                     # recovered: re-arm the failure log
         except Exception as error:                                       # noqa: BLE001
             if not self._warned:
                 Logger.warning(f'almanac_emit: emit failed - {error}')
@@ -396,7 +397,7 @@ class AlmanacEmitter:
                 raw.sort(key=lambda p: p[0])
                 for t, p in raw:
                     slp = derive.SLP([p, 'mb'], device, config)[0]
-                    if slp is not None:
+                    if slp is not None and slp == slp:   # not None, not NaN (NaN breaks allow_nan=False)
                         series.append([int(t), round(slp, 1)])
                 target = 48
                 if len(series) > target:
@@ -511,7 +512,7 @@ class AlmanacEmitter:
             'rainMonth':    _num(_idx(Obs.get('MonthRain'), 0)),
             'rainYear':     _num(_idx(Obs.get('YearRain'), 0)),
             'rainUnit':     _text(_cfg(config, 'Units', 'Precip')),
-            'rainRate':     _num(_idx(Obs.get('RainRate'), 3), default=_num(_idx(Obs.get('RainRate'), 0))),
+            'rainRate':     _num(_idx(Obs.get('RainRate'), 0)),   # index 0 is unit-converted (in/hr); [3] was raw mm/hr
             'rainStatus':   _text(_idx(Obs.get('RainRate'), 2)),
             'drySpellDays': None,   # not reliably sourced - see report
             'lastRainDate': None,   # not sourced - no last-rain date/amount is tracked

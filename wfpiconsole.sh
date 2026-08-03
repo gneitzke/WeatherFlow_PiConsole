@@ -878,6 +878,11 @@ update_repo_inline() {
     find "${directory}" -type d -name __pycache__ -exec rm -r {} + 2>/dev/null
     local branch
     branch=$(git -C "${directory}" rev-parse --abbrev-ref HEAD)
+    # install_service_file sed-edits the TRACKED wfpiconsole.service in place, so a
+    # deployed worktree is always dirty. Discard just that file first, otherwise
+    # git pull --ff-only aborts whenever an incoming commit touches it (the stock
+    # updater does the same). install_service_file re-applies our edits afterward.
+    git -C "${directory}" checkout -- wfpiconsole.service 2>/dev/null || true
     printf "\\n  %b Inline upgrade: git pull --ff-only on %b%s%b (local commits kept)" "${INFO}" "${COL_LIGHT_GREEN}" "${branch}" "${COL_NC}"
     if ! git -C "${directory}" pull --ff-only &> error_log; then
         printf "\\n  %b Cannot fast-forward %s. Resolve manually:  cd %s && git pull\\n" "${CROSS}" "${branch}" "${directory}"
@@ -896,7 +901,10 @@ run_update_inline() {
     install_python_venv
     update_python_modules
     install_kivy
-    update_repo_inline "${CONSOLEDIR}"
+    if ! update_repo_inline "${CONSOLEDIR}"; then
+        clean_up
+        exit 1                                      # don't report success on a failed pull
+    fi
     install_service_file
     clean_up
     printf "\\n  %b The Almanac UX is available: set [Display] LayoutStyle = almanac for the" "${INFO}"

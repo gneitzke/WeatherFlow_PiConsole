@@ -11,7 +11,7 @@
 # Bind stays on 127.0.0.1 by default (chromium is local; no data leaves the box).
 # Set WFP_BIND=0.0.0.0 to expose /health (and the page) to the LAN for remote
 # monitoring — note that also makes wx.json LAN-readable.
-import http.server, socketserver, json, os, time
+import http.server, socketserver, json, os, time, threading
 
 PORT      = int(os.environ.get("WFP_PORT", "8137"))
 WEB       = os.environ.get("WFP_WEB", ".")
@@ -19,18 +19,37 @@ BIND      = os.environ.get("WFP_BIND", "127.0.0.1")
 DATA      = os.environ.get("WFP_DATA", "/tmp/wfp_data/wx.json")
 STALE_SEC = int(os.environ.get("WFP_STALE_SEC", "20"))
 
+# monotonic count of wx.json fetches (the page's render heartbeat). The watchdog
+# reads this via /health instead of grepping the access log, which lets us drop
+# the per-request log churn below.
+_polls      = 0
+_polls_lock = threading.Lock()
+
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **k):
         super().__init__(*a, directory=WEB, **k)
 
     def do_GET(self):
-        if self.path.split("?")[0] == "/health":
+        p = self.path.split("?")[0]
+        if p == "/health":
             return self._health()
+        if p == "/wx.json":
+            global _polls
+            with _polls_lock:
+                _polls += 1
         return super().do_GET()
 
+    def log_request(self, code="-", size="-"):
+        # drop the ~2s wx.json/index poll churn (it grew the log unbounded on
+        # tmpfs). Keep errors and any other path so real problems still surface.
+        p = self.path.split("?")[0]
+        if str(code) in ("200", "304") and p in ("/wx.json", "/index.html", "/health", "/"):
+            return
+        super().log_request(code, size)
+
     def _health(self):
-        h = {"status": "ok"}
+        h = {"status": "ok", "polls": _polls}
         try:
             with open(DATA) as f:
                 d = json.load(f)

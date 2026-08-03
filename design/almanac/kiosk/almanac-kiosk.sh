@@ -56,15 +56,28 @@ trap cleanup EXIT INT TERM
 #    software GL rasterizer (llvmpipe) has nothing to draw — cuts the engine from
 #    ~70% of a core to near-idle. Empty window still needs a display (Xvfb); cap
 #    its frame rate low since nothing is shown.
-Xvfb "$VDISP" -screen 0 1024x600x24 -nolisten tcp >/tmp/almanac_xvfb.log 2>&1 & pids+=($!)
-sleep 2
-( cd "$APP" && DISPLAY="$VDISP" WFP_HEADLESS=1 KCFG_GRAPHICS_MAXFPS=10 "$PY" main.py ) >/tmp/almanac_data.log 2>&1 & pids+=($!)
+# Each critical process is launched via a function so the watchdog can relaunch it.
+launch_xvfb(){
+  Xvfb "$VDISP" -screen 0 1024x600x24 -nolisten tcp >/tmp/almanac_xvfb.log 2>&1 &
+  XVFB_PID=$!; pids+=("$XVFB_PID")
+}
+launch_engine(){
+  ( cd "$APP" && DISPLAY="$VDISP" WFP_HEADLESS=1 KCFG_GRAPHICS_MAXFPS=10 "$PY" main.py ) >/tmp/almanac_data.log 2>&1 &
+  ENGINE_PID=$!; pids+=("$ENGINE_PID")
+}
+# 2) local web server (page + live feed + /health endpoint). /health exposes a
+#    "polls" counter (wx.json fetches) — our render heartbeat, replacing the
+#    access-log grep. Bind 127.0.0.1 by default; WFP_BIND=0.0.0.0 exposes it.
+launch_server(){
+  ( cd "$WEB" && WFP_PORT="$PORT" WFP_WEB="$WEB" WFP_DATA="$DATA" WFP_BIND="${WFP_BIND:-127.0.0.1}" \
+      "$PY" "$APP/design/almanac/kiosk/serve.py" ) >"$HTTP_LOG" 2>&1 &
+  SERVE_PID=$!; pids+=("$SERVE_PID")
+}
 
-# 2) local web server (page + live feed + /health endpoint). Its access log is
-#    also our render health signal (wx.json polls). Bind 127.0.0.1 by default;
-#    set WFP_BIND=0.0.0.0 to expose /health to the LAN for remote monitoring.
-( cd "$WEB" && WFP_PORT="$PORT" WFP_WEB="$WEB" WFP_DATA="$DATA" WFP_BIND="${WFP_BIND:-127.0.0.1}" \
-    "$PY" "$APP/design/almanac/kiosk/serve.py" ) >"$HTTP_LOG" 2>&1 & pids+=($!)
+launch_xvfb
+sleep 2
+launch_engine
+launch_server
 
 # wait for first data frame (up to 45s) so the page opens populated
 for _ in $(seq 1 45); do [ -s "$DATA" ] && break; sleep 1; done
@@ -93,11 +106,12 @@ launch_cr(){
 # A healthy render means the page's JS is polling wx.json (~every 2s). A blank/
 # broken GPU init leaves the renderer unable to run JS -> ZERO new polls. That is
 # our screenshot-free, root-free health check.
+read_polls(){ curl -s "http://127.0.0.1:$PORT/health" 2>/dev/null | sed -n 's/.*"polls": *\([0-9]*\).*/\1/p'; }
 polls_growing(){
   local before after
-  before=$(grep -c "wx.json" "$HTTP_LOG" 2>/dev/null); before=${before:-0}
+  before=$(read_polls); before=${before:-0}
   sleep 8
-  after=$(grep -c "wx.json" "$HTTP_LOG" 2>/dev/null); after=${after:-0}
+  after=$(read_polls); after=${after:-0}
   [ "$after" -gt "$before" ]
 }
 
@@ -112,11 +126,22 @@ for attempt in 1 2 3 4; do
   echo "blank render on attempt $attempt — restarting chromium" >> /tmp/almanac_chrome.log
 done
 
-# keep the session alive; relaunch if chromium ever dies
+# keep the session alive; relaunch ANY critical process that dies (not just
+# chromium — a dead data engine or server used to leave the screen stale forever),
+# and every ~5 min re-check for a wedged alive-but-blank render.
+CLOG=/tmp/almanac_chrome.log
+loops=0
 while true; do
+  pgrep -f "Xvfb $VDISP" >/dev/null 2>&1 || { echo "Xvfb died — relaunching" >> "$CLOG"; launch_xvfb; sleep 2; }
+  kill -0 "$ENGINE_PID" 2>/dev/null || { echo "data engine died — relaunching" >> "$CLOG"; launch_engine; }
+  kill -0 "$SERVE_PID"  2>/dev/null || { echo "web server died — relaunching"  >> "$CLOG"; launch_server; }
   if ! kill -0 "$CRPID" 2>/dev/null; then
-    echo "chromium exited — relaunching" >> /tmp/almanac_chrome.log
+    echo "chromium exited — relaunching" >> "$CLOG"
     launch_cr; sleep 12
+  fi
+  loops=$((loops + 1))
+  if [ $((loops % 20)) -eq 0 ]; then                 # ~every 5 min (20 × 15s)
+    polls_growing || { echo "render wedged — relaunching chromium" >> "$CLOG"; launch_cr; sleep 12; }
   fi
   sleep 15
 done
