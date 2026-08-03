@@ -46,7 +46,8 @@ import pytz
 OUTPUT_PATH   = '/tmp/wfp_data/wx.json'
 EMIT_INTERVAL = 2.0     # seconds, per DATA_CONTRACT.md ("~every 2 s")
 VERSION_CHECK_INTERVAL = 900   # seconds (15 min) — how often we poll GitHub for a newer release
-AQI_CHECK_INTERVAL     = 1800  # seconds (30 min) — how often we refresh air quality (it changes slowly)
+AQI_CHECK_INTERVAL     = 600   # seconds (10 min) — refresh air quality; short enough to recover fast
+                               # from a transient boot-time network failure on the flaky USB wifi
 
 # Placeholder strings used throughout properties.py / observation_format.py to
 # mean "no data yet" ('-', '--', '---', ...). Any of these should collapse to
@@ -235,8 +236,8 @@ class AlmanacEmitter:
         # update check: soon after start, then periodically (off the main thread)
         Clock.schedule_once(self._check_version, 8)
         self._ver_event = Clock.schedule_interval(self._check_version, VERSION_CHECK_INTERVAL)
-        # air quality: soon after start, then periodically (off the main thread)
-        Clock.schedule_once(self._check_aqi, 12)
+        # air quality: after the USB wifi has settled post-boot, then periodically
+        Clock.schedule_once(self._check_aqi, 30)
         self._aqi_event = Clock.schedule_interval(self._check_aqi, AQI_CHECK_INTERVAL)
         return self._event
 
@@ -313,7 +314,7 @@ class AlmanacEmitter:
             url = ('https://air-quality-api.open-meteo.com/v1/air-quality'
                    f'?latitude={lat}&longitude={lon}&current=us_aqi,pm2_5&timezone=auto')
             req = urllib.request.Request(url, headers={'User-Agent': 'WeatherFlow-PiConsole-almanac'})
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=25) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
             cur = data.get('current') or {}
             aqi = cur.get('us_aqi')
