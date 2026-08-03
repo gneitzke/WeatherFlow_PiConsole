@@ -267,6 +267,18 @@
   @media (prefers-reduced-motion: reduce) { .uv-track .marker { transition: none; } }
   .uv-ends { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 12px; color: var(--ink-soft); letter-spacing: 0.1em; margin-top: 2px; }
 
+  /* Air Quality — EPA US-AQI colour bands (Good→Hazardous), mirrors the UV track */
+  .aq { margin-top: 7px; }
+  /* keep the AQI line on ONE row even for long categories ("Very Unhealthy") */
+  .aq .uv-line { flex-wrap: nowrap; min-width: 0; }
+  .aq .uv-line .k { letter-spacing: 0.05em; white-space: nowrap; }
+  .aq .uv-line .n { font-size: 22px; }
+  .aq .uv-line .w { font-size: 13px; white-space: nowrap; }
+  .aqi-bar { position: absolute; left: 0; right: 0; top: 2.5px; height: 8px; border-radius: 4px;
+    background: linear-gradient(to right,
+      #5FA46A 0%, #5FA46A 16%, #D8BE44 16%, #D8BE44 33%, #E28C33 33%, #E28C33 50%,
+      #E0574A 50%, #E0574A 66%, #B57BD0 66%, #B57BD0 88%, #C65B6E 88%, #C65B6E 100%); }
+
   /* Rainfall dry-spell block — derived from the station's own accumulation record */
   .dry { margin: auto 0; padding: 6px 0; }
   .dry-line { display: flex; align-items: baseline; gap: 7px; }
@@ -292,27 +304,33 @@
   /* two-tone wind-direction needle: bright accent north tip, light tail — high
      contrast on the dark dial and the direction reads at a glance */
   .needle-n { fill: var(--accent); }
-  .needle-s { fill: var(--moon-lit); }
+  .needle-s { fill: var(--moon-lit); stroke: var(--rule); stroke-width: 1; } /* hairline keeps the tail present on paper */
   .hub         { fill: var(--ink); }
 
   /* ———— barometer zone bar · stick-barometer scale, 950–1050 mb ———— */
   .baro .p-value .n { font-size: 40px; }          /* dial gone: digits get the space */
   /* centre the panel content so freed space sits at the edges, not mid-panel */
   .baro .p-col  { justify-content: center; }
-  .baro .ledger { margin-top: 9px; border-top: none; padding-top: 0; }  /* barograph is the divider now */
-  #barobar   { width: 100%; height: auto; display: block; margin-top: 6px; }
-  .bz-track  { fill: var(--ink); opacity: 0.07; }               /* visible vessel on dark */
+  .baro .ledger { margin-top: 7px; border-top: none; padding-top: 0; }  /* barograph is the divider now */
+  #barobar   { width: 100%; height: auto; display: block; margin-top: 4px; }
+  /* four pigment bands, severity left→right: vermilion / brass / verdigris / water.
+     One translucent opacity for the field, a brighter one for the zone you're in. */
+  .bz-zone        { opacity: 0.30; }
+  .bz-zone.on     { opacity: 0.60; }
+  .bz-zone.stormy { fill: var(--accent); }
+  .bz-zone.change { fill: var(--brass); }
+  .bz-zone.fair   { fill: var(--verdigris); }
+  .bz-zone.dry    { fill: var(--water); }
   .bz-frame  { fill: none; stroke: var(--rule); stroke-width: 1.4; }
-  .bz-tick   { stroke: var(--rule); stroke-width: 1.4; }
-  .bz-word   { fill: var(--ink-soft); opacity: 0.60; font-size: 13.5px; font-weight: 800; letter-spacing: 0.05em; }
+  .bz-tick   { stroke: var(--paper); stroke-width: 2; }          /* crisp gap between bands */
+  .bz-word   { fill: var(--ink-soft); opacity: 0.50; font-size: 16px; font-weight: 800; letter-spacing: 0.02em; }
   .bz-word.on{ fill: var(--ink); opacity: 1; }                   /* the glance answer */
-  .bz-end    { fill: var(--ink-soft); font-size: 11px; letter-spacing: 0.06em; }
-  .bz-marker line    { stroke: var(--ink); stroke-width: 3; }
+  .bz-marker line    { stroke: var(--ink); stroke-width: 3.5; }
   .bz-marker polygon { fill: var(--ink); }
   .bz-marker { transition: transform 0.85s ease; }
   @media (prefers-reduced-motion: reduce) { .bz-marker { transition: none; } }
   /* ———— 24-hour barograph (pressure-trend shape) — thick line, bold caps ———— */
-  #barograph  { width: 100%; height: auto; display: block; margin-top: 4px; }
+  #barograph  { width: 100%; height: auto; display: block; margin-top: 2px; }
   .bg-area    { fill: var(--water); opacity: 0.16; }
   .bg-line    { fill: none; stroke: var(--water); stroke-width: 2.8; stroke-linejoin: round; stroke-linecap: round; }
   .bg-base    { stroke: var(--rule-faint); stroke-width: 1; }
@@ -320,22 +338,24 @@
   .bg-dot     { fill: var(--accent); }
   .bg-cap     { fill: var(--ink-soft); font-size: 11px; font-weight: 800; letter-spacing: 0.12em; }
   .hub-dot     { fill: var(--paper); }
-  .rose-star   { stroke: var(--rule); fill: none; stroke-width: 0.75; }
-  .rose-letter { fill: var(--ink); font-family: var(--serif); font-size: 11.5px; }
-  /* wind compass: nudged up a touch and bolded for the 7" panel */
-  #rose { transform: translateY(-7px); }
-  #rose .dial-ring   { stroke-width: 2.2; }
-  #rose .tick        { stroke-width: 2; }
-  #rose .tick.minor  { stroke-width: 1.1; }
-  #rose .rose-star   { stroke-width: 1.6; }
-  #rose .rose-letter { font-size: 13px; font-weight: 800; }
+  /* wind compass: 8 bold ticks + big sans cardinals + heavy needle — the rose
+     star is gone; at 120px on a 7" panel fewer, thicker elements read farther */
+  #rose { transform: translateY(-4px); }
+  #rose .dial-ring   { stroke-width: 3; }
+  #rose .tick        { stroke: var(--ink);  stroke-width: 5; }    /* N/E/S/W ticks */
+  #rose .tick.minor  { stroke: var(--rule); stroke-width: 2.2; }  /* intercardinals */
+  .rose-letter   { fill: var(--ink); font-family: var(--sans); font-size: 21px; font-weight: 800; }
+  .rose-letter.n { fill: var(--accent); }                         /* north anchors the dial */
+  #rose .needle-s { opacity: 0.8; }                               /* tail defers to the tip */
+  .panel:nth-child(1) .p-body { gap: 10px; }                      /* buys the bigger dial */
+  .panel:nth-child(1) .lrow .k { letter-spacing: 0.06em; }        /* AVERAGE fits beside it */
   .arc-past    { stroke: var(--ink); stroke-width: 2.6; fill: none; }
   .arc-future  { stroke: var(--ink-soft); stroke-width: 2; fill: none; stroke-dasharray: 0.5 4; stroke-linecap: round; }
   .horizon     { stroke: var(--rule); stroke-width: 1.4; }
   .sun-dot     { fill: var(--brass); }
   .sun-ray     { stroke: var(--brass); stroke-width: 1; }
   .arc-tick    { stroke: var(--rule); stroke-width: 1.4; }
-  .arc-lbl     { fill: var(--ink-soft); font-size: 15px; letter-spacing: 0.16em; }
+  .arc-lbl     { fill: var(--ink-soft); font-size: 22px; font-weight: 800; letter-spacing: 0.18em; }
   .gauge-lbl   { fill: var(--ink-soft); font-size: 14.5px; font-weight: 800; }
   .gauge-cap   { fill: var(--ink-soft); font-size: 12px; font-weight: 800; letter-spacing: 0.12em; }
   .gauge-ptr   { fill: var(--water); }
@@ -509,7 +529,7 @@
       <div class="panel">
         <div class="p-head"><span class="p-title">Wind</span><span class="p-status" data-k="windStatus">Calm</span></div>
         <div class="p-body">
-          <svg width="106" height="106" viewBox="0 0 150 150" id="rose"></svg>
+          <svg width="120" height="120" viewBox="0 0 150 150" id="rose"></svg>
           <div class="p-col snug">
             <div class="p-value"><span class="n" data-k="windSpd">0.9</span><span class="u" data-k="windUnit">mph</span></div>
             <div class="p-sub"><b data-k="windCardinal">SSW</b> · <span data-k="windDir">206</span>°</div>
@@ -527,7 +547,7 @@
         <div class="p-col">
           <div class="p-value"><span class="n" data-k="slp">1022.1</span><span class="u" data-k="slpUnit">mb</span></div>
           <div class="p-sub"><span class="up-w" id="baro-arrow">↑</span> <span data-k="slpTrendDesc">Rising</span> <span data-k="slpTrendPerHr">0.4</span> <span data-k="slpUnit">mb</span>/hr</div>
-          <svg id="barobar" viewBox="0 0 250 42" preserveAspectRatio="xMidYMid meet"></svg>
+          <svg id="barobar" viewBox="0 0 250 50" preserveAspectRatio="xMidYMid meet"></svg>
           <svg id="barograph" viewBox="0 0 250 46" preserveAspectRatio="xMidYMid meet"></svg>
           <div class="ledger">
             <div class="lrow out"><span class="k">Outlook</span><span class="dots"></span><span class="v word" data-k="slpOutlook">Unchanged</span></div>
@@ -539,13 +559,12 @@
       <div class="panel">
         <div class="p-head"><span class="p-title">Sun &amp; Sky</span><span class="p-status">Solar · Limited</span></div>
         <div class="p-col">
-          <svg width="100%" height="40" viewBox="0 0 300 88" preserveAspectRatio="xMidYMax meet">
+          <svg width="100%" height="48" viewBox="0 0 300 88" preserveAspectRatio="xMidYMax meet">
             <path class="arc-fill" id="sun-fill" d="M 20 80 A 181 181 0 0 1 72.9 42.2 L 72.9 80 Z"/>
             <path class="arc-future" d="M 20 80 A 181 181 0 0 1 280 80"/>
             <path class="arc-past" id="sun-past" d="M 20 80 A 181 181 0 0 1 72.9 42.2"/>
             <line class="horizon" x1="8" y1="80" x2="292" y2="80"/>
-            <line class="arc-tick" x1="150" y1="25" x2="150" y2="19"/>
-            <text class="arc-lbl" x="150" y="14" text-anchor="middle">NOON</text>
+            <text class="arc-lbl" x="150" y="18" text-anchor="middle">NOON</text>
             <g id="sun-dotg" transform="translate(72.9 42.2)">
               <circle class="sun-dot" r="5.4"/><g id="sunrays"></g>
             </g>
@@ -559,8 +578,11 @@
             </div>
             <div class="uv-ends"><span>0</span><span>11+</span></div>
           </div>
+          <div class="uv aq" id="aq-block">
+            <div class="uv-line"><span class="k">Air Quality</span><span class="n" id="aqi-val">—</span><span class="w" id="aqi-cat">—</span></div>
+            <div class="uv-track"><div class="aqi-bar"></div><div class="marker" id="aqi-marker"></div></div>
+          </div>
           <div class="ledger">
-            <div class="lrow"><span class="k">Radiation</span><span class="dots"></span><span class="v"><span data-k="radiation">468</span> <small data-k="radUnit">W/m²</small></span></div>
             <div class="lrow"><span class="k">Till sunset</span><span class="dots"></span><span class="v" id="sun-tillset">2<small>h</small> 24<small>m</small></span></div>
           </div>
         </div>
@@ -784,60 +806,52 @@
   var windNeedle;
   (function () {
     var svg = $("rose"), cx = 75, cy = 75;
-    el("circle", { class: "dial-face wind", cx: cx, cy: cy, r: 66 }, svg);
-    el("circle", { class: "dial-ring", cx: cx, cy: cy, r: 66 }, svg);
-    for (var d = 0; d < 360; d += 10) {
-      var major = d % 90 === 0, mid = d % 45 === 0;
-      var p1 = pol(cx, cy, major ? 55 : mid ? 58 : 61, d), p2 = pol(cx, cy, 66, d);
+    el("circle", { class: "dial-face wind", cx: cx, cy: cy, r: 70 }, svg);
+    el("circle", { class: "dial-ring", cx: cx, cy: cy, r: 68 }, svg);
+    /* 8 ticks only: thick cardinals, lighter intercardinals — no minor clutter */
+    for (var d = 0; d < 360; d += 45) {
+      var major = d % 90 === 0;
+      var p1 = pol(cx, cy, major ? 58 : 61.5, d), p2 = pol(cx, cy, 68, d);
       el("line", { class: "tick" + (major ? "" : " minor"), x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1] }, svg);
     }
-    function star(rL, rS, rot) {
-      var pts = [];
-      for (var i = 0; i < 4; i++) {
-        pts.push(pol(cx, cy, rL, rot + i * 90));
-        pts.push(pol(cx, cy, rS, rot + i * 90 + 45));
-      }
-      el("polygon", { class: "rose-star",
-        points: pts.map(function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ") }, svg);
-    }
-    star(40, 7, 0); star(26, 5, 45);
     [["N", 0], ["E", 90], ["S", 180], ["W", 270]].forEach(function (c) {
-      var p = pol(cx, cy, 46, c[1]);
-      el("text", { class: "rose-letter", x: p[0], y: p[1] + 4, "text-anchor": "middle" }, svg).textContent = c[0];
+      var p = pol(cx, cy, 45, c[1]);
+      el("text", { class: "rose-letter" + (c[1] === 0 ? " n" : ""),
+        x: p[0], y: p[1] + 7.5, "text-anchor": "middle" }, svg).textContent = c[0];
     });
+    /* needle rides over the letters — its tip is the reading, occlusion is fine */
     windNeedle = el("g", { transform: "rotate(206 " + cx + " " + cy + ")" }, svg);
-    el("polygon", { class: "needle-n", points: "75,23 78.4,73 71.6,73" }, windNeedle);
-    el("polygon", { class: "needle-s", points: "71.6,73 75,81 78.4,73" }, windNeedle);
-    el("circle", { class: "hub", cx: cx, cy: cy, r: 4 }, svg);
-    el("circle", { class: "hub-dot", cx: cx, cy: cy, r: 1.4 }, svg);
+    el("polygon", { class: "needle-n", points: "75,10 83,75 67,75" }, windNeedle);
+    el("polygon", { class: "needle-s", points: "67,75 75,102 83,75" }, windNeedle);
+    el("circle", { class: "hub", cx: cx, cy: cy, r: 7 }, svg);
+    el("circle", { class: "hub-dot", cx: cx, cy: cy, r: 2.5 }, svg);
   })();
 
   /* ———— barometer · horizontal zone bar · 950–1050 mb (stick-barometer scale) ———— */
   var baroBar = {};
   (function () {
     var svg = $("barobar");
-    var X0 = 28, X1 = 222, Y0 = 16, Y1 = 32;                       /* bar rect (16 tall); ~1.94 px/mb */
-    var ZONES = [["STORMY", 950, 985], ["CHANGE", 985, 1015], ["FAIR", 1015, 1035], ["DRY", 1035, 1050]];
+    var X0 = 10, X1 = 240, Y0 = 21, Y1 = 45;                       /* bar rect (24 tall); 2.3 px/mb — end numerals dropped, scale widened */
+    var ZONES = [["STORMY", 950, 985, "stormy"], ["CHANGE", 985, 1015, "change"],
+                 ["FAIR", 1015, 1035, "fair"],   ["DRY", 1035, 1050, "dry"]];
     function x(v) { return X0 + (clamp(v, 950, 1050) - 950) / 100 * (X1 - X0); }
     baroBar.x = x;
 
-    el("rect", { class: "bz-track", x: X0, y: Y0, width: X1 - X0, height: Y1 - Y0 }, svg);
-
-    baroBar.words = [];
+    baroBar.words = []; baroBar.zones = [];
     ZONES.forEach(function (z, i) {
-      if (i) el("line", { class: "bz-tick", x1: x(z[1]), y1: Y0 - 3, x2: x(z[1]), y2: Y1 + 3 }, svg);
-      var w = el("text", { class: "bz-word", x: (x(z[1]) + x(z[2])) / 2, y: 11, "text-anchor": "middle" }, svg);
+      var r = el("rect", { class: "bz-zone " + z[3],
+        x: x(z[1]), y: Y0, width: x(z[2]) - x(z[1]), height: Y1 - Y0 }, svg);
+      r._lo = z[1]; r._hi = z[2]; baroBar.zones.push(r);
+      if (i) el("line", { class: "bz-tick", x1: x(z[1]), y1: Y0, x2: x(z[1]), y2: Y1 }, svg);
+      var w = el("text", { class: "bz-word", x: (x(z[1]) + x(z[2])) / 2, y: 12, "text-anchor": "middle" }, svg);
       w.textContent = z[0]; w._lo = z[1]; w._hi = z[2];
       baroBar.words.push(w);
     });
     el("rect", { class: "bz-frame", x: X0, y: Y0, width: X1 - X0, height: Y1 - Y0 }, svg);
 
-    el("text", { class: "bz-end", x: X0, y: 40, "text-anchor": "middle" }, svg).textContent = "950";
-    el("text", { class: "bz-end", x: X1, y: 40, "text-anchor": "middle" }, svg).textContent = "1050";
-
     baroBar.marker = el("g", { class: "bz-marker" }, svg);
-    el("polygon", { points: "-5,10 5,10 0,16" }, baroBar.marker);   /* cap points down into the bar */
-    el("line",    { x1: 0, y1: 16, x2: 0, y2: 34 }, baroBar.marker); /* stem through the bar */
+    el("polygon", { points: "-6,15 6,15 0,21" }, baroBar.marker);   /* cap points down into the bar */
+    el("line",    { x1: 0, y1: 21, x2: 0, y2: 48 }, baroBar.marker); /* stem through the bar */
     baroBar.marker.style.transform = "translateX(" + x(1022.1).toFixed(1) + "px)";
   })();
 
@@ -1109,6 +1123,9 @@
     baroBar.marker.style.opacity = isNum(data.slp) ? "1" : "0.3";
     baroBar.words.forEach(function (w) {
       w.classList.toggle("on", isNum(data.slp) && slp >= w._lo && (slp < w._hi || w._hi === 1050));
+    });
+    baroBar.zones.forEach(function (r) {
+      r.classList.toggle("on", isNum(data.slp) && slp >= r._lo && (slp < r._hi || r._hi === 1050));
     });
 
     /* RAIN water fill + pointer 0..1 in/hr; dim the whole gauge when bone-dry so
@@ -1434,11 +1451,34 @@
      8. Master render + poll loop
   ════════════════════════════════════════════════════════════ */
   var lastData = null;
+  /* Air Quality — number + category + marker, coloured by US-EPA AQI band.
+     Hidden entirely until the emitter supplies a reading. */
+  function renderAir(data) {
+    var box = $("aq-block");
+    if (!box) return;
+    if (!isNum(data.aqi)) { box.style.display = "none"; return; }
+    box.style.display = "";
+    var a = Math.round(data.aqi), cat, col;
+    if      (a <=  50) { cat = "Good";           col = "#5FA46A"; }
+    else if (a <= 100) { cat = "Moderate";       col = "#D8BE44"; }
+    else if (a <= 150) { cat = "Sensitive";      col = "#E28C33"; }
+    else if (a <= 200) { cat = "Unhealthy";      col = "#E0574A"; }
+    else if (a <= 300) { cat = "Very Unhealthy"; col = "#B57BD0"; }
+    else               { cat = "Hazardous";      col = "#C65B6E"; }
+    var valEl = $("aqi-val"), catEl = $("aqi-cat");
+    valEl.textContent = a;
+    catEl.textContent = data.aqiCategory || cat;
+    valEl.style.color = col;
+    catEl.style.color = col;
+    $("aqi-marker").style.left = clamp(a / 300 * 100, 0, 100).toFixed(1) + "%";
+  }
+
   function render(data) {
     lastData = data;
     renderText(data);
     renderDerived(data);
     renderGauges(data);
+    renderAir(data);
     Light.fromData(data);
     checkStale(data);
   }

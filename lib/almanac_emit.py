@@ -46,6 +46,7 @@ import pytz
 OUTPUT_PATH   = '/tmp/wfp_data/wx.json'
 EMIT_INTERVAL = 2.0     # seconds, per DATA_CONTRACT.md ("~every 2 s")
 VERSION_CHECK_INTERVAL = 900   # seconds (15 min) — how often we poll GitHub for a newer release
+AQI_CHECK_INTERVAL     = 1800  # seconds (30 min) — how often we refresh air quality (it changes slowly)
 
 # Placeholder strings used throughout properties.py / observation_format.py to
 # mean "no data yet" ('-', '--', '---', ...). Any of these should collapse to
@@ -214,6 +215,11 @@ class AlmanacEmitter:
         # don't re-parse the 1440-point REST payload on every 2 s emit tick)
         self._baro_series_cache = []
         self._baro_series_t     = 0.0
+        # air-quality state (fetched off-thread from Open-Meteo by station lat/lon)
+        self._aqi          = None
+        self._aqi_category = None
+        self._aqi_pm25     = None
+        self._aqi_event    = None
 
     def start(self):
         """ Schedule the periodic emit. Idempotent - calling twice (e.g. if
@@ -229,6 +235,9 @@ class AlmanacEmitter:
         # update check: soon after start, then periodically (off the main thread)
         Clock.schedule_once(self._check_version, 8)
         self._ver_event = Clock.schedule_interval(self._check_version, VERSION_CHECK_INTERVAL)
+        # air quality: soon after start, then periodically (off the main thread)
+        Clock.schedule_once(self._check_aqi, 12)
+        self._aqi_event = Clock.schedule_interval(self._check_aqi, AQI_CHECK_INTERVAL)
         return self._event
 
     def stop(self):
@@ -238,6 +247,9 @@ class AlmanacEmitter:
         if self._ver_event is not None:
             self._ver_event.cancel()
             self._ver_event = None
+        if self._aqi_event is not None:
+            self._aqi_event.cancel()
+            self._aqi_event = None
 
     def _check_version(self, _dt=None):
         """ Kick off a non-blocking GitHub version check on a daemon thread so a
@@ -267,6 +279,52 @@ class AlmanacEmitter:
                     _v.parse(str(latest).lstrip('vV')) > _v.parse(str(current).lstrip('vV')))
         except Exception:                                                 # noqa: BLE001
             pass
+
+    def _check_aqi(self, _dt=None):
+        """ Kick off a non-blocking air-quality fetch on a daemon thread. """
+        try:
+            import threading
+            threading.Thread(target=self._do_aqi, daemon=True).start()
+        except Exception:                                                 # noqa: BLE001
+            pass
+
+    @staticmethod
+    def _aqi_cat(aqi):
+        """ US EPA AQI category name. """
+        if aqi <= 50:   return 'Good'
+        if aqi <= 100:  return 'Moderate'
+        if aqi <= 150:  return 'Sensitive'          # "Unhealthy for Sensitive Groups"
+        if aqi <= 200:  return 'Unhealthy'
+        if aqi <= 300:  return 'Very Unhealthy'
+        return 'Hazardous'
+
+    def _do_aqi(self):
+        """ Fetch the current US AQI for the station's lat/lon from the Open-Meteo
+        Air-Quality API (free, no key). Off-thread, never raises; caches the
+        result for the emit tick. On failure the previous value is kept (or None,
+        so the HTML simply hides the air-quality block). """
+        try:
+            import urllib.request
+            config = getattr(self.app, 'config', None)
+            lat = _cfg(config, 'Station', 'Latitude')
+            lon = _cfg(config, 'Station', 'Longitude')
+            if not lat or not lon:
+                return
+            url = ('https://air-quality-api.open-meteo.com/v1/air-quality'
+                   f'?latitude={lat}&longitude={lon}&current=us_aqi,pm2_5&timezone=auto')
+            req = urllib.request.Request(url, headers={'User-Agent': 'WeatherFlow-PiConsole-almanac'})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+            cur = data.get('current') or {}
+            aqi = cur.get('us_aqi')
+            if aqi is None:
+                return
+            aqi = int(round(aqi))
+            self._aqi          = aqi
+            self._aqi_category = self._aqi_cat(aqi)
+            self._aqi_pm25     = cur.get('pm2_5')
+        except Exception as error:                                        # noqa: BLE001
+            Logger.warning(f'almanac_emit: air-quality fetch failed - {error}')
 
     # --------------------------------------------------------------------
     def _emit(self, dt):
@@ -462,6 +520,11 @@ class AlmanacEmitter:
             'daylight':  daylight_txt,
             'tillSunset': till_sunset_txt,
             'peakSun':   _num(_idx(Obs.get('peakSun'), 0)),
+
+            # Air quality (US AQI from Open-Meteo, by station lat/lon; off-thread)
+            'aqi':         self._aqi,
+            'aqiCategory': self._aqi_category,
+            'aqiPm25':     _num(self._aqi_pm25),
 
             # Moon
             'moonPhase':  _text(_idx(Astro.get('Phase'), 1)),
