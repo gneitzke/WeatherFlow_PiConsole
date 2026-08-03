@@ -29,11 +29,16 @@ same station data, built to be read from across a room on a wall-mounted 7-inch
 screen. It runs on the same Raspberry Pi off the same feed and leaves the classic
 six-panel console untouched.
 
-![The Almanac interface, showing Seattle sample data](design/almanac/screenshots/almanac.png)
-<sup>The Almanac (Seattle sample data).</sup>
+The same station reading, two interfaces, so the only thing that changes is how
+it reads. The Almanac (this fork):
 
-![The classic six-panel console](design/almanac/screenshots/classic.png)
-<sup>The classic six-panel console it runs alongside (upstream default).</sup>
+![The Almanac interface showing the reading below, redesigned](design/almanac/screenshots/almanac.png)
+
+And the classic six-panel console (the upstream default) showing the identical
+reading — 46.8 °F, 99% humidity, calm wind, 1024.3 mb and steady, 0.01 in of rain
+yesterday:
+
+![The classic six-panel console showing the same reading](design/almanac/screenshots/classic.png)
 
 What it changes:
 
