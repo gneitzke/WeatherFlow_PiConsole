@@ -22,8 +22,33 @@ please checkout the WeatherFlow community forums: https://community.weatherflow.
 https://weatherflow.com/tempest-weather-system/<br/>
 https://community.weatherflow.com/
 
+## The Almanac UI (this fork)
+
+This fork adds an optional **Almanac** interface: a glance-first redesign of the
+same station data, built to be read from across a room on a wall-mounted 7-inch
+screen. It runs on the same Raspberry Pi off the same feed and leaves the classic
+six-panel console untouched.
+
+What it changes:
+
+- One dominant temperature and a plain-language forecast line, in place of six equal-weight panels.
+- A barometer zone bar (Stormy / Change / Fair / Dry) and a 24-hour pressure barograph labelled with the day's high and low.
+- US air quality (AQI) pulled from the station's own latitude and longitude.
+- A wind panel that resolves to one current reading, with a bolder compass.
+- Animated updates: values count up, the vane swings, the rain gauge fills.
+- Day/night aware. After sunset the Sun & Sky panel becomes Moon & Sky (phase, illumination, moonrise/set).
+
+Two ways to run it:
+
+- **HTML kiosk (recommended).** The console runs headless as a data engine and `chromium --kiosk` renders the interface, pixel-identical and low-power. Setup and revert steps are in [`design/almanac/kiosk/README.md`](design/almanac/kiosk/README.md).
+- **Native Kivy layout.** Set `[Display] LayoutStyle = almanac` in the config.
+
+For the architecture, the `wx.json` data contract, and upgrade notes, see
+[`design/almanac/ARCHITECTURE.md`](design/almanac/ARCHITECTURE.md).
+
 ## Contents
 
+**[The Almanac UI (this fork)](#the-almanac-ui-this-fork)**<br>
 **[Compatibility](#compatibility)**<br>
 **[Installation Instructions](#installation-instructions)**<br>
 **[Update Instructions](#update-instructions)**<br>
