@@ -1,0 +1,8 @@
+# Test configuration lives here (not pytest.ini) because .gitignore ignores
+# *.ini to keep the station's wfpiconsole.ini config out of git.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "guard: git-based mergeability invariant (needs an upstream ref fetched)",
+]

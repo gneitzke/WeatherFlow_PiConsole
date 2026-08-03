@@ -1,0 +1,7 @@
+# Dev/test deps only. The suite stubs Kivy (see tests/conftest.py) so none of
+# these pull in Kivy/SDL/GL — every one is a pure wheel and installs in seconds.
+pytest==8.3.4
+pytz==2025.2
+ephem==4.2
+packaging==25.0
+requests==2.32.3
