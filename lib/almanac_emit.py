@@ -159,6 +159,13 @@ def _text(value, default=None):
     return text or default
 
 
+def _wind_desc(value):
+    """ Beaufort description word, trimmed for a status label
+    ('Calm Conditions' -> 'Calm'). """
+    text = _text(value)
+    return text.replace(' Conditions', '') if text else text
+
+
 def _temp_unit(value):
     """ Normalise the single-glyph degree unit (u'\N{DEGREE FAHRENHEIT}' etc.)
     produced by observation_format into the plain "°F"/"°C" the contract
@@ -484,7 +491,7 @@ class AlmanacEmitter:
             'windMax':      _num(_idx(Obs.get('MaxGust'), 0)),
             'windDir':      wind_dir_deg,
             'windCardinal': wind_cardinal,
-            'windStatus':   _text(_idx(Obs.get('WindSpd'), 2)),
+            'windStatus':   _wind_desc(_idx(Obs.get('WindSpd'), 4)),   # Beaufort description, not the force number at [2]
 
             # Barometer
             'slp':            _num(_idx(Obs.get('SLP'), 0)),

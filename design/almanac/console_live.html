@@ -351,6 +351,10 @@
   #rose .needle-s { opacity: 0.8; }                               /* tail defers to the tip */
   .panel:nth-child(1) .p-body { gap: 10px; }                      /* buys the bigger dial */
   .panel:nth-child(1) .lrow .k { letter-spacing: 0.06em; }        /* AVERAGE fits beside it */
+  /* compass + heading stacked; direction reads directly under the dial */
+  .wind-rose  { display: flex; flex-direction: column; align-items: center; flex: none; }
+  .wind-head  { text-align: center; margin-top: -1px; white-space: nowrap; }
+  .p-value .n.wind-spd { font-size: 54px; }                       /* wind speed enlarged */
   .arc-past    { stroke: var(--ink); stroke-width: 2.6; fill: none; }
   .arc-future  { stroke: var(--ink-soft); stroke-width: 2; fill: none; stroke-dasharray: 0.5 4; stroke-linecap: round; }
   .horizon     { stroke: var(--rule); stroke-width: 1.4; }
@@ -531,10 +535,12 @@
       <div class="panel">
         <div class="p-head"><span class="p-title">Wind</span><span class="p-status" data-k="windStatus">Calm</span></div>
         <div class="p-body">
-          <svg width="120" height="120" viewBox="0 0 150 150" id="rose"></svg>
+          <div class="wind-rose">
+            <svg width="120" height="120" viewBox="0 0 150 150" id="rose"></svg>
+            <div class="p-sub wind-head"><b data-k="windCardinal">SSW</b> · <span data-k="windDir">206</span>°</div>
+          </div>
           <div class="p-col snug">
-            <div class="p-value"><span class="n" data-k="windSpd">0.9</span><span class="u" data-k="windUnit">mph</span></div>
-            <div class="p-sub"><b data-k="windCardinal">SSW</b> · <span data-k="windDir">206</span>°</div>
+            <div class="p-value"><span class="n wind-spd" data-k="windSpd">0.9</span><span class="u" data-k="windUnit">mph</span></div>
             <div class="ledger">
               <div class="lrow"><span class="k">Average</span><span class="dots"></span><span class="v"><span data-k="windAvg">0.1</span> <small data-k="windUnit">mph</small></span></div>
               <div class="lrow"><span class="k">Gust</span><span class="dots"></span><span class="v"><span data-k="windGust">2.9</span> <small data-k="windUnit">mph</small></span></div>
