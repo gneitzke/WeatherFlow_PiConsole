@@ -104,7 +104,7 @@
   .page {
     position: relative; width: 1024px; height: 600px;
     background: var(--paper); overflow: hidden;
-    padding: 13px 34px 10px;
+    padding: 9px 34px 6px;
     display: flex; flex-direction: column;
   }
   /* Paper-grain disabled on the kiosk: the feTurbulence SVG filter blanks the
@@ -142,7 +142,7 @@
   .mast-stale.on { opacity: 0.85; }
 
   /* ———— Screens ———— */
-  .screen { flex: 1 1 auto; min-height: 0; display: none; flex-direction: row; padding-top: 12px; }
+  .screen { flex: 1 1 auto; min-height: 0; display: none; flex-direction: row; padding-top: 6px; }
   .screen.active { display: flex; }
 
   /* ═════════ MAIN: OBSERVATIONS ═════════ */
@@ -280,6 +280,39 @@
     background: linear-gradient(to right,
       #5FA46A 0%, #5FA46A 16%, #D8BE44 16%, #D8BE44 33%, #E28C33 33%, #E28C33 50%,
       #E0574A 50%, #E0574A 66%, #B57BD0 66%, #B57BD0 88%, #C65B6E 88%, #C65B6E 100%); }
+
+  /* ———— Alert bulletin strip (sits below the masthead; hidden until alerts arrive) ———— */
+  .alert-strip { flex: 0 0 auto; display: none; align-items: center; gap: 9px;
+    height: 23px; margin: 2px 0 0; padding: 0 11px 0 10px;
+    border-left: 3px solid currentColor; border-radius: 2px;      /* tier keyline */
+    font-family: var(--sans); color: var(--brass); background: var(--brass-tint);  /* JS sets tier */
+    overflow: hidden; }
+  .alert-strip.on { display: flex; }
+  .alert-strip.enter { animation: alertIn 0.5s ease both; }
+  @keyframes alertIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  .alert-pennant { flex: none; }
+  .al-event  { font-size: 14px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase;
+    white-space: nowrap; flex: none; }
+  .al-sep    { color: var(--rule); flex: none; }
+  .al-detail { flex: 1 1 auto; min-width: 0; font-size: 13px; letter-spacing: 0.02em; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }         /* long-headline safety net */
+  .al-more   { flex: none; font-size: 11.5px; font-weight: 800; letter-spacing: 0.10em; text-transform: uppercase;
+    padding: 1px 6px; border: 1px solid currentColor; border-radius: 9px; opacity: 0.9; }
+  .al-until  { flex: none; font-size: 11.5px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase;
+    color: var(--ink-soft); }
+  .alert-strip.stale { opacity: 0.6; }
+  @media (prefers-reduced-motion: reduce) { .alert-strip.enter { animation: none; } }
+
+  /* AQI degrade highlight (≥ Moderate) + hollow forward-forecast marker */
+  .aq.aq-elevated { padding-left: 8px; border-left: 3px solid var(--band, var(--brass));
+    border-radius: 2px; background: var(--band-tint, transparent); }
+  .aqi-seg { position: absolute; top: 5.5px; height: 2px; border-radius: 1px; opacity: 0.55; display: none; }
+  .uv-track .marker.fwd { background: transparent; border-width: 2.5px; box-shadow: none;
+    width: 13px; height: 13px; margin-left: -6.5px; opacity: 0.85; display: none; }
+  /* forecast trend rides the AQI line (no extra row) — pushed right, small caps */
+  .aq-fc { font-family: var(--sans); font-size: 11px; font-weight: 800; letter-spacing: 0.04em;
+    margin-left: auto; white-space: nowrap; display: none; }
+  .aq.stale { opacity: 0.55; }
 
   /* Rainfall dry-spell block — derived from the station's own accumulation record */
   .dry { margin: auto 0; padding: 6px 0; }
@@ -479,6 +512,19 @@
     <div class="hair"></div>
   </header>
 
+  <!-- ————— ALERT BULLETIN STRIP (hidden until the emitter reports alerts) ————— -->
+  <div class="alert-strip" id="alert-strip">
+    <svg class="alert-pennant" width="13" height="15" viewBox="0 0 13 15" aria-hidden="true">
+      <line x1="1.6" y1="0" x2="1.6" y2="15" stroke="currentColor" stroke-width="2"/>
+      <polygon points="3,1 12,4.6 3,8" fill="currentColor"/>
+    </svg>
+    <span class="al-event" id="al-event"></span>
+    <span class="al-sep" id="al-sep">·</span>
+    <span class="al-detail" id="al-detail"></span>
+    <span class="al-more" id="al-more" hidden></span>
+    <span class="al-until" id="al-until"></span>
+  </div>
+
   <!-- ═════════ SCREEN: OBSERVATIONS ═════════ -->
   <main class="screen active" id="s-obs">
 
@@ -616,8 +662,13 @@
             <div class="lrow"><span class="k">Peak sun today</span><span class="dots"></span><span class="v"><span data-k="peakSun">5.2</span> <small>h</small></span></div>
           </div>
           <div class="uv aq" id="aq-block">
-            <div class="uv-line"><span class="k">Air Quality</span><span class="n" id="aqi-val">—</span><span class="w" id="aqi-cat">—</span></div>
-            <div class="uv-track"><div class="aqi-bar"></div><div class="marker" id="aqi-marker"></div></div>
+            <div class="uv-line"><span class="k">Air Quality</span><span class="n" id="aqi-val">—</span><span class="w" id="aqi-cat">—</span><span class="aq-fc" id="aq-trend"></span></div>
+            <div class="uv-track">
+              <div class="aqi-bar"></div>
+              <div class="aqi-seg" id="aqi-seg"></div>
+              <div class="marker fwd" id="aqi-fwd"></div>
+              <div class="marker" id="aqi-marker"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -1529,32 +1580,84 @@
      8. Master render + poll loop
   ════════════════════════════════════════════════════════════ */
   var lastData = null;
-  /* Air Quality — number + category + marker, coloured by US-EPA AQI band.
-     Hidden entirely until the emitter supplies a reading. */
+  /* Alert bulletin strip — the emitter sends alerts already collapsed, classified
+     and sorted; the HTML just paints the lead (tier colour + one line) and a
+     "+N more" count when distinct alert types coexist. */
+  var TONE = { accent: "--accent", brass: "--brass", water: "--water", verdigris: "--verdigris" };
+  var _alertShown = false;
+  function renderAlerts(data) {
+    var strip = $("alert-strip");
+    var lead = (data.alerts && data.alerts.length) ? data.alerts[0] : null;
+    if (!lead) { strip.classList.remove("on", "enter", "stale"); _alertShown = false; return; }
+    var v = TONE[lead.tone] || "--verdigris";
+    strip.style.color = "var(" + v + ")";
+    strip.style.background = "var(" + v + "-tint)";
+    $("al-event").textContent = lead.event || "Weather Alert";
+    var detail = [lead.short, lead.areaShort].filter(Boolean).join(" · ");
+    $("al-detail").textContent = detail;
+    $("al-sep").style.display = detail ? "" : "none";
+    var more = (data.alertCount || 1) - 1, moreEl = $("al-more");
+    if (more > 0) { moreEl.textContent = "+" + more + " more"; moreEl.hidden = false; }
+    else { moreEl.hidden = true; }
+    var stale = !!data.alertsStale;
+    strip.classList.toggle("stale", stale);
+    $("al-until").textContent = stale ? ("as of " + (data.alertsAsOf || "—"))
+      : (lead.untilText ? ("until " + lead.untilText) : "");
+    strip.classList.add("on");
+    if (!_alertShown) { strip.classList.add("enter"); _alertShown = true; }
+  }
+
+  /* Air Quality — number + category + marker, coloured by US-EPA AQI band; a
+     hollow forward marker + trend line preview the 6-h peak so a rising smoke
+     event is legible BEFORE the current number degrades. Hidden until a reading. */
+  function aqiBand(a) {
+    if (a <=  50) return { cat: "Good",           col: "#5FA46A" };
+    if (a <= 100) return { cat: "Moderate",       col: "#D8BE44" };
+    if (a <= 150) return { cat: "Sensitive",      col: "#E28C33" };
+    if (a <= 200) return { cat: "Unhealthy",      col: "#E0574A" };
+    if (a <= 300) return { cat: "Very Unhealthy", col: "#B57BD0" };
+    return             { cat: "Hazardous",      col: "#C65B6E" };
+  }
+  function hexA(h, a) { var n = parseInt(h.slice(1), 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; }
   function renderAir(data) {
     var box = $("aq-block");
     if (!box) return;
     if (!isNum(data.aqi)) { box.style.display = "none"; return; }
     box.style.display = "";
-    var a = Math.round(data.aqi), cat, col;
-    if      (a <=  50) { cat = "Good";           col = "#5FA46A"; }
-    else if (a <= 100) { cat = "Moderate";       col = "#D8BE44"; }
-    else if (a <= 150) { cat = "Sensitive";      col = "#E28C33"; }
-    else if (a <= 200) { cat = "Unhealthy";      col = "#E0574A"; }
-    else if (a <= 300) { cat = "Very Unhealthy"; col = "#B57BD0"; }
-    else               { cat = "Hazardous";      col = "#C65B6E"; }
-    var valEl = $("aqi-val"), catEl = $("aqi-cat");
-    valEl.textContent = a;
-    catEl.textContent = data.aqiCategory || cat;
-    valEl.style.color = col;
-    catEl.style.color = col;
-    $("aqi-marker").style.left = clamp(a / 300 * 100, 0, 100).toFixed(1) + "%";
+    var a = Math.round(data.aqi), b = aqiBand(a);
+    $("aqi-val").textContent = a;
+    $("aqi-cat").textContent = data.aqiCategory || b.cat;
+    $("aqi-val").style.color = b.col;
+    $("aqi-cat").style.color = b.col;
+    var nowPct = clamp(a / 300 * 100, 0, 100);
+    $("aqi-marker").style.left = nowPct.toFixed(1) + "%";
+    var elevated = a > 50;
+    box.classList.toggle("aq-elevated", elevated);
+    box.style.setProperty("--band", elevated ? b.col : "");
+    box.style.setProperty("--band-tint", elevated ? hexA(b.col, 0.10) : "");
+    var stale = !!data.aqiStale;
+    box.classList.toggle("stale", stale);
+    var fwd = $("aqi-fwd"), seg = $("aqi-seg"), tr = $("aq-trend");
+    var peak = data.aqiPeak;
+    var showFwd = !stale && isNum(peak) && aqiBand(peak).cat !== b.cat && peak > a;
+    if (showFwd) {
+      var pb = aqiBand(peak), pPct = clamp(peak / 300 * 100, 0, 100);
+      fwd.style.display = "block"; fwd.style.left = pPct.toFixed(1) + "%"; fwd.style.borderColor = pb.col;
+      seg.style.display = "block"; seg.style.left = nowPct + "%"; seg.style.width = Math.max(0, pPct - nowPct) + "%"; seg.style.background = pb.col;
+      tr.style.display = "inline"; tr.style.color = pb.col; tr.textContent = "↗ " + (data.aqiTrendText || (pb.cat + " ahead"));
+    } else if (!stale && data.aqiTrend === "falling" && data.aqiTrendText) {
+      fwd.style.display = "none"; seg.style.display = "none";
+      tr.style.display = "inline"; tr.style.color = "var(--ink-soft)"; tr.textContent = "↘ " + data.aqiTrendText;
+    } else {
+      fwd.style.display = "none"; seg.style.display = "none"; tr.style.display = "none";
+    }
   }
 
   function render(data) {
     lastData = data;
     renderText(data);
     renderDerived(data);
+    renderAlerts(data);
     renderGauges(data);
     renderAir(data);
     renderSky(data);

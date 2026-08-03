@@ -28,7 +28,7 @@ FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 from kivy.logger import Logger
 from kivy.clock  import Clock
 
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import math
 import os
@@ -47,6 +47,29 @@ OUTPUT_PATH   = '/tmp/wfp_data/wx.json'
 EMIT_INTERVAL = 2.0     # seconds, per DATA_CONTRACT.md ("~every 2 s")
 VERSION_CHECK_INTERVAL = 900   # seconds (15 min) — how often we poll GitHub for a newer release
 AQI_CHECK_INTERVAL     = 600   # seconds (10 min) — refresh air quality; short enough to recover fast
+ALERTS_CHECK_INTERVAL  = 900   # seconds (15 min) — NWS alerts change slowly; be gentle on api.weather.gov
+ALERTS_TIMEOUT         = 20    # seconds — socket timeout for the alerts fetch
+ALERT_STALE_SEC        = 3600  # seconds (1 h) without a successful alerts fetch -> mark alertsStale
+AQI_STALE_SEC          = 3600  # seconds (1 h) without a successful AQI fetch -> mark aqiStale
+ALERT_MAX              = 3     # cap the alerts array (the HTML strip renders only the lead)
+# NWS asks for a User-Agent that identifies the app with a contact. Keep any real
+# address OUT of git: read Station/Contact from config, else env ALMANAC_CONTACT,
+# else this generic repo URL (NWS rejects a blank/absent UA with 403).
+ALERTS_UA_FALLBACK = 'WeatherFlow-PiConsole-almanac (+https://github.com/gneitzke/WeatherFlow_PiConsole)'
+
+# NWS product level parsed from the LAST word of the event name — a controlled
+# vocabulary that stays reliable even when CAP severity/urgency are 'Unknown'.
+# 'Alert' products (e.g. Air Quality Alert) bucket as advisory-tier. Higher = more urgent.
+_ALERT_LEVEL     = {'warning': 4, 'watch': 3, 'advisory': 2, 'alert': 2, 'statement': 1, 'outlook': 0}
+_ALERT_LEVELNAME = {4: 'warning', 3: 'watch', 2: 'advisory', 1: 'statement', 0: 'outlook'}
+# Hazard family — for the label/nuance only; the banner colour is derived from the level.
+_EVENT_CLASS_MAP = [
+    ('tornado', 'severe'), ('thunderstorm', 'severe'), ('hurricane', 'severe'), ('tsunami', 'severe'),
+    ('air quality', 'air'), ('smoke', 'air'), ('red flag', 'air'), ('fire', 'air'), ('heat', 'heat'),
+    ('winter', 'winter'), ('snow', 'winter'), ('ice', 'winter'), ('freeze', 'winter'),
+    ('wind', 'wind'), ('flood', 'water'), ('coastal', 'water'), ('fog', 'water'),
+    ('gale', 'water'), ('surf', 'water'),
+]
                                # from a transient boot-time network failure on the flaky USB wifi
 
 # Placeholder strings used throughout properties.py / observation_format.py to
@@ -228,6 +251,17 @@ class AlmanacEmitter:
         self._aqi_category = None
         self._aqi_pm25     = None
         self._aqi_event    = None
+        self._aqi_ts       = None    # epoch of last SUCCESSFUL aqi fetch (staleness guard)
+        self._aqi_forecast = []      # [[epoch, us_aqi], ...] next hours, for the trend
+        self._aqi_peak      = None   # max us_aqi over the next 6 h
+        self._aqi_peak_time = None   # station-local hour label of that peak ("5 PM")
+        self._aqi_fc_cat    = None   # AQI category at the peak
+        self._aqi_trend     = None   # 'rising' | 'falling' | 'steady'
+        self._aqi_trend_text = None  # "Moderate by 5 PM" | "Improving" | None
+        # weather-alerts state (fetched off-thread from api.weather.gov by lat/lon)
+        self._alerts       = []      # last-good, processed + collapsed + sorted
+        self._alerts_ts    = None    # epoch of last SUCCESSFUL alerts fetch (staleness guard)
+        self._alerts_event = None    # Clock handle
 
     def start(self):
         """ Schedule the periodic emit. Idempotent - calling twice (e.g. if
@@ -246,6 +280,9 @@ class AlmanacEmitter:
         # air quality: after the USB wifi has settled post-boot, then periodically
         Clock.schedule_once(self._check_aqi, 30)
         self._aqi_event = Clock.schedule_interval(self._check_aqi, AQI_CHECK_INTERVAL)
+        # weather alerts: staggered a little after AQI, then periodically
+        Clock.schedule_once(self._check_alerts, 40)
+        self._alerts_event = Clock.schedule_interval(self._check_alerts, ALERTS_CHECK_INTERVAL)
         return self._event
 
     def stop(self):
@@ -258,6 +295,9 @@ class AlmanacEmitter:
         if self._aqi_event is not None:
             self._aqi_event.cancel()
             self._aqi_event = None
+        if self._alerts_event is not None:
+            self._alerts_event.cancel()
+            self._alerts_event = None
 
     def _check_version(self, _dt=None):
         """ Kick off a non-blocking GitHub version check on a daemon thread so a
@@ -319,7 +359,8 @@ class AlmanacEmitter:
             if not lat or not lon:
                 return
             url = ('https://air-quality-api.open-meteo.com/v1/air-quality'
-                   f'?latitude={lat}&longitude={lon}&current=us_aqi,pm2_5&timezone=auto')
+                   f'?latitude={lat}&longitude={lon}&current=us_aqi,pm2_5'
+                   '&hourly=us_aqi,pm2_5&forecast_days=1&timezone=auto')
             req = urllib.request.Request(url, headers={'User-Agent': 'WeatherFlow-PiConsole-almanac'})
             with urllib.request.urlopen(req, timeout=25) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
@@ -331,8 +372,230 @@ class AlmanacEmitter:
             self._aqi          = aqi
             self._aqi_category = self._aqi_cat(aqi)
             self._aqi_pm25     = cur.get('pm2_5')
+            self._aqi_ts       = time.time()
+            # short forecast trend so a rising smoke event shows before the number does
+            (self._aqi_forecast, self._aqi_peak, self._aqi_peak_time,
+             self._aqi_trend, self._aqi_trend_text, self._aqi_fc_cat) = \
+                self._aqi_forecast_summary(data.get('hourly') or {}, time.time(),
+                                           self._station_tz(config), aqi)
         except Exception as error:                                        # noqa: BLE001
             Logger.warning(f'almanac_emit: air-quality fetch failed - {error}')
+
+    @staticmethod
+    def _hour_label(dt):
+        """ "5 PM" / "5:30 PM" from a datetime. Portable (avoids the non-BSD %-I). """
+        hour12 = dt.hour % 12 or 12
+        ampm = 'AM' if dt.hour < 12 else 'PM'
+        return f'{hour12} {ampm}' if dt.minute == 0 else f'{hour12}:{dt.minute:02d} {ampm}'
+
+    @staticmethod
+    def _aqi_forecast_summary(hourly, now, tz, aqi_now):
+        """ From Open-Meteo hourly us_aqi (local-naive ISO times + the station tz),
+        build the next-hours series, the 6 h peak, and a rising/falling/steady
+        trend (5-AQI deadband, band-crossing required). Pure; never raises.
+        Returns (series, peak, peak_time, trend, trend_text, peak_cat). """
+        times = hourly.get('time') or []
+        vals  = hourly.get('us_aqi') or []
+        pts = []
+        for t, v in zip(times, vals):
+            if v is None:
+                continue
+            try:
+                dt = datetime.fromisoformat(t)
+            except (ValueError, TypeError):
+                continue
+            if dt.tzinfo is None and tz is not None:
+                try:
+                    dt = tz.localize(dt)
+                except Exception:                                         # noqa: BLE001
+                    dt = dt.replace(tzinfo=timezone.utc)
+            epoch = dt.timestamp() if dt.tzinfo else None
+            pts.append((epoch, dt, int(round(v))))
+        future = [(e, d, v) for (e, d, v) in pts if e is None or e >= now - 1800][:12]
+        if not future:
+            return [], None, None, None, None, None
+        series = [[int(e), v] for (e, d, v) in future if e is not None]
+        window = [(e, d, v) for (e, d, v) in future if e is None or e <= now + 6 * 3600] or future
+        _, peak_dt, peak = max(window, key=lambda x: x[2])
+        peak_cat  = AlmanacEmitter._aqi_cat(peak)
+        peak_time = AlmanacEmitter._hour_label(peak_dt)
+        base = aqi_now if aqi_now is not None else future[0][2]
+        low  = min(v for (_, _, v) in future)
+        if peak - base >= 5 and peak_cat != AlmanacEmitter._aqi_cat(base):
+            trend, trend_text = 'rising', f'{peak_cat} by {peak_time}'
+        elif base - low >= 5 and AlmanacEmitter._aqi_cat(low) != AlmanacEmitter._aqi_cat(base):
+            trend, trend_text = 'falling', 'Improving'
+        else:
+            trend, trend_text = 'steady', None
+        return series, peak, peak_time, trend, trend_text, peak_cat
+
+    # --------------------------------------------------------------------
+    # Weather alerts (NWS api.weather.gov, by station lat/lon)
+    # --------------------------------------------------------------------
+    def _check_alerts(self, _dt=None):
+        """ Kick off a non-blocking NWS alerts fetch on a daemon thread. """
+        try:
+            import threading
+            threading.Thread(target=self._do_alerts, daemon=True).start()
+        except Exception:                                                 # noqa: BLE001
+            pass
+
+    def _do_alerts(self):
+        """ Fetch active NWS alerts for the station's lat/lon. Off-thread, never
+        raises; keeps the last-good list on failure (staleness is flagged in the
+        payload rather than silently shown as fresh). """
+        try:
+            import urllib.request
+            config = getattr(self.app, 'config', None)
+            lat = _cfg(config, 'Station', 'Latitude')
+            lon = _cfg(config, 'Station', 'Longitude')
+            if not lat or not lon:
+                return
+            contact = (_cfg(config, 'Station', 'Contact')
+                       or os.environ.get('ALMANAC_CONTACT') or ALERTS_UA_FALLBACK)
+            url = f'https://api.weather.gov/alerts/active?point={lat},{lon}'
+            req = urllib.request.Request(url, headers={
+                'User-Agent': contact, 'Accept': 'application/geo+json'})
+            with urllib.request.urlopen(req, timeout=ALERTS_TIMEOUT) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+            feats = [f.get('properties') or {} for f in (data.get('features') or [])]
+            self._alerts    = self._process_alerts(feats, time.time(), self._station_tz(config))
+            self._alerts_ts = time.time()
+        except Exception as error:                                        # noqa: BLE001
+            Logger.warning(f'almanac_emit: alerts fetch failed - {error}')
+
+    @staticmethod
+    def _alert_level(event):
+        """ NWS product level from the last word of the event name. 'Alert' products
+        bucket as advisory-tier; unknown products as statement-tier. Returns
+        (level_int, level_str) with higher int = more urgent. """
+        last = (event or '').strip().lower().rsplit(' ', 1)[-1]
+        lvl = _ALERT_LEVEL.get(last, 1)
+        return lvl, _ALERT_LEVELNAME[lvl]
+
+    @staticmethod
+    def _alert_tone(event, level):
+        """ Banner colour token, derived from the level with a 2-rule hazard override:
+        (A) air-quality/smoke/red-flag/fire-weather pin to amber at any level;
+        (B) routine water advisories (wind/flood/winter/fog/coastal/gale/surf,
+        level <= advisory) cool to blue instead of shouting amber. """
+        e = (event or '').lower()
+        if any(k in e for k in ('air quality', 'smoke', 'red flag', 'fire weather')):
+            return 'brass'                              # override A
+        if level <= 2 and any(k in e for k in ('wind', 'flood', 'winter', 'fog', 'coastal', 'gale', 'surf')):
+            return 'water'                              # override B
+        if level >= 4:
+            return 'accent'                             # warning
+        if level >= 2:
+            return 'brass'                              # watch / advisory / alert
+        return 'verdigris'                              # statement / outlook / unknown
+
+    @staticmethod
+    def _event_class(event):
+        """ Hazard family for the label/nuance; colour comes from the level. """
+        e = (event or '').lower()
+        for sub, cls in _EVENT_CLASS_MAP:
+            if sub in e:
+                return cls
+        return 'default'
+
+    @staticmethod
+    def _to_epoch(iso):
+        """ ISO-8601 (with or without offset) -> epoch seconds; None if unparsable. """
+        if not iso:
+            return None
+        try:
+            dt = datetime.fromisoformat(iso)
+        except (ValueError, TypeError):
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+
+    @staticmethod
+    def _until_text(epoch, tz):
+        """ Glanceable station-local end time, e.g. "Wed 5 PM". None if unknown. """
+        if epoch is None or tz is None:
+            return None
+        try:
+            dt = datetime.fromtimestamp(epoch, tz)
+        except (ValueError, OSError, OverflowError):
+            return None
+        return f"{dt.strftime('%a')} {AlmanacEmitter._hour_label(dt)}"
+
+    @staticmethod
+    def _split_counties(area_desc):
+        """ "King, WA; Kitsap, WA; …" -> ['King', 'Kitsap', …] (deduped, ordered). """
+        out, seen = [], set()
+        for seg in (area_desc or '').split(';'):
+            name = seg.split(',')[0].strip()
+            if name and name not in seen:
+                seen.add(name)
+                out.append(name)
+        return out
+
+    @staticmethod
+    def _areas_short(counties):
+        """ ['King','Kitsap','Pierce','Snohomish','Thurston'] -> 'King, Kitsap, Pierce +2'. """
+        if not counties:
+            return None
+        head = counties[:3]
+        extra = len(counties) - len(head)
+        return ', '.join(head) + (f' +{extra}' if extra > 0 else '')
+
+    @staticmethod
+    def _extract_reason(desc):
+        """ Best-effort "…for wildfire smoke has been issued…" -> "Wildfire smoke".
+        Returns None when not confidently extractable. """
+        if not desc:
+            return None
+        match = re.search(r'\bfor ([a-z][a-z \-]{2,40}?) (?:has been|have been|is|are) '
+                          r'(?:issued|in effect)', desc, re.I)
+        if not match:
+            return None
+        reason = match.group(1).strip()
+        return reason[:1].upper() + reason[1:]
+
+    def _process_alerts(self, feats, now, tz):
+        """ Raw NWS `properties` dicts -> the wx.json alert list: drop expired,
+        classify by product level, COLLAPSE identical events (union of counties,
+        soonest end), sort by level then soonest end, cap the count. Pure given its
+        inputs (no network); never raises. """
+        groups = {}
+        for prop in feats:
+            end = prop.get('ends') or prop.get('expires')
+            expires = self._to_epoch(end)
+            if expires is not None and expires < now:              # expired
+                continue
+            event = prop.get('event') or 'Weather Alert'
+            level, level_name = self._alert_level(event)
+            key = event.strip().lower()                            # collapse only IDENTICAL products
+            cand = {
+                'event': event, 'eventClass': self._event_class(event),
+                'level': level_name, 'tone': self._alert_tone(event, level), 'priority': level,
+                'short': self._extract_reason(prop.get('description')),
+                'onset': self._to_epoch(prop.get('onset')),
+                'until': expires, 'untilText': self._until_text(expires, tz),
+                'headline': (prop.get('headline') or '')[:160],
+                '_areaset': self._split_counties(prop.get('areaDesc') or ''),
+            }
+            group = groups.get(key)
+            if group is None:
+                groups[key] = cand
+            else:
+                for county in cand['_areaset']:
+                    if county not in group['_areaset']:
+                        group['_areaset'].append(county)
+                group['short'] = group['short'] or cand['short']
+                if cand['until'] is not None and (group['until'] is None or cand['until'] < group['until']):
+                    group['until'] = cand['until']
+                    group['untilText'] = cand['untilText']
+        out = []
+        for group in groups.values():
+            group['areaShort'] = self._areas_short(group.pop('_areaset'))
+            out.append(group)
+        out.sort(key=lambda a: (-a['priority'], a['until'] if a['until'] is not None else 9e18))
+        return out[:ALERT_MAX]
 
     # --------------------------------------------------------------------
     def _emit(self, dt):
@@ -534,6 +797,20 @@ class AlmanacEmitter:
             'aqi':         self._aqi,
             'aqiCategory': self._aqi_category,
             'aqiPm25':     _num(self._aqi_pm25),
+            'aqiForecast':    self._aqi_forecast,
+            'aqiPeak':        self._aqi_peak,
+            'aqiPeakTime':    self._aqi_peak_time,
+            'aqiForecastCat': self._aqi_fc_cat,
+            'aqiTrend':       self._aqi_trend,
+            'aqiTrendText':   self._aqi_trend_text,
+            'aqiStale':       (self._aqi_ts is None) or (time.time() - self._aqi_ts) > AQI_STALE_SEC,
+
+            # Weather alerts (NWS, by station lat/lon)
+            'alerts':      self._alerts,
+            'alertCount':  len(self._alerts),
+            'alertsStale': (self._alerts_ts is None) or (time.time() - self._alerts_ts) > ALERT_STALE_SEC,
+            'alertsAsOf':  (datetime.fromtimestamp(self._alerts_ts, tz).strftime('%H:%M')
+                            if (self._alerts_ts and tz) else None),
 
             # Moon
             'moonPhase':  _text(_idx(Astro.get('Phase'), 1)),

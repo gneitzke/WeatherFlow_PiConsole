@@ -47,6 +47,26 @@ the HTML shows an em-dash for null. Emitter converts from the app's
   "sunrise": "05:43", "sunset": "20:43", "sunFrac": 0.29,
   "daylight": "11h 37m", "peakSun": 0.65,
 
+  // Air Quality  (US EPA AQI by station lat/lon, Open-Meteo; null hides the block)
+  "aqi": 40, "aqiCategory": "Good", "aqiPm25": 13.8,
+  // short forecast so a rising smoke event is visible before the number degrades
+  "aqiForecast": [[1754247600, 40], [1754251200, 43]], "aqiPeak": 55, "aqiPeakTime": "5 PM",
+  "aqiForecastCat": "Moderate", "aqiTrend": "rising", "aqiTrendText": "Moderate by 5 PM",
+  "aqiStale": false,          // true if the last successful AQI fetch is > 1 h old
+
+  // Weather alerts  (active NWS alerts by lat/lon; same-type collapsed, capped 3,
+  // sorted by product level: warning > watch > advisory > alert > statement)
+  "alerts": [
+    { "event": "Air Quality Alert", "eventClass": "air", "level": "advisory",
+      "tone": "brass",        // banner colour token: accent | brass | water | verdigris
+      "priority": 2,          // level int (4 = warning, highest)
+      "short": "Wildfire smoke", "areaShort": "King, Kitsap, Pierce +2",
+      "onset": 1754251380, "until": 1754438400, "untilText": "Wed 5 PM",
+      "headline": "Air Quality Alert issued August 3 …" }
+  ],
+  "alertCount": 1,            // distinct types; the HTML shows "+N more" = count-1
+  "alertsStale": false, "alertsAsOf": "13:52",   // last successful fetch; stale after 1 h
+
   // Moon
   "moonPhase": "Waning Gibbous", "moonIllum": 78,
   "moonrise": "22:14", "moonset": "09:38", "nextFull": "Aug 8", "nextNew": "Aug 23",
