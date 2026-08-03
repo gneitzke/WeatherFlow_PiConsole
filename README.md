@@ -29,6 +29,12 @@ same station data, built to be read from across a room on a wall-mounted 7-inch
 screen. It runs on the same Raspberry Pi off the same feed and leaves the classic
 six-panel console untouched.
 
+![The Almanac interface, showing Seattle sample data](design/almanac/screenshots/almanac.png)
+<sup>The Almanac (Seattle sample data).</sup>
+
+![The classic six-panel console](design/almanac/screenshots/classic.png)
+<sup>The classic six-panel console it runs alongside (upstream default).</sup>
+
 What it changes:
 
 - One dominant temperature and a plain-language forecast line, in place of six equal-weight panels.
