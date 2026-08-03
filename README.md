@@ -29,14 +29,14 @@ same station data, built to be read from across a room on a wall-mounted 7-inch
 screen. It runs on the same Raspberry Pi off the same feed and leaves the classic
 six-panel console untouched.
 
-The same station reading, two interfaces, so the only thing that changes is how
-it reads. The Almanac (this fork):
+The same station reading in two interfaces. The Almanac (this fork) reads at a
+glance and finds room for things the classic layout can't — here, an active
+air-quality alert across the top and the AQI's own short forecast:
 
-![The Almanac interface showing the reading below, redesigned](design/almanac/screenshots/almanac.png)
+![The Almanac interface, with an air-quality alert strip and the AQI forecast](design/almanac/screenshots/almanac.png)
 
-And the classic six-panel console (the upstream default) showing the identical
-reading — 46.8 °F, 99% humidity, calm wind, 1024.3 mb and steady, 0.01 in of rain
-yesterday:
+The classic six-panel console (the upstream default), same underlying reading —
+46.8 °F, 99% humidity, calm wind, 1024.3 mb and steady, 0.01 in of rain yesterday:
 
 ![The classic six-panel console showing the same reading](design/almanac/screenshots/classic.png)
 
@@ -44,10 +44,18 @@ What it changes:
 
 - One dominant temperature and a plain-language forecast line, in place of six equal-weight panels.
 - A barometer zone bar (Stormy / Change / Fair / Dry) and a 24-hour pressure barograph labelled with the day's high and low.
-- US air quality (AQI) pulled from the station's own latitude and longitude.
+- Active weather alerts (US National Weather Service) in a single glance-able strip below the masthead, coloured by severity and collapsed to one line when several are in effect.
+- Air quality (AQI) by the station's own latitude and longitude, with a short forecast so a rising smoke event shows before the number climbs.
 - A wind panel that resolves to one current reading, with a bolder compass.
 - Animated updates: values count up, the vane swings, the rain gauge fills.
 - Day/night aware. After sunset the Sun & Sky panel becomes Moon & Sky (phase, illumination, moonrise/set).
+
+Both extra data sources degrade quietly. Weather alerts come from the US National
+Weather Service, so outside the US the strip simply stays hidden. Air quality is
+worldwide (Open-Meteo), and its panel hides itself wherever a reading isn't
+available. Neither one can stall the display: they are fetched off the main
+thread, keep their last good value through a network blip, and are marked stale
+rather than shown as current if the connection stays down.
 
 Two ways to run it:
 

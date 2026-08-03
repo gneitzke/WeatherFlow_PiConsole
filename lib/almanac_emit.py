@@ -442,10 +442,18 @@ class AlmanacEmitter:
 
     def _do_alerts(self):
         """ Fetch active NWS alerts for the station's lat/lon. Off-thread, never
-        raises; keeps the last-good list on failure (staleness is flagged in the
-        payload rather than silently shown as fresh). """
+        raises; keeps the last-good list on a transient failure (staleness is
+        flagged in the payload rather than silently shown as fresh).
+
+        NWS (api.weather.gov) only covers the US and its territories. A point
+        outside that coverage returns HTTP 400 "out of bounds" (400/404) — that
+        is NOT a failure, it just means there are no NWS alerts here, so we clear
+        the list and mark it freshly-fetched (no repeated warnings, never stale).
+        Non-US stations therefore simply show no alert strip; the AQI block still
+        works worldwide (Open-Meteo computes us_aqi globally). """
         try:
             import urllib.request
+            import urllib.error
             config = getattr(self.app, 'config', None)
             lat = _cfg(config, 'Station', 'Latitude')
             lon = _cfg(config, 'Station', 'Longitude')
@@ -456,8 +464,16 @@ class AlmanacEmitter:
             url = f'https://api.weather.gov/alerts/active?point={lat},{lon}'
             req = urllib.request.Request(url, headers={
                 'User-Agent': contact, 'Accept': 'application/geo+json'})
-            with urllib.request.urlopen(req, timeout=ALERTS_TIMEOUT) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
+            try:
+                with urllib.request.urlopen(req, timeout=ALERTS_TIMEOUT) as resp:
+                    data = json.loads(resp.read().decode('utf-8'))
+            except urllib.error.HTTPError as http_error:
+                if http_error.code in (400, 404):
+                    # outside NWS coverage (non-US) — benign: no alerts here
+                    self._alerts    = []
+                    self._alerts_ts = time.time()
+                    return
+                raise
             feats = [f.get('properties') or {} for f in (data.get('features') or [])]
             self._alerts    = self._process_alerts(feats, time.time(), self._station_tz(config))
             self._alerts_ts = time.time()

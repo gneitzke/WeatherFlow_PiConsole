@@ -8,6 +8,8 @@ alert `properties` dicts and an Open-Meteo hourly block are fed directly.
 
 import json
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime
 
 import pytest
@@ -18,6 +20,21 @@ from tests.fixtures import nws_alerts as nws
 from tests.fixtures import obs_scenarios as scn
 
 TZ = pytz.timezone('America/Los_Angeles')
+
+
+class _FakeResp:
+    """ Minimal stand-in for the urlopen() context manager. """
+    def __init__(self, body):
+        self._body = body.encode()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self):
+        return self._body
 
 
 # ---------------------------------------------------------------- level + tone
@@ -156,3 +173,45 @@ def test_aqi_cat_thresholds():
     assert A._aqi_cat(50) == 'Good'
     assert A._aqi_cat(55) == 'Moderate'
     assert A._aqi_cat(175) == 'Unhealthy'
+
+
+# ----------------------------------------- non-US / graceful fallback (mocked HTTP)
+def test_do_alerts_non_us_graceful(make_emitter, monkeypatch):
+    # NWS returns 400 "out of bounds" outside the US -> benign: empty + fresh, no warning
+    def boom(req, timeout=None):
+        raise urllib.error.HTTPError('http://x', 400, 'point out of bounds', {}, None)
+    monkeypatch.setattr(urllib.request, 'urlopen', boom)
+    e = make_emitter(scn.all_none())
+    e._do_alerts()
+    assert e._alerts == [] and e._alerts_ts is not None      # known-empty, not stale
+    assert e._build_payload()['alertsStale'] is False
+
+
+def test_do_alerts_transient_failure_keeps_lastgood(make_emitter, monkeypatch):
+    seeded = [{'event': 'Air Quality Alert', 'tone': 'brass'}]
+    e = make_emitter(scn.all_none(), _alerts=list(seeded), _alerts_ts=1.0)
+
+    def boom(req, timeout=None):
+        raise urllib.error.URLError('network down')
+    monkeypatch.setattr(urllib.request, 'urlopen', boom)
+    e._do_alerts()
+    assert e._alerts == seeded and e._alerts_ts == 1.0       # last-good kept; still old -> stale
+
+
+def test_do_alerts_success_collapses(make_emitter, monkeypatch):
+    body = json.dumps({'features': [{'properties': nws.air_quality_1()},
+                                    {'properties': nws.air_quality_2()}]})
+    monkeypatch.setattr(urllib.request, 'urlopen', lambda req, timeout=None: _FakeResp(body))
+    e = make_emitter(scn.all_none())
+    e._do_alerts()
+    assert len(e._alerts) == 1 and e._alerts_ts is not None  # two live alerts collapsed to one
+
+
+def test_do_aqi_null_is_graceful(make_emitter, monkeypatch):
+    # AQI unavailable for a point -> _aqi stays None -> the HTML hides the block
+    body = json.dumps({'current': {'us_aqi': None, 'pm2_5': None}, 'hourly': {}})
+    monkeypatch.setattr(urllib.request, 'urlopen', lambda req, timeout=None: _FakeResp(body))
+    e = make_emitter(scn.all_none())
+    e._do_aqi()
+    assert e._aqi is None
+    assert e._build_payload()['aqi'] is None
