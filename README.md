@@ -46,6 +46,24 @@ Two ways to run it:
 For the architecture, the `wx.json` data contract, and upgrade notes, see
 [`design/almanac/ARCHITECTURE.md`](design/almanac/ARCHITECTURE.md).
 
+### Tests
+
+The fork's data pipeline (the observation parser, the `wx.json` emitter, and a
+merge-safety guard) has an offline pytest suite that needs no Kivy, display, or
+network, so paths like a lightning strike are verified without waiting for real
+weather:
+
+```bash
+python3 -m venv venv-test
+venv-test/bin/pip install -r requirements-dev.txt
+venv-test/bin/pytest
+```
+
+CI runs the same suite on GitHub Actions (Python 3.11) on every push and pull
+request. One guard test compares this fork's `CurrentConditions` class against
+the upstream project and fails on any divergence, so upstream fixes keep merging
+cleanly.
+
 ## Contents
 
 **[The Almanac UI (this fork)](#the-almanac-ui-this-fork)**<br>
