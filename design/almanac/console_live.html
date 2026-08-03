@@ -251,29 +251,31 @@
   .lrow.out .dots { display: none; }
   .lrow.out .v.word { flex: 1; min-width: 0; text-align: right; }
 
-  /* UV block */
+  /* Till sunset — sits right under the sun arc / rise-set */
+  .tillset { border-top: 1px solid var(--rule-faint); margin-top: 5px; padding-top: 4px; }
+  /* UV + Air Quality blocks (enlarged for the 7" screen) */
   .uv { margin-top: 5px; }
-  .uv-line { display: flex; align-items: baseline; gap: 7px; }
-  .uv-line .k { font-family: var(--sans); font-size: 15.5px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-soft); }
-  .uv-line .n { font-size: 24px; font-weight: 800; }
-  .uv-line .w { font-family: var(--sans); font-size: 15px; color: var(--ink); font-weight: 800; letter-spacing: 0.06em; }
-  .uv-track { position: relative; height: 13px; margin-top: 3px; }
+  .uv-line { display: flex; align-items: baseline; gap: 8px; }
+  .uv-line .k { font-family: var(--sans); font-size: 16px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-soft); }
+  .uv-line .n { font-size: 28px; font-weight: 800; }
+  .uv-line .w { font-family: var(--sans); font-size: 16.5px; color: var(--ink); font-weight: 800; letter-spacing: 0.05em; }
+  .uv-track { position: relative; height: 14px; margin-top: 3px; }
   /* Apple-Watch-style WHO UV scale: green(low)→amber→orange→red→violet(extreme) */
-  .uv-bar { position: absolute; left: 0; right: 0; top: 2.5px; height: 8px; border-radius: 4px;
+  .uv-bar { position: absolute; left: 0; right: 0; top: 2.5px; height: 9px; border-radius: 5px;
     background: linear-gradient(to right, #4E9E5B 5%, #D8BE44 32%, #E28C33 56%, #C43E2B 80%, #8E5AA8 100%); }
-  .uv-track .marker { position: absolute; top: 0; left: 36.4%; width: 13px; height: 13px; margin-left: -6.5px;
+  .uv-track .marker { position: absolute; top: 0; left: 36.4%; width: 15px; height: 15px; margin-left: -7.5px;
     background: var(--paper); border: 3px solid var(--ink); border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.4);
     transition: left 0.85s ease; }
   @media (prefers-reduced-motion: reduce) { .uv-track .marker { transition: none; } }
   .uv-ends { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 12px; color: var(--ink-soft); letter-spacing: 0.1em; margin-top: 2px; }
 
   /* Air Quality — EPA US-AQI colour bands (Good→Hazardous), mirrors the UV track */
-  .aq { margin-top: 7px; }
+  .aq { margin-top: 5px; }
   /* keep the AQI line on ONE row even for long categories ("Very Unhealthy") */
   .aq .uv-line { flex-wrap: nowrap; min-width: 0; }
   .aq .uv-line .k { letter-spacing: 0.05em; white-space: nowrap; }
-  .aq .uv-line .n { font-size: 22px; }
-  .aq .uv-line .w { font-size: 13px; white-space: nowrap; }
+  .aq .uv-line .n { font-size: 26px; }
+  .aq .uv-line .w { font-size: 15px; white-space: nowrap; }
   .aqi-bar { position: absolute; left: 0; right: 0; top: 2.5px; height: 8px; border-radius: 4px;
     background: linear-gradient(to right,
       #5FA46A 0%, #5FA46A 16%, #D8BE44 16%, #D8BE44 33%, #E28C33 33%, #E28C33 50%,
@@ -559,7 +561,7 @@
       <div class="panel">
         <div class="p-head"><span class="p-title">Sun &amp; Sky</span><span class="p-status">Solar · Limited</span></div>
         <div class="p-col">
-          <svg width="100%" height="48" viewBox="0 0 300 88" preserveAspectRatio="xMidYMax meet">
+          <svg width="100%" height="44" viewBox="0 0 300 88" preserveAspectRatio="xMidYMax meet">
             <path class="arc-fill" id="sun-fill" d="M 20 80 A 181 181 0 0 1 72.9 42.2 L 72.9 80 Z"/>
             <path class="arc-future" d="M 20 80 A 181 181 0 0 1 280 80"/>
             <path class="arc-past" id="sun-past" d="M 20 80 A 181 181 0 0 1 72.9 42.2"/>
@@ -570,20 +572,17 @@
             </g>
           </svg>
           <div class="sun-times"><span>Rise <b data-k="sunrise">05:43</b></span><span>Set <b data-k="sunset">20:43</b></span></div>
+          <div class="lrow tillset"><span class="k">Till sunset</span><span class="dots"></span><span class="v" id="sun-tillset">2<small>h</small> 24<small>m</small></span></div>
           <div class="uv">
             <div class="uv-line"><span class="k">UV Index</span><span class="n" data-k="uvIndex">4.0</span><span class="w" data-k="uvDesc">Moderate</span></div>
             <div class="uv-track">
               <div class="uv-bar"></div>
               <div class="marker" id="uv-marker"></div>
             </div>
-            <div class="uv-ends"><span>0</span><span>11+</span></div>
           </div>
           <div class="uv aq" id="aq-block">
             <div class="uv-line"><span class="k">Air Quality</span><span class="n" id="aqi-val">—</span><span class="w" id="aqi-cat">—</span></div>
             <div class="uv-track"><div class="aqi-bar"></div><div class="marker" id="aqi-marker"></div></div>
-          </div>
-          <div class="ledger">
-            <div class="lrow"><span class="k">Till sunset</span><span class="dots"></span><span class="v" id="sun-tillset">2<small>h</small> 24<small>m</small></span></div>
           </div>
         </div>
       </div>
