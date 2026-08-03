@@ -339,6 +339,17 @@
   .bg-dot-halo{ fill: var(--paper); }
   .bg-dot     { fill: var(--accent); }
   .bg-cap     { fill: var(--ink-soft); font-size: 11px; font-weight: 800; letter-spacing: 0.12em; }
+  .bg-ext     { fill: var(--ink-soft); font-size: 10.5px; font-weight: 800; }   /* 24h hi/lo on the trace */
+  /* masthead moon glyph — date's companion mark */
+  .mast-moon  { display: inline-block; width: 16px; height: 16px; margin-left: 11px; vertical-align: -2px; }
+  /* Sun & Sky ⇄ Moon & Sky (night swap); Air Quality stays below both */
+  .sky-night  { display: none; }
+  .moon-row   { display: flex; align-items: center; gap: 15px; margin: 0 0 2px; }
+  .moon-glyph { flex: none; }
+  .moon-illum { display: flex; flex-direction: column; }
+  .moon-illum .mi-num { font-size: 24px; font-weight: 800; line-height: 1; }
+  .moon-illum .mi-num small { font-family: var(--sans); font-size: 15px; color: var(--ink-soft); font-weight: 800; }
+  .moon-illum .mi-lbl { font-family: var(--sans); font-size: 12.5px; color: var(--ink-soft); letter-spacing: 0.05em; margin-top: 5px; }
   .hub-dot     { fill: var(--paper); }
   /* wind compass: 8 bold ticks + big sans cardinals + heavy needle — the rose
      star is gone; at 120px on a 7" panel fewer, thicker elements read farther */
@@ -454,7 +465,7 @@
   <header class="masthead">
     <div class="scotch"></div>
     <div class="mast-row">
-      <div class="mast-date" data-k="date">Fri, 31 Jul 2026</div>
+      <div class="mast-date"><span data-k="date">Fri, 31 Jul 2026</span><svg class="mast-moon" id="mast-moon" width="16" height="16" viewBox="0 0 150 150"><circle class="moon-base" cx="75" cy="75" r="66"/><path class="moon-dark" id="mast-moon-dark" d=""/></svg></div>
       <div class="mast-station"><span data-k="station">Seattle</span><span class="sub">WeatherFlow Tempest · Washington</span></div>
       <div class="mast-clock">
         <span class="mast-stale" id="staleflag">stale</span>
@@ -563,28 +574,46 @@
         </div>
       </div>
 
-      <!-- SUN & SKY -->
+      <!-- SUN & SKY  ⇄  MOON & SKY (shows the sky that's actually overhead) -->
       <div class="panel">
-        <div class="p-head"><span class="p-title">Sun &amp; Sky</span><span class="p-status">Solar · Limited</span></div>
+        <div class="p-head"><span class="p-title" id="sky-title">Sun &amp; Sky</span><span class="p-status" id="sky-status">Solar</span></div>
         <div class="p-col">
-          <svg width="100%" height="44" viewBox="0 0 300 88" preserveAspectRatio="xMidYMax meet">
-            <path class="arc-fill" id="sun-fill" d="M 20 80 A 181 181 0 0 1 72.9 42.2 L 72.9 80 Z"/>
-            <path class="arc-future" d="M 20 80 A 181 181 0 0 1 280 80"/>
-            <path class="arc-past" id="sun-past" d="M 20 80 A 181 181 0 0 1 72.9 42.2"/>
-            <line class="horizon" x1="8" y1="80" x2="292" y2="80"/>
-            <text class="arc-lbl" x="150" y="18" text-anchor="middle">NOON</text>
-            <g id="sun-dotg" transform="translate(72.9 42.2)">
-              <circle class="sun-dot" r="5.4"/><g id="sunrays"></g>
-            </g>
-          </svg>
-          <div class="sun-times"><span>Rise <b data-k="sunrise">05:43</b></span><span>Set <b data-k="sunset">20:43</b></span></div>
-          <div class="lrow tillset"><span class="k">Till sunset</span><span class="dots"></span><span class="v" id="sun-tillset">2<small>h</small> 24<small>m</small></span></div>
-          <div class="uv">
-            <div class="uv-line"><span class="k">UV Index</span><span class="n" data-k="uvIndex">4.0</span><span class="w" data-k="uvDesc">Moderate</span></div>
-            <div class="uv-track">
-              <div class="uv-bar"></div>
-              <div class="marker" id="uv-marker"></div>
+          <div class="sky-day" id="sky-day">
+            <svg width="100%" height="44" viewBox="0 0 300 88" preserveAspectRatio="xMidYMax meet">
+              <path class="arc-fill" id="sun-fill" d="M 20 80 A 181 181 0 0 1 72.9 42.2 L 72.9 80 Z"/>
+              <path class="arc-future" d="M 20 80 A 181 181 0 0 1 280 80"/>
+              <path class="arc-past" id="sun-past" d="M 20 80 A 181 181 0 0 1 72.9 42.2"/>
+              <line class="horizon" x1="8" y1="80" x2="292" y2="80"/>
+              <text class="arc-lbl" x="150" y="18" text-anchor="middle">NOON</text>
+              <g id="sun-dotg" transform="translate(72.9 42.2)">
+                <circle class="sun-dot" r="5.4"/><g id="sunrays"></g>
+              </g>
+            </svg>
+            <div class="sun-times"><span>Rise <b data-k="sunrise">05:43</b></span><span>Set <b data-k="sunset">20:43</b></span></div>
+            <div class="lrow tillset"><span class="k">Till sunset</span><span class="dots"></span><span class="v" id="sun-tillset">2<small>h</small> 24<small>m</small></span></div>
+            <div class="uv">
+              <div class="uv-line"><span class="k">UV Index</span><span class="n" data-k="uvIndex">4.0</span><span class="w" data-k="uvDesc">Moderate</span></div>
+              <div class="uv-track">
+                <div class="uv-bar"></div>
+                <div class="marker" id="uv-marker"></div>
+              </div>
             </div>
+          </div>
+          <div class="sky-night" id="sky-night">
+            <div class="moon-row">
+              <svg class="moon-glyph" width="56" height="56" viewBox="0 0 150 150">
+                <circle class="moon-base" cx="75" cy="75" r="66"/>
+                <circle class="moon-crater" cx="55" cy="52" r="9"/>
+                <circle class="moon-crater" cx="44" cy="88" r="6"/>
+                <circle class="moon-crater" cx="72" cy="106" r="7"/>
+                <circle class="moon-crater" cx="96" cy="64" r="5"/>
+                <path class="moon-dark" id="sky-moon-dark" d=""/>
+              </svg>
+              <div class="moon-illum"><span class="mi-num"><span data-k="moonIllum">78</span><small>%</small></span><span class="mi-lbl">illuminated</span></div>
+            </div>
+            <div class="lrow"><span class="k">Moonrise</span><span class="dots"></span><span class="v" data-k="moonrise">22:14</span></div>
+            <div class="lrow"><span class="k">Moonset</span><span class="dots"></span><span class="v" data-k="moonset">09:38</span></div>
+            <div class="lrow"><span class="k">Peak sun today</span><span class="dots"></span><span class="v"><span data-k="peakSun">5.2</span> <small>h</small></span></div>
           </div>
           <div class="uv aq" id="aq-block">
             <div class="uv-line"><span class="k">Air Quality</span><span class="n" id="aqi-val">—</span><span class="w" id="aqi-cat">—</span></div>
@@ -605,6 +634,7 @@
               <div class="ledger">
                 <div class="lrow"><span class="k">Yesterday</span><span class="dots"></span><span class="v"><span data-k="rainYest">0.00</span> <small data-k="rainUnit">in</small></span></div>
                 <div class="lrow"><span class="k">This month</span><span class="dots"></span><span class="v"><span data-k="rainMonth">0.15</span> <small data-k="rainUnit">in</small></span></div>
+                <div class="lrow"><span class="k">This year</span><span class="dots"></span><span class="v"><span data-k="rainYear">40.0</span> <small data-k="rainUnit">in</small></span></div>
               </div>
             </div>
             <svg width="82" height="176" viewBox="0 0 72 154" id="raingauge" style="flex:none"></svg>
@@ -899,6 +929,8 @@
     baroGraph.line = el("path", { class: "bg-line", d: "" }, svg);
     baroGraph.halo = el("circle", { class: "bg-dot-halo", r: 5,   cx: geo.X1, cy: geo.YB }, svg);
     baroGraph.dot  = el("circle", { class: "bg-dot",      r: 3.2, cx: geo.X1, cy: geo.YB }, svg);
+    baroGraph.hi   = el("text", { class: "bg-ext", "text-anchor": "middle" }, svg);   /* 24h high on the crest */
+    baroGraph.lo   = el("text", { class: "bg-ext", "text-anchor": "middle" }, svg);   /* 24h low on the trough */
     el("text", { class: "bg-cap", x: geo.X0, y: 43, "text-anchor": "start" }, svg).textContent = "−24H";
     el("text", { class: "bg-cap", x: geo.X1, y: 43, "text-anchor": "end" }, svg).textContent = "NOW";
   })();
@@ -921,6 +953,18 @@
     var cx = X(n - 1).toFixed(1), cy = Y(vals[n - 1]).toFixed(1);
     g.dot.setAttribute("cx", cx);  g.dot.setAttribute("cy", cy);
     g.halo.setAttribute("cx", cx); g.halo.setAttribute("cy", cy);
+    /* 24h high/low numerals on the trace (x-position is the time). Suppress a
+       label when its extreme is essentially "now" — the live value already shows it */
+    var iMax = 0, iMin = 0;
+    for (var m = 1; m < n; m++) { if (vals[m] > vals[iMax]) iMax = m; if (vals[m] < vals[iMin]) iMin = m; }
+    g.hi.setAttribute("x", clamp(X(iMax), 16, geo.X1 - 16).toFixed(1));
+    g.hi.setAttribute("y", Math.max(9, Y(vals[iMax]) - 4).toFixed(1));
+    g.hi.textContent = vals[iMax].toFixed(1);
+    g.hi.style.opacity = (n - 1 - iMax) <= 2 ? "0" : "1";
+    g.lo.setAttribute("x", clamp(X(iMin), 16, geo.X1 - 16).toFixed(1));
+    g.lo.setAttribute("y", Math.min(geo.YB + 9, Y(vals[iMin]) + 10).toFixed(1));
+    g.lo.textContent = vals[iMin].toFixed(1);
+    g.lo.style.opacity = (n - 1 - iMin) <= 2 ? "0" : "1";
   }
 
   /* ———— lightning range rings (full-screen view) ———— */
@@ -1307,29 +1351,51 @@
     el("circle", { class: "spark-now", cx: nowX.toFixed(1), cy: nowY.toFixed(1), r: 4.2 }, g);
   }
 
-  /* ———— Moon: redraw the shadow terminator from phase + illum ———— */
-  function renderMoon(data) {
-    var path = $("moon-dark-path");
-    var illum = data.moonIllum;
+  /* ———— Moon: draw the shadow terminator from phase + illum onto any disc ———— */
+  function drawMoonTerminator(path, cx, cy, r, illum, phase) {
+    if (!path) return;
     if (!isNum(illum)) { path.setAttribute("d", ""); return; }
-    var cx = 75, cy = 75, r = 60, top = cy - r, bot = cy + r;
-    var f = clamp(illum / 100, 0, 1);
+    var top = cy - r, bot = cy + r, f = clamp(illum / 100, 0, 1);
     if (f >= 0.995) { path.setAttribute("d", ""); return; }               /* full: no shadow */
     if (f <= 0.005) {                                                      /* new: all dark */
       path.setAttribute("d", "M " + cx + " " + top + " A " + r + " " + r + " 0 0 1 " + cx + " " + bot +
                              " A " + r + " " + r + " 0 0 1 " + cx + " " + top + " Z");
       return;
     }
-    var k = 1 - 2 * f;
-    var rx = (r * Math.abs(k)).toFixed(2);
-    var phase = (data.moonPhase || "").toLowerCase();
-    var waxing = phase.indexOf("waxing") >= 0 || phase.indexOf("first") >= 0;
-    var outerSweep, innerSweep;
-    if (!waxing) { outerSweep = 1; innerSweep = (k < 0) ? 0 : 1; }         /* waning: dark on right */
-    else         { outerSweep = 0; innerSweep = (k < 0) ? 1 : 0; }         /* waxing: dark on left  */
+    var k = 1 - 2 * f, rx = (r * Math.abs(k)).toFixed(2);
+    var p = (phase || "").toLowerCase();
+    var waxing = p.indexOf("waxing") >= 0 || p.indexOf("first") >= 0;
+    var outer, inner;
+    if (!waxing) { outer = 1; inner = (k < 0) ? 0 : 1; }                   /* waning: dark on right */
+    else         { outer = 0; inner = (k < 0) ? 1 : 0; }                   /* waxing: dark on left  */
     path.setAttribute("d",
-      "M " + cx + " " + top + " A " + r + " " + r + " 0 0 " + outerSweep + " " + cx + " " + bot +
-      " A " + rx + " " + r + " 0 0 " + innerSweep + " " + cx + " " + top + " Z");
+      "M " + cx + " " + top + " A " + r + " " + r + " 0 0 " + outer + " " + cx + " " + bot +
+      " A " + rx + " " + r + " 0 0 " + inner + " " + cx + " " + top + " Z");
+  }
+  function renderMoon(data) { drawMoonTerminator($("moon-dark-path"), 75, 75, 60, data.moonIllum, data.moonPhase); }
+
+  /* ———— Sun & Sky ⇄ Moon & Sky: show the sky that's actually overhead ———— */
+  function toMin(hhmm) { var m = /^(\d{1,2}):(\d{2})/.exec(hhmm || ""); return m ? (+m[1]) * 60 + (+m[2]) : null; }
+  function isDaytime(data) {
+    var now = toMin(data.time), sr = toMin(data.sunrise), ss = toMin(data.sunset);
+    if (now != null && sr != null && ss != null) return now >= sr && now < ss;
+    return isNum(data.sunFrac);
+  }
+  function renderSky(data) {
+    var day = isDaytime(data), dEl = $("sky-day"), nEl = $("sky-night");
+    if (dEl) dEl.style.display = day ? "block" : "none";
+    if (nEl) nEl.style.display = day ? "none" : "block";   /* explicit: CSS default is display:none */
+    var title = $("sky-title"), status = $("sky-status");
+    if (day) {
+      if (title) title.textContent = "Sun & Sky";
+      if (status) status.textContent = isNum(data.radiation)
+        ? ("Solar " + Math.round(data.radiation) + " " + (data.radUnit || "W/m²")) : "Solar";
+    } else {
+      if (title) title.textContent = "Moon & Sky";
+      if (status) status.textContent = data.moonPhase || "Night";
+      drawMoonTerminator($("sky-moon-dark"), 75, 75, 66, data.moonIllum, data.moonPhase);
+    }
+    drawMoonTerminator($("mast-moon-dark"), 75, 75, 66, data.moonIllum, data.moonPhase);
   }
 
   /* ════════════════════════════════════════════════════════════
@@ -1491,6 +1557,7 @@
     renderDerived(data);
     renderGauges(data);
     renderAir(data);
+    renderSky(data);
     Light.fromData(data);
     checkStale(data);
   }
