@@ -43,6 +43,17 @@ for _ in $(seq 1 60); do pgrep -x openbox >/dev/null 2>&1 && break; sleep 1; don
 for _ in $(seq 1 30); do xset q          >/dev/null 2>&1 && break; sleep 1; done
 sleep 5
 
+# RESTART-SAFE: if a previous instance died uncleanly (SIGKILL, OOM), its Xvfb /
+# engine / server / chromium children are orphaned onto init and would collide
+# with a fresh launch (two Xvfb on the same display, duelling chromiums). Clear
+# any leftovers so a relaunch — by systemd, cron, or by hand — starts clean. At a
+# normal boot this matches nothing.
+pkill -9 chromium 2>/dev/null || true
+pkill -f "Xvfb $VDISP" 2>/dev/null || true
+pkill -f "venv/bin/python3 main.py" 2>/dev/null || true
+pkill -f "kiosk/serve.py" 2>/dev/null || true
+sleep 1
+
 mkdir -p "$DATA_DIR" "$WEB"
 cp -f "$APP/design/almanac/console_live.html" "$WEB/index.html"
 ln -sf "$DATA" "$WEB/wx.json"
@@ -64,6 +75,7 @@ launch_xvfb(){
 launch_engine(){
   ( cd "$APP" && DISPLAY="$VDISP" WFP_HEADLESS=1 KCFG_GRAPHICS_MAXFPS=10 "$PY" main.py ) >/tmp/almanac_data.log 2>&1 &
   ENGINE_PID=$!; pids+=("$ENGINE_PID")
+  ENGINE_GRACE=6                                   # ~90s warmup before the freshness check judges it
 }
 # 2) local web server (page + live feed + /health endpoint). /health exposes a
 #    "polls" counter (wx.json fetches) — our render heartbeat, replacing the
@@ -130,7 +142,7 @@ done
 # chromium — a dead data engine or server used to leave the screen stale forever),
 # and every ~5 min re-check for a wedged alive-but-blank render.
 CLOG=/tmp/almanac_chrome.log
-loops=0
+loops=0; stale_hits=0
 while true; do
   pgrep -f "Xvfb $VDISP" >/dev/null 2>&1 || { echo "Xvfb died — relaunching" >> "$CLOG"; launch_xvfb; sleep 2; }
   kill -0 "$ENGINE_PID" 2>/dev/null || { echo "data engine died — relaunching" >> "$CLOG"; launch_engine; }
@@ -139,8 +151,30 @@ while true; do
     echo "chromium exited — relaunching" >> "$CLOG"
     launch_cr; sleep 12
   fi
+
+  # DATA FRESHNESS — the engine can be alive-but-wedged (a hung websocket or a
+  # stalled emit loop): the PID guard above won't catch that, but the screen goes
+  # silently stale. /health reports "stale" once wx.json stops updating (age > 20s).
+  # After a fresh engine's warmup grace, restart it if data stays stale two checks
+  # running (~30s) — recovering a hang the classic UI would just sit in.
+  if [ "${ENGINE_GRACE:-0}" -gt 0 ]; then
+    ENGINE_GRACE=$((ENGINE_GRACE - 1)); stale_hits=0
+  else
+    st=$(curl -s --max-time 4 "http://127.0.0.1:$PORT/health" | sed -n 's/.*"status": *"\([a-z]*\)".*/\1/p')
+    if [ "$st" = "stale" ] || [ "$st" = "error" ]; then
+      stale_hits=$((stale_hits + 1))
+      if [ "$stale_hits" -ge 2 ]; then
+        echo "data $st — restarting data engine" >> "$CLOG"
+        kill "$ENGINE_PID" 2>/dev/null; sleep 2; launch_engine
+        stale_hits=0
+      fi
+    else
+      stale_hits=0
+    fi
+  fi
+
   loops=$((loops + 1))
-  if [ $((loops % 20)) -eq 0 ]; then                 # ~every 5 min (20 × 15s)
+  if [ $((loops % 8)) -eq 0 ]; then                  # ~every 2 min (8 × 15s): alive-but-blank render
     polls_growing || { echo "render wedged — relaunching chromium" >> "$CLOG"; launch_cr; sleep 12; }
   fi
   sleep 15

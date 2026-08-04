@@ -1,0 +1,28 @@
+# systemd USER service for the almanac kiosk — supervises the watchdog itself so
+# the whole display chain always comes back, the way wfpiconsole.service supervises
+# the classic UI (but Restart=always for the entire supervised chain).
+#
+# Install (as the console user, uid with a graphical session):
+#   mkdir -p ~/.config/systemd/user
+#   cp design/almanac/kiosk/almanac-kiosk.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now almanac-kiosk.service
+#   sudo loginctl enable-linger "$USER"          # start at boot without interactive login
+#   # and disable the old autostart entry so it doesn't double-launch:
+#   mv ~/.config/autostart/almanac-kiosk.desktop{,.disabled}
+#
+# The launcher self-gates on the X session (waits for openbox + xset), so starting
+# early at default.target is safe — it simply waits for the display.
+[Unit]
+Description=Almanac weather kiosk (HTML overlay + supervised data engine)
+After=default.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=%h/wfpiconsole/design/almanac/kiosk/almanac-kiosk.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
