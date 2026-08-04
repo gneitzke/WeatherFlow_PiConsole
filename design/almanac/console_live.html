@@ -245,10 +245,12 @@
   .lrow .k { font-family: var(--sans); font-size: 15.5px; font-weight: 800; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
   .lrow .dots { flex: 1; margin: 0 7px; border-bottom: 1px dotted var(--dot); transform: translateY(-3px); }
   .lrow .v { font-size: 18px; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  /* rainfall totals: consistent 2-decimal tabular figures right-align via the
-     leader, so decimals + units stack without a fixed-width slot bloating the
-     value toward the rate gauge/pointer. Extra gap guarantees clearance. */
+  /* rainfall totals: right-aligned tabular figures in a modest fixed-width slot,
+     so the numbers form a clean column with decimals stacked. The slot is sized
+     for the common case (a rare big year total expands its own short-label row),
+     and the 20px gauge gap backstops any overflow so nothing reaches the gauge. */
   #tile-rain .p-body { gap: 20px; }
+  #tile-rain .lrow .v .amt { display: inline-block; min-width: 3em; text-align: right; }
   .lrow .v small { font-family: var(--sans); font-size: 15px; font-weight: 800; color: var(--ink-soft); }
   .lrow .v.word { font-size: 14.5px; white-space: normal; text-align: right; line-height: 1.18; }
   .lrow.out { align-items: baseline; gap: 10px; }
