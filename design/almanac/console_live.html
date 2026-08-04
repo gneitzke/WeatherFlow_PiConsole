@@ -250,7 +250,8 @@
      for the common case (a rare big year total expands its own short-label row),
      and the 20px gauge gap backstops any overflow so nothing reaches the gauge. */
   #tile-rain .p-body { gap: 20px; }
-  #tile-rain .lrow .v .amt { display: inline-block; min-width: 3em; text-align: right; }
+  #tile-rain .lrow .k { font-size: 14px; letter-spacing: 0.06em; }   /* narrower so YESTERDAY fits */
+  #tile-rain .lrow .v .amt { display: inline-block; min-width: 2.4em; text-align: right; }
   .lrow .v small { font-family: var(--sans); font-size: 15px; font-weight: 800; color: var(--ink-soft); }
   .lrow .v.word { font-size: 14.5px; white-space: normal; text-align: right; line-height: 1.18; }
   .lrow.out { align-items: baseline; gap: 10px; }
