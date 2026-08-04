@@ -244,7 +244,10 @@
   .lrow { display: flex; align-items: baseline; padding: 1px 0; }
   .lrow .k { font-family: var(--sans); font-size: 15.5px; font-weight: 800; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
   .lrow .dots { flex: 1; margin: 0 7px; border-bottom: 1px dotted var(--dot); transform: translateY(-3px); }
-  .lrow .v { font-size: 18px; font-weight: 800; white-space: nowrap; font-variant-numeric: lining-nums; }
+  .lrow .v { font-size: 18px; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  /* rainfall totals: fixed-width right-aligned figures so decimals stack and a
+     big year total (e.g. 120.50 in) can never reach into the rate gauge */
+  #tile-rain .lrow .v .amt { display: inline-block; min-width: 3.6em; text-align: right; }
   .lrow .v small { font-family: var(--sans); font-size: 15px; font-weight: 800; color: var(--ink-soft); }
   .lrow .v.word { font-size: 14.5px; white-space: normal; text-align: right; line-height: 1.18; }
   .lrow.out { align-items: baseline; gap: 10px; }
@@ -684,9 +687,9 @@
               <div class="p-value"><span class="n" data-k="rainToday">0.00</span><span class="u"><span data-k="rainUnit">in</span> today</span></div>
               <div class="p-sub">Rate <span data-k="rainRate">0</span> <span data-k="rainUnit">in</span>/hr<span id="rain-intensity"></span></div>
               <div class="ledger">
-                <div class="lrow"><span class="k">Yesterday</span><span class="dots"></span><span class="v"><span data-k="rainYest">0.00</span> <small data-k="rainUnit">in</small></span></div>
-                <div class="lrow"><span class="k">This month</span><span class="dots"></span><span class="v"><span data-k="rainMonth">0.15</span> <small data-k="rainUnit">in</small></span></div>
-                <div class="lrow"><span class="k">This year</span><span class="dots"></span><span class="v"><span data-k="rainYear">40.0</span> <small data-k="rainUnit">in</small></span></div>
+                <div class="lrow"><span class="k">Yesterday</span><span class="dots"></span><span class="v"><span class="amt" data-k="rainYest">0.00</span> <small data-k="rainUnit">in</small></span></div>
+                <div class="lrow"><span class="k">This month</span><span class="dots"></span><span class="v"><span class="amt" data-k="rainMonth">0.15</span> <small data-k="rainUnit">in</small></span></div>
+                <div class="lrow"><span class="k">This year</span><span class="dots"></span><span class="v"><span class="amt" data-k="rainYear">40.00</span> <small data-k="rainUnit">in</small></span></div>
               </div>
             </div>
             <svg width="82" height="176" viewBox="0 0 72 154" id="raingauge" style="flex:none"></svg>
@@ -1009,12 +1012,14 @@
        label when its extreme is essentially "now" — the live value already shows it */
     var iMax = 0, iMin = 0;
     for (var m = 1; m < n; m++) { if (vals[m] > vals[iMax]) iMax = m; if (vals[m] < vals[iMin]) iMin = m; }
-    g.hi.setAttribute("x", clamp(X(iMax), 16, geo.X1 - 16).toFixed(1));
+    g.hi.setAttribute("x", clamp(X(iMax), 20, geo.X1 - 20).toFixed(1));
     g.hi.setAttribute("y", Math.max(9, Y(vals[iMax]) - 4).toFixed(1));
     g.hi.textContent = vals[iMax].toFixed(1);
     g.hi.style.opacity = (n - 1 - iMax) <= 2 ? "0" : "1";
-    g.lo.setAttribute("x", clamp(X(iMin), 16, geo.X1 - 16).toFixed(1));
-    g.lo.setAttribute("y", Math.min(geo.YB + 9, Y(vals[iMin]) + 10).toFixed(1));
+    /* low label sits ABOVE its trough, not below — otherwise a trough near the
+       start/end overlaps the −24H / NOW captions on the axis row */
+    g.lo.setAttribute("x", clamp(X(iMin), 20, geo.X1 - 20).toFixed(1));
+    g.lo.setAttribute("y", Math.max(geo.YT + 9, Y(vals[iMin]) - 5).toFixed(1));
     g.lo.textContent = vals[iMin].toFixed(1);
     g.lo.style.opacity = (n - 1 - iMin) <= 2 ? "0" : "1";
   }
@@ -1074,7 +1079,7 @@
     rainStatus: String, rainToday: f2, rainUnit: String,
     rainRate: function (v) { return v ? v.toFixed(2) : "0"; },
     drySpellDays: r0, lastRainDate: String, lastRainAmt: f2,
-    rainYest: f2, rainMonth: f2, rainYear: f1,
+    rainYest: f2, rainMonth: f2, rainYear: f2,
     uvIndex: f1, uvDesc: String, radiation: r0, radUnit: String,
     peakSun: f2,
     sunrise: String, sunset: String,
