@@ -249,17 +249,17 @@
      so the numbers form a clean column with decimals stacked. The slot is sized
      for the common case (a rare big year total expands its own short-label row),
      and the 20px gauge gap backstops any overflow so nothing reaches the gauge. */
-  #tile-rain .p-body { gap: 20px; }
-  #tile-rain .lrow .k    { font-size: 13px; letter-spacing: 0.05em; }  /* narrow labels buy value room */
-  #tile-rain .lrow .dots { margin: 0 4px; }
+  #tile-rain .p-body { gap: 18px; }
+  #tile-rain .lrow .k    { font-size: 12px; letter-spacing: 0.03em; }  /* narrow labels so the long YESTERDAY row fits and its value aligns */
+  #tile-rain .lrow .dots { margin: 0 3px; }
   /* the embedded serif subset lacks tabular figures, so right-alignment alone
      can't stack the decimals. Align on the decimal point structurally: the
      integer right-aligns into a 3-digit-wide slot and the ".xx" fraction is a
      fixed box, so ".xx in" lands at the same x on every row and the integer
      grows leftward (room for 152.xx) without ever reaching the rate gauge. */
   #tile-rain .lrow .v .amt    { display: inline-block; }
-  #tile-rain .lrow .v .amt .ai { display: inline-block; text-align: right; min-width: 1.7em; }
-  #tile-rain .lrow .v .amt .af { display: inline-block; text-align: left;  width: 1.6em; }
+  #tile-rain .lrow .v .amt .ai { display: inline-block; text-align: right; min-width: 1.6em; }
+  #tile-rain .lrow .v .amt .af { display: inline-block; text-align: left;  width: 1.5em; }
   .lrow .v small { font-family: var(--sans); font-size: 15px; font-weight: 800; color: var(--ink-soft); }
   .lrow .v.word { font-size: 14.5px; white-space: normal; text-align: right; line-height: 1.18; }
   .lrow.out { align-items: baseline; gap: 10px; }
