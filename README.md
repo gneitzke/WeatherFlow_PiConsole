@@ -30,13 +30,13 @@ screen. It runs on the same Raspberry Pi off the same feed and leaves the classi
 six-panel console untouched.
 
 The same station reading in two interfaces. The Almanac (this fork) reads at a
-glance and finds room for things the classic layout can't — here, an active
-air-quality alert across the top and the AQI's own short forecast:
+glance and finds room for things the classic layout can't. Here, an active
+air-quality alert runs across the top, and the AQI carries its own short forecast:
 
 ![The Almanac interface, with an air-quality alert strip and the AQI forecast](design/almanac/screenshots/almanac.png)
 
-The classic six-panel console (the upstream default), same underlying reading —
-46.8 °F, 99% humidity, calm wind, 1024.3 mb and steady, 0.01 in of rain yesterday:
+The classic six-panel console (the upstream default), showing the same reading:
+46.8 °F, 99% humidity, calm wind, 1024.3 mb and steady, 0.01 in of rain yesterday.
 
 ![The classic six-panel console showing the same reading](design/almanac/screenshots/classic.png)
 
@@ -44,7 +44,7 @@ What it changes:
 
 - One dominant temperature and a plain-language forecast line, in place of six equal-weight panels.
 - A barometer zone bar (Stormy / Change / Fair / Dry) and a 24-hour pressure barograph labelled with the day's high and low.
-- Active weather alerts (US National Weather Service) in a single glance-able strip below the masthead, coloured by severity and collapsed to one line when several are in effect.
+- Active weather alerts (US National Weather Service) in a single strip below the masthead, coloured by severity and collapsed to one line when several are active.
 - Air quality (AQI) by the station's own latitude and longitude, with a short forecast so a rising smoke event shows before the number climbs.
 - A wind panel that resolves to one current reading, with a bolder compass.
 - Animated updates: values count up, the vane swings, the rain gauge fills.
@@ -59,7 +59,7 @@ rather than shown as current if the connection stays down.
 
 Two ways to run it:
 
-- **HTML kiosk (recommended).** The console runs headless as a data engine and `chromium --kiosk` renders the interface, pixel-identical and low-power (~½ core total on a Pi). A systemd-supervised watchdog keeps the whole chain alive: it relaunches any component that dies, restarts the engine if the feed goes stale (a hung websocket the classic UI would sit in), and re-checks for a wedged render. It self-heals — verified by killing the watchdog and watching systemd bring the display back on its own. Setup, management, and revert steps are in [`design/almanac/kiosk/README.md`](design/almanac/kiosk/README.md).
+- **HTML kiosk (recommended).** The console runs headless as a data engine and `chromium --kiosk` renders the interface, pixel-identical and low-power (~½ core total on a Pi). A systemd-supervised watchdog keeps the whole chain alive: it relaunches any component that dies, restarts the engine if the feed goes stale (a hung websocket the classic UI would sit in), and re-checks for a wedged render. It self-heals: I confirmed that by killing the watchdog and watching systemd bring the display back on its own. Setup, management, and revert steps are in [`design/almanac/kiosk/README.md`](design/almanac/kiosk/README.md).
 - **Native Kivy layout.** Set `[Display] LayoutStyle = almanac` in the config.
 
 For the architecture, the `wx.json` data contract, and upgrade notes, see
