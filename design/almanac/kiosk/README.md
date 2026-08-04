@@ -1,4 +1,4 @@
-# Almanac kiosk — deploy & revert
+# Almanac kiosk — deploy, manage & revert
 
 Shows the almanac HTML overlay (`design/almanac/console_live.html`) fullscreen on
 the Pi, fed live by the console. See `almanac-kiosk.sh` for the architecture.
@@ -6,8 +6,11 @@ the Pi, fed live by the console. See `almanac-kiosk.sh` for the architecture.
 ## What runs
 - **Data engine** — the console, headless on Xvfb `:1`, with `[Display] LayoutStyle = almanac`
   so `lib/almanac_emit.py` writes `/tmp/wfp_data/wx.json` (~2s). Never on the real screen.
-- **Server** — `python3 -m http.server` on `127.0.0.1:8137` serving the page + feed.
+- **Server** — `serve.py` on `127.0.0.1:8137` serving the page + feed + a `/health` endpoint.
 - **Display** — `chromium-browser --kiosk` on `:0`, touch on, cursor hidden.
+- **Watchdog** — `almanac-kiosk.sh` supervises all of the above: it relaunches any that
+  die, restarts the engine if the feed goes stale (a hung websocket the classic UI would
+  sit in), and re-checks for a blank/wedged render every ~2 min.
 
 The kiosk **replaces** the on-screen Kivy console, so we stop its service and run this.
 
@@ -22,24 +25,39 @@ chmod +x ~/wfpiconsole/design/almanac/kiosk/almanac-kiosk.sh
 # stop the on-screen Kivy console (frees :0 for chromium)
 sudo systemctl disable --now wfpiconsole.service
 
-# autostart the kiosk in the desktop session
-mkdir -p ~/.config/autostart
-cat > ~/.config/autostart/almanac-kiosk.desktop <<EOF
-[Desktop Entry]
-Type=Application
-Name=Almanac Kiosk
-Exec=$HOME/wfpiconsole/design/almanac/kiosk/almanac-kiosk.sh
-X-GNOME-Autostart-enabled=true
-EOF
-```
-Then reboot (or log out/in). The overlay comes up fullscreen on boot.
+# supervise the kiosk with systemd so the whole chain always comes back
+mkdir -p ~/.config/systemd/user
+cp ~/wfpiconsole/design/almanac/kiosk/almanac-kiosk.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now almanac-kiosk.service
+sudo loginctl enable-linger "$USER"                # start at boot without an interactive login
 
-## Verify before trusting it (the one unproven step)
-The headless data engine (Kivy on Xvfb) is the part to confirm on-device:
+# belt-and-suspenders: a 1-min cron check that restarts the service if ever inactive
+( crontab -l 2>/dev/null | grep -v almanac-kiosk.service; \
+  echo '* * * * * /bin/sh -c "export XDG_RUNTIME_DIR=/run/user/$(id -u); systemctl --user is-active --quiet almanac-kiosk.service || systemctl --user start almanac-kiosk.service"' ) | crontab -
+```
+The overlay comes up fullscreen on boot. `almanac-kiosk.service` is `Restart=always`, so a
+crashed watchdog is brought back immediately; the cron check is a second layer behind it.
+
+> Migrating from the older autostart method? Remove the stale entry so it can't double-launch:
+> `rm -f ~/.config/autostart/almanac-kiosk.desktop*`
+
+## Manage
 ```bash
-# after setup, check the feed is being written with real values:
-cat /tmp/wfp_data/wx.json          # should show live temp/wind/etc, ts ~now
-tail /tmp/almanac_data.log          # console errors?
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+systemctl --user status  almanac-kiosk.service     # state + last logs
+systemctl --user restart almanac-kiosk.service     # after an emitter/Python change
+journalctl --user -u almanac-kiosk -f              # follow logs (also /tmp/almanac_*.log)
+curl -s 127.0.0.1:8137/health                      # {status, dataAgeSec, polls, station, temp}
+```
+An **HTML-only** change just needs the page reloaded (`pkill -9 chromium`; the watchdog
+relaunches it in ~15s). An **emitter/Python** change needs the engine restarted — simplest is
+`systemctl --user restart almanac-kiosk.service` (or a reboot).
+
+## Verify before trusting it
+```bash
+cat /tmp/wfp_data/wx.json           # live temp/wind/etc, ts ~now
+curl -s 127.0.0.1:8137/health       # status:"ok", dataAgeSec small, polls climbing
 ```
 If `wx.json` isn't appearing, the console isn't running headless correctly — check
 `/tmp/almanac_xvfb.log` and `/tmp/almanac_data.log`. (Kivy needs Xvfb's virtual GL;
@@ -47,7 +65,9 @@ if VC4 offscreen GL is unhappy, add `KIVY_GL_BACKEND=gl` or install `libgl1-mesa
 
 ## Revert to the classic console
 ```bash
-rm -f ~/.config/autostart/almanac-kiosk.desktop
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+systemctl --user disable --now almanac-kiosk.service
+crontab -l 2>/dev/null | grep -v almanac-kiosk.service | crontab -
 pkill -f chromium; pkill -f "Xvfb :1"
 sed -i 's/^LayoutStyle = .*/LayoutStyle = classic/' ~/wfpiconsole/wfpiconsole.ini
 sudo systemctl enable --now wfpiconsole.service
