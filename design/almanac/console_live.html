@@ -305,6 +305,9 @@
   .alert-strip.on { display: flex; }
   .alert-strip.enter { animation: alertIn 0.5s ease both; }
   @keyframes alertIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  /* multi-alert rotation cross-fade — opacity transition driven by JS style.opacity toggle */
+  #alert-strip { transition: opacity 0.24s ease; }
+  @media (prefers-reduced-motion: reduce) { #alert-strip { transition: none; } }
   .alert-pennant { flex: none; }
   .al-event  { font-size: 15px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
     white-space: nowrap; flex: none; }
@@ -1607,30 +1610,91 @@
   ════════════════════════════════════════════════════════════ */
   var lastData = null;
   /* Alert bulletin strip — the emitter sends alerts already collapsed, classified
-     and sorted; the HTML just paints the lead (tier colour + one line) and a
-     "+N more" count when distinct alert types coexist. */
+     and sorted; the HTML rotates through them every 30s with a 240ms opacity
+     cross-fade, showing "N of M" in the chip when multiple alerts are active. */
   var TONE = { accent: "--accent", brass: "--brass", water: "--water", verdigris: "--verdigris" };
   var _alertShown = false;
-  function renderAlerts(data) {
+  var _alertList  = [];   /* last-known alert array */
+  var _alertIdx   = 0;   /* which alert is currently on screen */
+  var _alertTimer = null; /* setInterval handle for rotation */
+  var _alertStale = false;
+  var _alertsAsOf = "";
+
+  /* key on sorted event names only — areaShort can shift between polls as
+     counties are added, which would make the key look "changed" every 2s and
+     continuously reset the 30s timer before it ever fires */
+  function _alertListKey(alerts) {
+    return alerts.map(function(a) { return a.event; }).sort().join(";");
+  }
+
+  function _paintAlert(a) {
     var strip = $("alert-strip");
-    var lead = (data.alerts && data.alerts.length) ? data.alerts[0] : null;
-    if (!lead) { strip.classList.remove("on", "enter", "stale"); _alertShown = false; return; }
-    var v = TONE[lead.tone] || "--verdigris";
-    strip.style.color = "var(" + v + ")";
+    var v = TONE[a.tone] || "--verdigris";
+    strip.style.color      = "var(" + v + ")";
     strip.style.background = "var(" + v + "-tint)";
-    $("al-event").textContent = lead.event || "Weather Alert";
-    var detail = [lead.short, lead.areaShort].filter(Boolean).join(" · ");
+    $("al-event").textContent = a.event || "Weather Alert";
+    var detail = [a.short, a.areaShort].filter(Boolean).join(" · ");
     $("al-detail").textContent = detail;
     $("al-sep").style.display = detail ? "" : "none";
-    var more = (data.alertCount || 1) - 1, moreEl = $("al-more");
+    var more = _alertList.length - 1, moreEl = $("al-more");
     if (more > 0) { moreEl.textContent = "+" + more + " more"; moreEl.hidden = false; }
     else { moreEl.hidden = true; }
-    var stale = !!data.alertsStale;
-    strip.classList.toggle("stale", stale);
-    $("al-until").textContent = stale ? ("as of " + (data.alertsAsOf || "—"))
-      : (lead.untilText ? ("until " + lead.untilText) : "");
+    strip.classList.toggle("stale", _alertStale);
+    $("al-until").textContent = _alertStale
+      ? ("as of " + (_alertsAsOf || "—"))
+      : (a.untilText ? ("until " + a.untilText) : "");
+  }
+
+  function _stepAlert() {
+    if (_alertList.length < 2) return;
+    var strip   = $("alert-strip");
+    var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    _alertIdx   = (_alertIdx + 1) % _alertList.length;
+    if (reduced) { _paintAlert(_alertList[_alertIdx]); return; }
+    strip.style.opacity = "0";
+    setTimeout(function() {
+      _paintAlert(_alertList[_alertIdx]);
+      strip.style.opacity = "";   /* clear inline → CSS stale rule applies naturally */
+    }, 240);
+  }
+
+  function renderAlerts(data) {
+    var strip  = $("alert-strip");
+    var alerts = (data.alerts && data.alerts.length) ? data.alerts : [];
+    _alertStale = !!data.alertsStale;
+    _alertsAsOf = data.alertsAsOf || "";
+
+    if (!alerts.length) {
+      if (_alertTimer) { clearInterval(_alertTimer); _alertTimer = null; }
+      strip.classList.remove("on", "enter", "stale");
+      strip.style.opacity = "";
+      _alertShown = false; _alertList = []; _alertIdx = 0;
+      return;
+    }
+
+    /* restart rotation only when the event set changes; always update the list
+       data so areaShort/untilText stay fresh without affecting the timer */
+    var newKey = _alertListKey(alerts);
+    if (newKey !== _alertListKey(_alertList)) {
+      _alertIdx = 0;
+      if (_alertTimer) { clearInterval(_alertTimer); _alertTimer = null; }
+      if (alerts.length > 1) _alertTimer = setInterval(_stepAlert, 30000);
+    } else if (!_alertTimer && alerts.length > 1) {
+      _alertTimer = setInterval(_stepAlert, 30000);
+    }
+    _alertList = alerts;
+
+    _paintAlert(_alertList[_alertIdx]);
     strip.classList.add("on");
-    if (!_alertShown) { strip.classList.add("enter"); _alertShown = true; }
+    if (!_alertShown) {
+      strip.classList.add("enter");
+      /* remove 'enter' after the slide-in so animation fill-mode: both
+         doesn't block our later opacity fade (animation fill wins over inline style) */
+      strip.addEventListener("animationend", function() {
+        strip.classList.remove("enter");
+      }, { once: true });
+      _alertShown = true;
+    }
   }
 
   /* Air Quality — number + category + marker, coloured by US-EPA AQI band; a
