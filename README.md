@@ -57,6 +57,25 @@ available. Neither one can stall the display: they are fetched off the main
 thread, keep their last good value through a network blip, and are marked stale
 rather than shown as current if the connection stays down.
 
+### Air quality source
+
+By default the AQI panel pulls from Open-Meteo (a CAMS satellite model — no
+account needed). For readings that match [airnow.gov](https://www.airnow.gov/)
+exactly, configure a free WAQI token: it switches the source to the nearest
+EPA/AirNow monitoring station.
+
+**During install or update** the script asks for the token automatically. If you
+skipped it or want to change it later, run:
+
+```
+wfpiconsole configure-aqi
+```
+
+That command prompts for a token, validates it against the WAQI API, and saves
+it to `wfpiconsole.ini`. Leave the field blank to clear an existing token and
+revert to Open-Meteo. A free token takes under a minute to obtain at
+[aqicn.org/data-platform/token](https://aqicn.org/data-platform/token/).
+
 Two ways to run it:
 
 - **HTML kiosk (recommended).** The console runs headless as a data engine and `chromium --kiosk` renders the interface, pixel-identical and low-power (~½ core total on a Pi). A systemd-supervised watchdog keeps the whole chain alive: it relaunches any component that dies, restarts the engine if the feed goes stale (a hung websocket the classic UI would sit in), and re-checks for a wedged render. It self-heals: I confirmed that by killing the watchdog and watching systemd bring the display back on its own. Setup, management, and revert steps are in [`design/almanac/kiosk/README.md`](design/almanac/kiosk/README.md).

@@ -821,6 +821,11 @@ process_complete() {
 # monitoring station — matching airnow.gov. Skipped silently if already set.
 configure_waqi_token() {
 
+    # Pass --force to re-prompt even when a token is already set (used by the
+    # standalone 'configure-aqi' command so users can update or clear the token).
+    local force=0
+    [[ "${1:-}" == "--force" ]] && force=1
+
     local ini="$CONSOLEDIR/wfpiconsole.ini"
 
     # ini doesn't exist yet on a first install (created on first run)
@@ -831,7 +836,7 @@ configure_waqi_token() {
         return
     fi
 
-    # Skip silently if a token is already configured
+    # Check for existing token
     local existing
     existing=$(${PYTHON_VENV} -c "
 import configparser
@@ -839,29 +844,53 @@ c = configparser.ConfigParser()
 c.read('$ini')
 print(c.get('AirQuality', 'WaqiToken', fallback=''))
 " 2>/dev/null | tr -d '[:space:]')
-    if [[ -n "$existing" ]]; then
+
+    # Skip silently during installs/updates when a token is already configured
+    if [[ -n "$existing" && $force -eq 0 ]]; then
         printf "\\n  %b Air Quality: WAQI token already configured\\n" "${TICK}"
         return
     fi
 
-    # Prompt the user for a token
-    local token
-    if ! token=$(whiptail --title "Air Quality API token (optional)" \
-        --inputbox \
-"For accurate air quality matching airnow.gov, enter a free WAQI API token.
+    # Build the prompt — include a clear note when replacing an existing token
+    local prompt_body
+    if [[ -n "$existing" ]]; then
+        prompt_body="Current WAQI token is set. Enter a new token to replace it, or
+leave blank to remove it and fall back to Open-Meteo.
+
+Get a free token at:
+
+  https://aqicn.org/data-platform/token/"
+    else
+        prompt_body="For accurate air quality matching airnow.gov, enter a free WAQI API token.
 
 Get one in under a minute at:
 
   https://aqicn.org/data-platform/token/
 
-Leave blank to use the Open-Meteo forecast model instead (no token needed)." \
+Leave blank to use the Open-Meteo forecast model instead (no token needed)."
+    fi
+
+    # Prompt the user for a token
+    local token
+    if ! token=$(whiptail --title "Air Quality API token (optional)" \
+        --inputbox "$prompt_body" \
         16 ${c} "" 3>&1 1>&2 2>&3); then
         return 0   # user pressed Cancel — treat as skip
     fi
 
     token=$(echo "$token" | tr -d '[:space:]')
+
+    # Blank entry: clear an existing token (falls back to Open-Meteo) or no-op
     if [[ -z "$token" ]]; then
-        printf "\\n  %b Air Quality: no token entered, using Open-Meteo fallback\\n" "${INFO}"
+        if [[ -n "$existing" ]]; then
+            local str3="Removing WAQI token from configuration"
+            printf "\\n  %b %s..." "${INFO}" "${str3}"
+            sed -i '/^WaqiToken/d' "$ini"
+            printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str3}"
+            printf "  %b Air Quality will use the Open-Meteo forecast model\\n" "${INFO}"
+        else
+            printf "\\n  %b Air Quality: no token entered, using Open-Meteo fallback\\n" "${INFO}"
+        fi
         return
     fi
 
@@ -877,7 +906,7 @@ Leave blank to use the Open-Meteo forecast model instead (no token needed)." \
         || echo "error")
     if [[ "$waqi_status" != "ok" ]]; then
         printf "%b  %b %s\\n" "${OVER}" "${EXCLAMATION}" "${str}"
-        printf "  %b Token was rejected by WAQI — check it and run 'wfpiconsole update' to retry\\n" "${INFO}"
+        printf "  %b Token was rejected by WAQI — check it and run 'wfpiconsole configure-aqi' to retry\\n" "${INFO}"
         return
     fi
     printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
@@ -895,6 +924,12 @@ Leave blank to use the Open-Meteo forecast model instead (no token needed)." \
         printf "\\n[AirQuality]\\nWaqiToken = %s\\n" "$token" >> "$ini"
     fi
     printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str2}"
+}
+
+# CONFIGURE AIR QUALITY API TOKEN (STANDALONE COMMAND)
+# ------------------------------------------------------------------------------
+configure_aqi() {
+    configure_waqi_token --force
 }
 
 # START THE WeatherFlow PiConsole
@@ -1127,7 +1162,8 @@ Options:
   stable                : Switch the WeatherFlow PiConsole to the stable branch
   beta                  : Switch the WeatherFlow PiConsole to the beta branch
   autostart-enable      : Set the WeatherFlow PiConsole to autostart at boot
-  autostart-disable     : Stop the WeatherFlow PiConsole autostarting at boot"
+  autostart-disable     : Stop the WeatherFlow PiConsole autostarting at boot
+  configure-aqi         : Set, update, or clear the WAQI air quality API token"
   exit 0
 }
 
@@ -1287,5 +1323,6 @@ case "${1}" in
     "runBeta"             ) run_beta;;
     "autostart-enable"    ) autostart-enable;;
     "autostart-disable"   ) autostart-disable;;
+    "configure-aqi"       ) configure_aqi;;
     *                     ) printf "Unrecognised usage\\n" && help_func;;
 esac
