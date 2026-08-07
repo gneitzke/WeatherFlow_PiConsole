@@ -347,37 +347,40 @@ class AlmanacEmitter:
         return 'Hazardous'
 
     def _do_aqi(self):
-        """ Fetch the current US AQI for the station's lat/lon from the Open-Meteo
-        Air-Quality API (free, no key). Off-thread, never raises; caches the
-        result for the emit tick. On failure the previous value is kept (or None,
-        so the HTML simply hides the air-quality block). """
+        """ Fetch the current US AQI from the WAQI API (aqicn.org), which aggregates
+        the nearest EPA/AirNow monitoring station — matching what airnow.gov shows.
+        Token is read from [AirQuality] WaqiToken in wfpiconsole.ini.
+        Off-thread, never raises; on failure the previous value is kept. """
         try:
             import urllib.request
             config = getattr(self.app, 'config', None)
-            lat = _cfg(config, 'Station', 'Latitude')
-            lon = _cfg(config, 'Station', 'Longitude')
-            if not lat or not lon:
+            lat   = _cfg(config, 'Station', 'Latitude')
+            lon   = _cfg(config, 'Station', 'Longitude')
+            token = _cfg(config, 'AirQuality', 'WaqiToken') or ''
+            if not lat or not lon or not token:
                 return
-            url = ('https://air-quality-api.open-meteo.com/v1/air-quality'
-                   f'?latitude={lat}&longitude={lon}&current=us_aqi,pm2_5'
-                   '&hourly=us_aqi,pm2_5&forecast_days=1&timezone=auto')
+            url = f'https://api.waqi.info/feed/geo:{lat};{lon}/?token={token}'
             req = urllib.request.Request(url, headers={'User-Agent': 'WeatherFlow-PiConsole-almanac'})
             with urllib.request.urlopen(req, timeout=25) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
-            cur = data.get('current') or {}
-            aqi = cur.get('us_aqi')
-            if aqi is None:
+            if data.get('status') != 'ok':
+                Logger.warning(f'almanac_emit: WAQI status={data.get("status")} '
+                               f'msg={data.get("data")}')
                 return
+            d   = data.get('data') or {}
+            aqi = d.get('aqi')
+            if not isinstance(aqi, (int, float)):
+                return                      # station reports '-' when sensor is offline
             aqi = int(round(aqi))
+            iaqi = d.get('iaqi') or {}
             self._aqi          = aqi
             self._aqi_category = self._aqi_cat(aqi)
-            self._aqi_pm25     = cur.get('pm2_5')
+            self._aqi_pm25     = (iaqi.get('pm25') or {}).get('v')   # PM2.5 µg/m³
             self._aqi_ts       = time.time()
-            # short forecast trend so a rising smoke event shows before the number does
+            fc_pm25 = ((d.get('forecast') or {}).get('daily') or {}).get('pm25') or []
             (self._aqi_forecast, self._aqi_peak, self._aqi_peak_time,
              self._aqi_trend, self._aqi_trend_text, self._aqi_fc_cat) = \
-                self._aqi_forecast_summary(data.get('hourly') or {}, time.time(),
-                                           self._station_tz(config), aqi)
+                self._waqi_trend(aqi, fc_pm25)
         except Exception as error:                                        # noqa: BLE001
             Logger.warning(f'almanac_emit: air-quality fetch failed - {error}')
 
@@ -428,6 +431,30 @@ class AlmanacEmitter:
         else:
             trend, trend_text = 'steady', None
         return series, peak, peak_time, trend, trend_text, peak_cat
+
+    @staticmethod
+    def _waqi_trend(aqi_now, fc_pm25_daily):
+        """ Derive rising/falling/steady from WAQI's daily PM2.5 forecast.
+        Returns the same 6-tuple as _aqi_forecast_summary so callers are
+        unchanged.  No hourly series, so aqiForecast sparkline is empty. """
+        if not fc_pm25_daily or aqi_now is None:
+            return [], None, None, None, None, None
+        today    = fc_pm25_daily[0] if fc_pm25_daily else {}
+        tomorrow = fc_pm25_daily[1] if len(fc_pm25_daily) > 1 else {}
+        peak_raw = today.get('max')
+        if peak_raw is None:
+            return [], None, None, None, None, None
+        peak     = int(round(peak_raw))
+        peak_cat = AlmanacEmitter._aqi_cat(peak)
+        cur_cat  = AlmanacEmitter._aqi_cat(aqi_now)
+        nxt_avg  = tomorrow.get('avg')
+        if peak - aqi_now >= 5 and peak_cat != cur_cat:
+            return [], peak, None, 'rising',  f'{peak_cat} today', peak_cat
+        if nxt_avg is not None:
+            nxt = int(round(nxt_avg))
+            if aqi_now - nxt >= 5 and AlmanacEmitter._aqi_cat(nxt) != cur_cat:
+                return [], peak, None, 'falling', 'Improving', peak_cat
+        return [], peak, None, 'steady', None, peak_cat
 
     # --------------------------------------------------------------------
     # Weather alerts (NWS api.weather.gov, by station lat/lon)
