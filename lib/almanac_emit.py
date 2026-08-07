@@ -347,40 +347,67 @@ class AlmanacEmitter:
         return 'Hazardous'
 
     def _do_aqi(self):
-        """ Fetch the current US AQI from the WAQI API (aqicn.org), which aggregates
-        the nearest EPA/AirNow monitoring station — matching what airnow.gov shows.
-        Token is read from [AirQuality] WaqiToken in wfpiconsole.ini.
-        Off-thread, never raises; on failure the previous value is kept. """
+        """ Fetch US AQI for the station's lat/lon.
+
+        When [AirQuality] WaqiToken is set in wfpiconsole.ini, uses the WAQI
+        API (aqicn.org) which aggregates the nearest EPA/AirNow monitoring
+        station — the same reading shown on airnow.gov.
+
+        Falls back to Open-Meteo (CAMS satellite model, no token required)
+        when no token is configured.  Off-thread, never raises. """
         try:
             import urllib.request
             config = getattr(self.app, 'config', None)
             lat   = _cfg(config, 'Station', 'Latitude')
             lon   = _cfg(config, 'Station', 'Longitude')
-            token = _cfg(config, 'AirQuality', 'WaqiToken') or ''
-            if not lat or not lon or not token:
+            if not lat or not lon:
                 return
-            url = f'https://api.waqi.info/feed/geo:{lat};{lon}/?token={token}'
-            req = urllib.request.Request(url, headers={'User-Agent': 'WeatherFlow-PiConsole-almanac'})
-            with urllib.request.urlopen(req, timeout=25) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-            if data.get('status') != 'ok':
-                Logger.warning(f'almanac_emit: WAQI status={data.get("status")} '
-                               f'msg={data.get("data")}')
-                return
-            d   = data.get('data') or {}
-            aqi = d.get('aqi')
-            if not isinstance(aqi, (int, float)):
-                return                      # station reports '-' when sensor is offline
-            aqi = int(round(aqi))
-            iaqi = d.get('iaqi') or {}
-            self._aqi          = aqi
-            self._aqi_category = self._aqi_cat(aqi)
-            self._aqi_pm25     = (iaqi.get('pm25') or {}).get('v')   # PM2.5 µg/m³
-            self._aqi_ts       = time.time()
-            fc_pm25 = ((d.get('forecast') or {}).get('daily') or {}).get('pm25') or []
-            (self._aqi_forecast, self._aqi_peak, self._aqi_peak_time,
-             self._aqi_trend, self._aqi_trend_text, self._aqi_fc_cat) = \
-                self._waqi_trend(aqi, fc_pm25)
+            token = (_cfg(config, 'AirQuality', 'WaqiToken') or '').strip()
+            if token:
+                # WAQI: nearest EPA/AirNow monitoring station
+                url = f'https://api.waqi.info/feed/geo:{lat};{lon}/?token={token}'
+                req = urllib.request.Request(url, headers={'User-Agent': 'WeatherFlow-PiConsole-almanac'})
+                with urllib.request.urlopen(req, timeout=25) as resp:
+                    data = json.loads(resp.read().decode('utf-8'))
+                if data.get('status') != 'ok':
+                    Logger.warning(f'almanac_emit: WAQI status={data.get("status")} '
+                                   f'msg={data.get("data")}')
+                    return
+                d   = data.get('data') or {}
+                aqi = d.get('aqi')
+                if not isinstance(aqi, (int, float)):
+                    return                  # station reports '-' when sensor is offline
+                aqi = int(round(aqi))
+                iaqi = d.get('iaqi') or {}
+                self._aqi          = aqi
+                self._aqi_category = self._aqi_cat(aqi)
+                self._aqi_pm25     = (iaqi.get('pm25') or {}).get('v')   # PM2.5 µg/m³
+                self._aqi_ts       = time.time()
+                fc_pm25 = ((d.get('forecast') or {}).get('daily') or {}).get('pm25') or []
+                (self._aqi_forecast, self._aqi_peak, self._aqi_peak_time,
+                 self._aqi_trend, self._aqi_trend_text, self._aqi_fc_cat) = \
+                    self._waqi_trend(aqi, fc_pm25)
+            else:
+                # Open-Meteo fallback: CAMS model, no token required
+                url = ('https://air-quality-api.open-meteo.com/v1/air-quality'
+                       f'?latitude={lat}&longitude={lon}&current=us_aqi,pm2_5'
+                       '&hourly=us_aqi,pm2_5&forecast_days=1&timezone=auto')
+                req = urllib.request.Request(url, headers={'User-Agent': 'WeatherFlow-PiConsole-almanac'})
+                with urllib.request.urlopen(req, timeout=25) as resp:
+                    data = json.loads(resp.read().decode('utf-8'))
+                cur = data.get('current') or {}
+                aqi = cur.get('us_aqi')
+                if aqi is None:
+                    return
+                aqi = int(round(aqi))
+                self._aqi          = aqi
+                self._aqi_category = self._aqi_cat(aqi)
+                self._aqi_pm25     = cur.get('pm2_5')
+                self._aqi_ts       = time.time()
+                (self._aqi_forecast, self._aqi_peak, self._aqi_peak_time,
+                 self._aqi_trend, self._aqi_trend_text, self._aqi_fc_cat) = \
+                    self._aqi_forecast_summary(data.get('hourly') or {}, time.time(),
+                                               self._station_tz(config), aqi)
         except Exception as error:                                        # noqa: BLE001
             Logger.warning(f'almanac_emit: air-quality fetch failed - {error}')
 

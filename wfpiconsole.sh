@@ -814,6 +814,89 @@ process_complete() {
     esac
 }
 
+# CONFIGURE WAQI AIR QUALITY TOKEN (OPTIONAL)
+# ------------------------------------------------------------------------------
+# Prompts for a free WAQI token (https://aqicn.org/data-platform/token/) which
+# switches air quality from Open-Meteo CAMS model to the nearest EPA/AirNow
+# monitoring station — matching airnow.gov. Skipped silently if already set.
+configure_waqi_token() {
+
+    local ini="$CONSOLEDIR/wfpiconsole.ini"
+
+    # ini doesn't exist yet on a first install (created on first run)
+    if [[ ! -f "$ini" ]]; then
+        printf "\\n  %b Air Quality: run 'wfpiconsole update' after first launch\\n" "${INFO}"
+        printf "      to configure your WAQI token for EPA/AirNow readings.\\n"
+        printf "      Without it the console uses the Open-Meteo forecast model.\\n"
+        return
+    fi
+
+    # Skip silently if a token is already configured
+    local existing
+    existing=$(${PYTHON_VENV} -c "
+import configparser
+c = configparser.ConfigParser()
+c.read('$ini')
+print(c.get('AirQuality', 'WaqiToken', fallback=''))
+" 2>/dev/null | tr -d '[:space:]')
+    if [[ -n "$existing" ]]; then
+        printf "\\n  %b Air Quality: WAQI token already configured\\n" "${TICK}"
+        return
+    fi
+
+    # Prompt the user for a token
+    local token
+    if ! token=$(whiptail --title "Air Quality API token (optional)" \
+        --inputbox \
+"For accurate air quality matching airnow.gov, enter a free WAQI API token.
+
+Get one in under a minute at:
+
+  https://aqicn.org/data-platform/token/
+
+Leave blank to use the Open-Meteo forecast model instead (no token needed)." \
+        16 ${c} "" 3>&1 1>&2 2>&3); then
+        return 0   # user pressed Cancel — treat as skip
+    fi
+
+    token=$(echo "$token" | tr -d '[:space:]')
+    if [[ -z "$token" ]]; then
+        printf "\\n  %b Air Quality: no token entered, using Open-Meteo fallback\\n" "${INFO}"
+        return
+    fi
+
+    # Validate the token against the WAQI API before saving
+    local str="Validating WAQI token"
+    printf "\\n  %b %s..." "${INFO}" "${str}"
+    local lat lon waqi_status
+    lat=$(${PYTHON_VENV} -c "import configparser; c=configparser.ConfigParser(); c.read('$ini'); print(c.get('Station','Latitude',fallback='0'))" 2>/dev/null)
+    lon=$(${PYTHON_VENV} -c "import configparser; c=configparser.ConfigParser(); c.read('$ini'); print(c.get('Station','Longitude',fallback='0'))" 2>/dev/null)
+    waqi_status=$(curl -sf --max-time 10 \
+        "https://api.waqi.info/feed/geo:${lat};${lon}/?token=${token}" \
+        | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','error'))" 2>/dev/null \
+        || echo "error")
+    if [[ "$waqi_status" != "ok" ]]; then
+        printf "%b  %b %s\\n" "${OVER}" "${EXCLAMATION}" "${str}"
+        printf "  %b Token was rejected by WAQI — check it and run 'wfpiconsole update' to retry\\n" "${INFO}"
+        return
+    fi
+    printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
+
+    # Write token to ini, preserving the existing file format
+    local str2="Saving WAQI token to configuration"
+    printf "  %b %s..." "${INFO}" "${str2}"
+    if grep -q "^\[AirQuality\]" "$ini" 2>/dev/null; then
+        if grep -q "^WaqiToken" "$ini" 2>/dev/null; then
+            sed -i "s/^WaqiToken.*/WaqiToken = ${token}/" "$ini"
+        else
+            sed -i "/^\[AirQuality\]/a WaqiToken = ${token}" "$ini"
+        fi
+    else
+        printf "\\n[AirQuality]\\nWaqiToken = %s\\n" "$token" >> "$ini"
+    fi
+    printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str2}"
+}
+
 # START THE WeatherFlow PiConsole
 # ------------------------------------------------------------------------------
 start () {
@@ -852,6 +935,8 @@ install() {
     get_latest_version
     # Edit and install wfpiconsole.service file
     install_service_file
+    # Optionally configure WAQI token for EPA/AirNow air quality readings
+    configure_waqi_token
     # Clean up after update
     clean_up
     # Display installation complete dialogue
@@ -906,6 +991,8 @@ run_update_inline() {
         exit 1                                      # don't report success on a failed pull
     fi
     install_service_file
+    # Optionally configure WAQI token for EPA/AirNow air quality readings
+    configure_waqi_token
     clean_up
     printf "\\n  %b The Almanac UX is available: set [Display] LayoutStyle = almanac for the" "${INFO}"
     printf "\\n     native Kivy layout, or run the HTML kiosk (see design/almanac/kiosk/README.md).\\n"
@@ -945,6 +1032,8 @@ run_update() {
     get_latest_version
     # Edit and install wfpiconsole.service file
     install_service_file
+    # Optionally configure WAQI token for EPA/AirNow air quality readings
+    configure_waqi_token
     # Clean up after installation
     clean_up
     # Display update complete dialogue
