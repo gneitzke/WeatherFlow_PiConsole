@@ -11,8 +11,9 @@
 #   # and disable the old autostart entry so it doesn't double-launch:
 #   mv ~/.config/autostart/almanac-kiosk.desktop{,.disabled}
 #
-# The launcher self-gates on the X session (waits for openbox + xset), so starting
-# early at default.target is safe — it simply waits for the display.
+# The launcher self-gates on the live session (X11: openbox + xset; Wayland:
+# labwc/wayfire + socket), so starting early at default.target is safe. It simply
+# waits for whichever display server the desktop brought up.
 [Unit]
 Description=Almanac weather kiosk (HTML overlay + supervised data engine)
 After=default.target

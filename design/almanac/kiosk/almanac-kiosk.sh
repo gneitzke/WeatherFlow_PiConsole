@@ -25,22 +25,64 @@ UDD="/tmp/almanac_chrome"                            # chromium profile (wiped e
 HTTP_LOG="/tmp/almanac_http.log"
 
 # real session env — chromium needs the exact session bus to map a window + touch.
-# Force the standard paths (autostart may carry a different/empty value).
-export DISPLAY=":0"
-export XAUTHORITY="$HOME/.Xauthority"
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
 
+# ── DISPLAY BACKEND — X11 (proven, the default) or Wayland ────────────────────
+# Older Pi OS installs (and any raspi-config "X11" choice) run LXDE-pi/openbox on
+# X11: the real screen is :0, gated by openbox + `xset q`. A fresh Raspberry Pi OS
+# Bookworm install on a Pi 4/5 boots Wayland (labwc or wayfire) instead, where
+# there is no :0, no openbox, and xset does nothing. Auto-detect so the same
+# launcher works on both without anyone toggling raspi-config. Override with
+# WFP_BACKEND=x11|wayland. The headless data engine always uses its own Xvfb
+# (below), so only the on-screen chromium half depends on this.
+find_wayland_display(){                                # sets WAYLAND_DISPLAY if a live socket exists
+  [ -n "${WAYLAND_DISPLAY:-}" ] && [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && return 0
+  for s in "$XDG_RUNTIME_DIR"/wayland-[0-9]*; do
+    [ -S "$s" ] && { WAYLAND_DISPLAY="$(basename "$s")"; return 0; }
+  done
+  return 1
+}
+BACKEND="${WFP_BACKEND:-auto}"
+if [ "$BACKEND" = auto ]; then
+  if { [ "${XDG_SESSION_TYPE:-}" = wayland ] || pgrep -x labwc >/dev/null 2>&1 \
+       || pgrep -x wayfire >/dev/null 2>&1; } && find_wayland_display; then
+    BACKEND=wayland
+  else
+    BACKEND=x11
+  fi
+fi
+if [ "$BACKEND" = wayland ]; then
+  export WAYLAND_DISPLAY; unset DISPLAY                # chromium maps onto the Wayland compositor, not :0
+  CR_OZONE=wayland
+else
+  export DISPLAY=":0"                                  # force standard paths (autostart may carry empty values)
+  export XAUTHORITY="$HOME/.Xauthority"
+  CR_OZONE=x11
+fi
+
+# chromium binary name differs by image (Pi OS: chromium-browser; plain Debian: chromium)
+CR_BIN="${WFP_CHROMIUM:-}"
+if [ -z "$CR_BIN" ]; then
+  for c in chromium-browser chromium; do command -v "$c" >/dev/null 2>&1 && { CR_BIN="$c"; break; }; done
+fi
+CR_BIN="${CR_BIN:-chromium-browser}"
+
 # ── COLD-BOOT RACE (the root cause of "fragile on reboot") ────────────────────
-# If chromium launches before the VC4 GPU/compositor is ready, its GPU process
+# If chromium launches before the GPU/compositor is ready, its GPU process
 # initialises into a broken state and composites a BLANK WHITE window that never
 # recovers. Gate the launch on real readiness signals, not a fixed sleep:
-#   1) the window manager (openbox) is up,
-#   2) the X server is actually answering ( xset q ),
+#   1) the compositor / window manager is up,
+#   2) the display is actually answering (X: `xset q`; Wayland: the socket exists),
 #   3) a short settle for the GPU stack.
 # The watchdog below is the belt-and-braces guarantee if the race still slips through.
-for _ in $(seq 1 60); do pgrep -x openbox >/dev/null 2>&1 && break; sleep 1; done
-for _ in $(seq 1 30); do xset q          >/dev/null 2>&1 && break; sleep 1; done
+if [ "$BACKEND" = wayland ]; then
+  for _ in $(seq 1 60); do { pgrep -x labwc >/dev/null 2>&1 || pgrep -x wayfire >/dev/null 2>&1; } && break; sleep 1; done
+  for _ in $(seq 1 30); do [ -S "$XDG_RUNTIME_DIR/${WAYLAND_DISPLAY:-wayland-0}" ] && break; sleep 1; done
+else
+  for _ in $(seq 1 60); do pgrep -x openbox >/dev/null 2>&1 && break; sleep 1; done
+  for _ in $(seq 1 30); do xset q          >/dev/null 2>&1 && break; sleep 1; done
+fi
 sleep 5
 
 # RESTART-SAFE: if a previous instance died uncleanly (SIGKILL, OOM), its Xvfb /
@@ -94,14 +136,18 @@ launch_server
 # wait for first data frame (up to 45s) so the page opens populated
 for _ in $(seq 1 45); do [ -s "$DATA" ] && break; sleep 1; done
 
-# stop the screen from blanking (kiosk has no working input)
-xset s off -dpms s noblank 2>/dev/null || true
+# stop the screen from blanking (kiosk has no working input). X11: xset. Wayland
+# has no xset — labwc/wayfire idle-blank is disabled via compositor config (see
+# design/almanac/kiosk/PI4-SETUP.md); chromium --kiosk also inhibits the idle.
+if [ "$BACKEND" = x11 ]; then
+  xset s off -dpms s noblank 2>/dev/null || true
+fi
 
 # ── chromium kiosk, with a self-healing watchdog ──────────────────────────────
 # Flags stay MINIMAL and use the REAL GPU (default). Do NOT add --disable-gpu
 # (software rendering can't composite on VC4 -> no window maps), nor
 # --disable-dev-shm-usage / --single-process (they starve renderer IPC).
-CR_FLAGS=(--kiosk --ozone-platform=x11 --touch-events=enabled
+CR_FLAGS=(--kiosk --ozone-platform="$CR_OZONE" --touch-events=enabled
   --no-first-run --no-default-browser-check --disable-infobars
   --disable-session-crashed-bubble --noerrdialogs --password-store=basic)
 URL="http://127.0.0.1:$PORT/index.html?theme=$THEME"
@@ -110,7 +156,7 @@ CRPID=""
 launch_cr(){
   pkill -9 chromium 2>/dev/null; sleep 2
   rm -rf "$UDD"                                   # fresh profile: no stale SingletonLock
-  chromium-browser "${CR_FLAGS[@]}" --user-data-dir="$UDD" "$URL" \
+  "$CR_BIN" "${CR_FLAGS[@]}" --user-data-dir="$UDD" "$URL" \
     >/tmp/almanac_chrome.log 2>&1 &
   CRPID=$!
 }
