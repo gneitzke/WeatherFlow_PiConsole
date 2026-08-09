@@ -65,6 +65,57 @@ def test_currentconditions_identical_to_upstream():
             'subclass (see panels/headless.py) instead.\n\n' + diff)
 
 
+def _allowed_added_config_line(body):
+    """ Predicate for the lib/config.py diff-guard: is this added line (already
+        stripped of the leading '+' and surrounding whitespace) part of the
+        sanctioned divergence from upstream? """
+    if body == '':
+        return True
+    if body.startswith('#'):
+        return True
+    if body == 'from lib import station_finder':
+        return True
+    if body.startswith("if section == 'Station' and station_finder.intercept"):
+        return True
+    if body == 'return':
+        return True
+    # Pre-existing almanac-layout config keys added by an earlier feature commit
+    # on this branch (reviewed separately). Tolerated so the hook guard stays
+    # focused on the station_finder integration rather than flagging unrelated,
+    # already-merged additions.
+    if body.startswith("('LayoutStyle',") or body.startswith("('LayoutPrompt',"):
+        return True
+    return False
+
+
+@pytest.mark.guard
+def test_config_py_diff_limited_to_station_finder_hook():
+    ref = _resolve_upstream_ref()
+    if ref is None:
+        pytest.skip('no upstream ref — set PICONSOLE_UPSTREAM_REF or fetch peted-davis/main')
+
+    local = (ROOT / 'lib' / 'config.py').read_text()
+    upstream = subprocess.check_output(
+        ['git', '-C', str(ROOT), 'show', f'{ref}:lib/config.py'], text=True)
+
+    offending = []
+    for line in difflib.unified_diff(upstream.splitlines(), local.splitlines(),
+                                     fromfile=f'{ref}:lib/config.py',
+                                     tofile='local:lib/config.py', lineterm=''):
+        if line.startswith('---') or line.startswith('+++') or line.startswith('@@'):
+            continue
+        if line.startswith('-'):
+            offending.append(line)                       # NO removed lines allowed
+        elif line.startswith('+'):
+            if not _allowed_added_config_line(line[1:].strip()):
+                offending.append(line)
+
+    assert not offending, (
+        'lib/config.py has diverged from upstream beyond the station_finder hook. '
+        'Keep the picker logic in lib/station_finder.py so config.py stays mergeable '
+        'against upstream fixes.\n\n' + '\n'.join(offending))
+
+
 @pytest.mark.guard
 def test_headless_override_keeps_button_list_empty():
     # The override MUST assign button_list = [] (not a bare pass): the evt_strike

@@ -435,6 +435,12 @@ def write_config_key(config, section, key, details):
             value = ''
             key_required = False
 
+        # Offer nearby public station picker to users without WeatherFlow
+        # hardware (all logic lives in lib/station_finder.py)
+        from lib import station_finder
+        if section == 'Station' and station_finder.intercept(config, key, CONNECTION):
+            return
+
         # Request user input to determine which devices are present
         if key == 'TempestID':
             if query_user('Do you own a TEMPEST?*', None):
