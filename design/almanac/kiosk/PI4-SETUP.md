@@ -1,4 +1,4 @@
-# Almanac kiosk — fresh Pi 4 / Pi 5 setup
+# Almanac kiosk: fresh Pi 4 / Pi 5 setup
 
 This is the from-scratch path for a new Raspberry Pi. The kiosk launcher
 (`almanac-kiosk.sh`) runs on **both** display servers and picks the right one at
@@ -44,12 +44,17 @@ guesses wrong. Point at a specific browser with `WFP_CHROMIUM=/usr/bin/chromium`
    git clone -b main https://github.com/gneitzke/WeatherFlow_PiConsole.git ~/wfpiconsole
    cd ~/wfpiconsole && ./wfpiconsole.sh install
    ```
-5. **Configure** (`wfpiconsole start`, then the wizard). No hardware at this Pi?
-   The station picker will offer to search for a nearby public station; you only
-   need a free WeatherFlow account and a Personal Access Token.
+5. **Configure** (`wfpiconsole start`, then the wizard). It asks for a WeatherFlow
+   Personal Access Token; generate one at
+   [tempestwx.com/settings/tokens](https://tempestwx.com/settings/tokens) (free
+   account). No hardware at this Pi? The station picker will offer to search for a
+   nearby public station, so you do not need your own Tempest.
 6. **Enable the kiosk service.** The systemd user service, autostart, and revert
    steps are in [`README.md`](README.md). Set `WFP_BIND=0.0.0.0` in the service to
    view the page from other devices at `http://<hostname>.local:8137`.
+7. **Reboot** (`sudo reboot`). The Pi autologins to the desktop and the kiosk comes
+   up fullscreen on its own. Autologin and the boot-time service both need this
+   first reboot to take effect.
 
 ## Screen blanking on Wayland
 
@@ -80,7 +85,7 @@ X11 blanking is handled by the launcher (`xset`). Wayland has no `xset`:
 After the service is up:
 ```
 grep -E "healthy|attempt|backend" /tmp/almanac_chrome.log
-echo "$XDG_SESSION_TYPE"          # x11 or wayland — what the desktop is running
+echo "$XDG_SESSION_TYPE"          # x11 or wayland (what the desktop is running)
 pgrep -a -x 'labwc|wayfire|openbox'
 ```
 `/health` should report growing `polls` (the render heartbeat):
