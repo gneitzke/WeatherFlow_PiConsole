@@ -23,6 +23,7 @@ Type=simple
 ExecStart=%h/wfpiconsole/design/almanac/kiosk/almanac-kiosk.sh
 Restart=always
 RestartSec=3
+Environment=WFP_BIND=0.0.0.0
 
 [Install]
 WantedBy=default.target
