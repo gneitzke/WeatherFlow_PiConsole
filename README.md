@@ -57,6 +57,59 @@ available. Neither one can stall the display: they are fetched off the main
 thread, keep their last good value through a network blip, and are marked stale
 rather than shown as current if the connection stays down.
 
+### Viewing the Almanac remotely
+
+Once the kiosk is running, the page is also reachable from any device on your
+local network — phone, laptop, tablet — without any extra software:
+
+```
+http://weather.local:8137
+```
+
+Replace `weather` with your Pi's hostname if it differs. The page polls
+`/wx.json` every two seconds and renders the same live data the wall display
+shows. A status endpoint is also available:
+
+```
+http://weather.local:8137/health
+```
+
+This is enabled by default in the systemd service via `Environment=WFP_BIND=0.0.0.0`.
+If you want to restrict the server back to the Pi only (no LAN access), remove
+that line from `~/.config/systemd/user/almanac-kiosk.service` and run
+`systemctl --user daemon-reload && systemctl --user restart almanac-kiosk`.
+
+### Do I need a WeatherFlow Tempest?
+
+For live weather readings (temperature, wind, rain, pressure) **yes** — the
+console is built entirely around WeatherFlow's data formats and has no support
+for other hardware brands (Ecowitt, Davis, Ambient, etc.).
+
+The three connection modes are all WeatherFlow-only:
+
+| Mode | What you need |
+|---|---|
+| Websocket + REST API (default) | WeatherFlow Personal Access Token + any Tempest, AIR, or SKY device |
+| UDP + REST API | WeatherFlow device broadcasting on your local network |
+| UDP only | WeatherFlow device + serial number; no internet required after setup |
+
+**What works without a Tempest:** the Almanac's supplementary panels — air
+quality, weather forecasts, and astronomy — pull from public APIs keyed only on
+latitude and longitude. If you set those manually in `wfpiconsole.ini`, those
+panels display correctly even with no hardware attached.
+
+**Trying it before you buy:** the first-run wizard offers a "blank config"
+option that installs a minimal `wfpiconsole.ini` and starts the console
+immediately. The weather readings will be empty, but you can see the layout and
+verify the Pi setup is working. Run `wfpiconsole start`, choose the blank
+config option at the prompt, then edit `~/wfpiconsole/wfpiconsole.ini` manually
+to add your station details once your hardware arrives.
+
+To get a WeatherFlow Personal Access Token, go to
+[tempestwx.com/settings/tokens](https://tempestwx.com/settings/tokens). Your
+station ID and device IDs are under the WeatherFlow app: gear icon → Stations
+→ [your station] → Status.
+
 ### Air quality source
 
 By default the AQI panel pulls from Open-Meteo (a CAMS satellite model — no
@@ -105,6 +158,9 @@ cleanly.
 ## Contents
 
 **[The Almanac UI (this fork)](#the-almanac-ui-this-fork)**<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[Viewing the Almanac remotely](#viewing-the-almanac-remotely)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[Do I need a WeatherFlow Tempest?](#do-i-need-a-weatherflow-tempest)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;[Air quality source](#air-quality-source)<br>
 **[Compatibility](#compatibility)**<br>
 **[Installation Instructions](#installation-instructions)**<br>
 **[Update Instructions](#update-instructions)**<br>
