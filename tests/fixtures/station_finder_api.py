@@ -125,6 +125,44 @@ def detail_air_no_environment(station_id=1008, name='Air No Env'):
     return detail_response(_station_obj(station_id, name, [_sk(), _ar(environment=None)]))
 
 
+def detail_sky_indoor_air_only(station_id=1009, name='Sky + Indoor Air'):
+    # SK present but the only AR is explicitly indoor -> NOT sky_air eligible: an
+    # indoor sensor must never be wired as the outdoor source.
+    indoor = _ar(device_id=6003, serial='AR-00000003', environment='indoor')
+    return detail_response(_station_obj(station_id, name, [_sk(), indoor, _hb()]))
+
+
+def detail_sky_indoor_and_outdoor_air(station_id=1010, name='Sky + Indoor + Outdoor'):
+    # SK with both an indoor and an outdoor AR -> the outdoor one must be chosen.
+    indoor  = _ar(device_id=6004, serial='AR-00000004', environment='indoor')
+    outdoor = _ar(device_id=6005, serial='AR-00000005', environment='outdoor')
+    return detail_response(_station_obj(station_id, name, [_sk(), indoor, outdoor]))
+
+
+# --- incomplete-detail variants (Fix 1: downstream-crash exposure) -----------
+def detail_missing_timezone(station_id=1011, name='No Timezone'):
+    """ Otherwise-valid Tempest station whose station object omits 'timezone'
+        (which upstream dereferences unguarded). """
+    station_obj = _station_obj(station_id, name, [_st(), _hb()])
+    del station_obj['timezone']
+    return detail_response(station_obj)
+
+
+def detail_missing_elevation(station_id=1012, name='No Elevation'):
+    """ Otherwise-valid Tempest station whose station_meta omits 'elevation'. """
+    station_obj = _station_obj(station_id, name, [_st(), _hb()])
+    station_obj['station_meta'] = {}
+    return detail_response(station_obj)
+
+
+def detail_device_missing_agl(station_id=1013, name='No AGL'):
+    """ Otherwise-valid Tempest station whose selected ST device has a
+        device_meta without 'agl' (the height lookup would KeyError). """
+    st = {'device_id': 5001, 'device_type': 'ST', 'serial_number': 'ST-00045678',
+          'device_meta': {'environment': 'outdoor'}}
+    return detail_response(_station_obj(station_id, name, [st, _hb()]))
+
+
 def detail_unauthorized():
     return {'status': {'status_code': 401, 'status_message': 'UNAUTHORIZED'}}
 

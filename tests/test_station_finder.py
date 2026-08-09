@@ -270,6 +270,29 @@ def test_classify_air_without_environment_key():
     assert result['devices']['AR_out'] is not None
 
 
+# --- Fix 2: indoor-only AIR must not be wired as the outdoor source ----------
+def test_classify_sky_with_indoor_only_air_is_ineligible():
+    station = api.detail_sky_indoor_air_only()['stations'][0]
+    result = sf.classify_devices(station)
+    assert result['mode'] is None
+    assert result['devices']['AR_out'] is None
+
+
+def test_classify_sky_with_outdoor_air_is_sky_air():
+    station = api.detail_sky_air()['stations'][0]
+    result = sf.classify_devices(station)
+    assert result['mode'] == 'sky_air'
+    assert result['devices']['AR_out']['device_meta']['environment'] == 'outdoor'
+
+
+def test_classify_sky_indoor_and_outdoor_air_uses_outdoor():
+    station = api.detail_sky_indoor_and_outdoor_air()['stations'][0]
+    result = sf.classify_devices(station)
+    assert result['mode'] == 'sky_air'
+    assert result['devices']['AR_out']['device_id'] == 6005
+    assert result['devices']['AR_out']['device_meta']['environment'] == 'outdoor'
+
+
 # ---------------------------------------------------------------------------
 # 6. build_candidates
 # ---------------------------------------------------------------------------
@@ -314,6 +337,44 @@ def test_build_candidates_skips_and_caches_failure(monkeypatch):
     assert sum('/rest/stations/' in c for c in calls2) == 0
 
 
+# --- Fix 1: incomplete station detail is skipped, never crashes downstream ----
+def test_detail_is_complete_accepts_full_tempest():
+    station_obj = api.detail_tempest()['stations'][0]
+    classification = sf.classify_devices(station_obj)
+    assert sf.detail_is_complete(station_obj, classification) is True
+
+
+@pytest.mark.parametrize('detail_fn, sid', [
+    (api.detail_missing_timezone,   1011),
+    (api.detail_missing_elevation,  1012),
+    (api.detail_device_missing_agl, 1013),
+])
+def test_build_candidates_skips_incomplete_detail(monkeypatch, detail_fn, sid):
+    stations = [{'station_id': sid, 'name': 'incomplete', 'distance_km': 1.0}]
+    detail_map = {sid: detail_fn(sid)}
+    monkeypatch.setattr(sf.requests, 'get', make_dispatch(detail_map=detail_map))
+    candidates = sf.build_candidates(stations, 'tok', 20)     # must not raise
+    assert candidates == []
+    # Cached as a failed lookup so a widen pass never re-fetches it
+    assert sf._detail_cache[sid] is None
+
+
+def test_build_candidates_keeps_complete_detail(monkeypatch):
+    stations = [{'station_id': 1001, 'name': 'good', 'distance_km': 1.0}]
+    detail_map = {1001: api.detail_tempest(1001)}
+    monkeypatch.setattr(sf.requests, 'get', make_dispatch(detail_map=detail_map))
+    candidates = sf.build_candidates(stations, 'tok', 20)
+    assert [c['station_id'] for c in candidates] == [1001]
+
+
+def test_build_candidates_skips_sky_indoor_only_air(monkeypatch):
+    # Fix 2 seen end-to-end: a SK + indoor-only-AR station is not a candidate.
+    stations = [{'station_id': 1009, 'name': 'indoor', 'distance_km': 1.0}]
+    detail_map = {1009: api.detail_sky_indoor_air_only(1009)}
+    monkeypatch.setattr(sf.requests, 'get', make_dispatch(detail_map=detail_map))
+    assert sf.build_candidates(stations, 'tok', 20) == []
+
+
 # ---------------------------------------------------------------------------
 # 7. present_and_choose
 # ---------------------------------------------------------------------------
@@ -328,25 +389,25 @@ def _sample_candidates():
 def test_present_reprompts_then_accepts(monkeypatch, capsys):
     cands = _sample_candidates()
     feed_input(monkeypatch, ['0', '99', 'x', '', '2'])
-    result = sf.present_and_choose(cands, (0, 0), 10, False)
+    result = sf.present_and_choose(cands, 10, False)
     assert result is cands[1]
     assert capsys.readouterr().out.count('Selection not recognised. Please try again') == 4
 
 
 def test_present_quit_returns_none(monkeypatch):
     feed_input(monkeypatch, ['q'])
-    assert sf.present_and_choose(_sample_candidates(), (0, 0), 10, False) is None
+    assert sf.present_and_choose(_sample_candidates(), 10, False) is None
 
 
 def test_present_widen_when_not_at_max(monkeypatch):
     feed_input(monkeypatch, ['w'])
-    assert sf.present_and_choose(_sample_candidates(), (0, 0), 10, False) == 'widen'
+    assert sf.present_and_choose(_sample_candidates(), 10, False) == 'widen'
 
 
 def test_present_widen_at_max_reprompts_then_accepts(monkeypatch, capsys):
     cands = _sample_candidates()
     feed_input(monkeypatch, ['w', '1'])
-    result = sf.present_and_choose(cands, (0, 0), 100, True)
+    result = sf.present_and_choose(cands, 100, True)
     assert result is cands[0]
     assert 'Maximum search radius reached (100 km)' in capsys.readouterr().out
 
@@ -507,3 +568,80 @@ def test_run_picker_preflight_failure_reselects(monkeypatch, capsys):
     assert sf.run_picker(cfg) is True
     assert cfg['Station']['StationID'] == '1002'
     assert "is not currently sharing public data" in capsys.readouterr().out
+
+
+def test_run_picker_unauthorized_exhaustion_aborts(monkeypatch):
+    # MAX_RETRIES consecutive bad tokens must abort, not loop forever.
+    cfg = make_cfg(token='BADTOKEN', Latitude='47.6', Longitude='-122.3')
+    monkeypatch.setattr('lib.config.query_user', lambda *a, **k: True)
+    monkeypatch.setattr(sf.requests, 'get',
+                        lambda url, timeout=None: FakeResponse(api.map_unauthorized()))
+    prompts = []
+    monkeypatch.setattr('builtins.input', lambda *a, **k: prompts.append(1) or 'STILLBAD')
+    assert sf.run_picker(cfg) is False
+    assert len(prompts) == sf.MAX_RETRIES
+
+
+# ---------------------------------------------------------------------------
+# 11. intercept never propagates an internal error (invariant: never crash)
+# ---------------------------------------------------------------------------
+def test_intercept_never_propagates_internal_error(monkeypatch):
+    cfg = make_cfg()
+    monkeypatch.setattr('lib.config.query_user', lambda *a, **k: True)
+
+    def boom(config):
+        raise RuntimeError('kaboom in the picker')
+    monkeypatch.setattr(sf, 'get_search_center', boom)
+
+    errors = []
+    monkeypatch.setattr(sf.Logger, 'error', lambda msg: errors.append(msg))
+
+    # Must swallow the error and fall back to manual entry, never re-raise
+    assert sf.intercept(cfg, 'StationID', 1) is False
+    assert errors and errors[0].startswith('station_finder:')
+
+
+# ---------------------------------------------------------------------------
+# 12. get_search_center
+# ---------------------------------------------------------------------------
+def test_get_search_center_manual_entry(monkeypatch):
+    cfg = make_cfg()
+    feed_input(monkeypatch, ['47.6', '-122.3'])
+    assert sf.get_search_center(cfg) == (47.6, -122.3)
+
+
+def test_get_search_center_uses_configured_when_accepted(monkeypatch):
+    cfg = make_cfg(Latitude='47.6', Longitude='-122.3')
+    monkeypatch.setattr('lib.config.query_user', lambda *a, **k: True)
+    no_input(monkeypatch)
+    assert sf.get_search_center(cfg) == (47.6, -122.3)
+
+
+def test_get_search_center_latitude_out_of_range_reprompts(monkeypatch, capsys):
+    cfg = make_cfg()
+    feed_input(monkeypatch, ['91', '47.6', '-122.3'])
+    assert sf.get_search_center(cfg) == (47.6, -122.3)
+    assert 'Latitude must be between -90 and 90' in capsys.readouterr().out
+
+
+def test_get_search_center_non_float_reprompts(monkeypatch, capsys):
+    cfg = make_cfg()
+    feed_input(monkeypatch, ['not-a-number', '47.6', '-122.3'])
+    assert sf.get_search_center(cfg) == (47.6, -122.3)
+    assert 'Latitude format is not valid' in capsys.readouterr().out
+
+
+def test_get_search_center_quit_returns_none(monkeypatch):
+    cfg = make_cfg()
+    feed_input(monkeypatch, ['q'])
+    assert sf.get_search_center(cfg) is None
+
+
+def test_get_search_center_invalid_configured_falls_back_to_manual(monkeypatch):
+    # Configured coords are out of range: query_user must NOT be consulted; the
+    # code falls straight through to the manual prompt.
+    cfg = make_cfg(Latitude='999', Longitude='-122.3')
+    monkeypatch.setattr('lib.config.query_user',
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError('query_user called')))
+    feed_input(monkeypatch, ['47.6', '-122.3'])
+    assert sf.get_search_center(cfg) == (47.6, -122.3)

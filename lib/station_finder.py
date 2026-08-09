@@ -37,7 +37,6 @@ this program. If not, see <http://www.gnu.org/licenses/>.
 from kivy.logger import Logger
 import requests
 import math
-import sys
 
 # Define required constants
 DEFAULT_TIMEOUT      = 20
@@ -129,9 +128,6 @@ def run_picker(config):
         success             True if a station was selected and applied
     """
 
-    # Lazy import to avoid a circular import at module load time
-    from lib import config as config_module
-
     # Read the WeatherFlow Personal Access Token (never logged)
     token = config['Keys']['WeatherFlow']
     if not token:
@@ -200,7 +196,7 @@ def run_picker(config):
         # Present the list and act on the user's choice
         widen = False
         while True:
-            choice = present_and_choose(candidates, center, radius_km, at_max_radius)
+            choice = present_and_choose(candidates, radius_km, at_max_radius)
             if choice is None:
                 return False
             if choice == 'widen':
@@ -450,15 +446,23 @@ def classify_devices(station):
         elif device_type == 'AR':
             ars.append(device)
 
-    # Prefer the first outdoor AIR, else the first AIR
+    # Choose the outdoor AIR. Prefer an AIR explicitly marked outdoor; if none is
+    # explicitly outdoor, fall back to any AIR that is NOT explicitly indoor
+    # (tolerating missing metadata: an AIR with no 'environment' key is treated
+    # as usable, as before). If the only AIR(s) are explicitly indoor, the
+    # station has NO usable outdoor AIR and must not be wired sky_air.
     out_air = None
     for air in ars:
         meta = air.get('device_meta', {}) or {}
         if meta.get('environment') == 'outdoor':
             out_air = air
             break
-    if out_air is None and ars:
-        out_air = ars[0]
+    if out_air is None:
+        for air in ars:
+            meta = air.get('device_meta', {}) or {}
+            if meta.get('environment') != 'indoor':
+                out_air = air
+                break
 
     # ST wins even if SK/AR are also present
     if st is not None:
@@ -469,6 +473,54 @@ def classify_devices(station):
         mode = None
 
     return {'mode': mode, 'devices': {'ST': st, 'SK': sk, 'AR_out': out_air}}
+
+
+def detail_is_complete(station_obj, classification):
+
+    """ Returns True only if station_obj carries every field the UNMODIFIED
+        upstream wizard (lib.config.write_config_key) will later dereference for
+        the device set this candidate would wire up.
+
+    Those dereferences happen AFTER the picker returns, outside its try/except,
+    so a public station missing any of them would KeyError and crash the wizard.
+    Treating an incomplete station as a failed lookup lets it be skipped silently
+    instead. Only the devices that would actually be selected are validated:
+    rejecting a Tempest station because some unrelated indoor SK/AR lacks 'agl'
+    would wrongly drop a perfectly usable station. Pure.
+    """
+
+    # Station-level fields read by upstream:
+    #   STATION['stations'][idx]['latitude'|'longitude'|'timezone'|'name']
+    #   STATION['stations'][idx]['station_meta']['elevation']
+    for field in ('name', 'timezone', 'latitude', 'longitude'):
+        if field not in station_obj:
+            return False
+    station_meta = station_obj.get('station_meta')
+    if not isinstance(station_meta, dict) or 'elevation' not in station_meta:
+        return False
+
+    # Device-level fields, only for the device(s) the picker will select. Every
+    # selected device needs 'device_id' and 'device_meta'['agl'] (the height
+    # lookup). ST and SK additionally have 'serial_number' read (TempestSN /
+    # SkySN); the outdoor AIR's serial is never read (OutAirSN reads 'agl' due to
+    # a documented upstream bug), so it is not required here.
+    if classification['mode'] == 'tempest':
+        required = [(classification['devices']['ST'], True)]
+    else:
+        required = [(classification['devices']['SK'], True),
+                    (classification['devices']['AR_out'], False)]
+    for device, needs_serial in required:
+        if not device:
+            return False
+        if 'device_id' not in device:
+            return False
+        meta = device.get('device_meta')
+        if not isinstance(meta, dict) or 'agl' not in meta:
+            return False
+        if needs_serial and 'serial_number' not in device:
+            return False
+
+    return True
 
 
 def build_candidates(stations, token, timeout):
@@ -503,6 +555,16 @@ def build_candidates(stations, token, timeout):
         station_obj = detail['stations'][0]
         classification = classify_devices(station_obj)
         if classification['mode'] is None:
+            continue
+
+        # Only keep stations that will cleanly complete the wizard. If the detail
+        # is missing a field upstream dereferences for the selected device set,
+        # treat it as a failed lookup (cache None) so it is silently skipped as a
+        # candidate rather than crashing the wizard later, and not re-fetched on a
+        # subsequent widen pass.
+        if not detail_is_complete(station_obj, classification):
+            _detail_cache[station_id] = None
+            Logger.warning('station_finder: station detail incomplete; skipping')
             continue
 
         name = (station.get('name')
@@ -550,7 +612,7 @@ def preflight_station(candidate, token, timeout):
     return True
 
 
-def present_and_choose(candidates, center, radius_km, at_max_radius):
+def present_and_choose(candidates, radius_km, at_max_radius):
 
     """ Prints the numbered candidate list and reads the user's selection.
 
