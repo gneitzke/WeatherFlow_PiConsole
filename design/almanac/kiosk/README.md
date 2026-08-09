@@ -3,11 +3,19 @@
 Shows the almanac HTML overlay (`design/almanac/console_live.html`) fullscreen on
 the Pi, fed live by the console. See `almanac-kiosk.sh` for the architecture.
 
+> **Starting from a blank card on a Pi 4 or Pi 5?** Follow [`PI4-SETUP.md`](PI4-SETUP.md)
+> first (OS choice, install, first-boot). This page is the deploy/manage/revert
+> reference for a Pi that already has the console installed.
+
+The launcher auto-detects the display server, so it runs on both an X11 desktop and
+a Wayland one (a fresh Bookworm Pi 4/5 boots Wayland). Set `WFP_BACKEND=x11|wayland`
+to override.
+
 ## What runs
 - **Data engine**: the console, headless on Xvfb `:1`, with `[Display] LayoutStyle = almanac`
   so `lib/almanac_emit.py` writes `/tmp/wfp_data/wx.json` (~2s). Never on the real screen.
 - **Server**: `serve.py` on `127.0.0.1:8137` serving the page + feed + a `/health` endpoint.
-- **Display**: `chromium-browser --kiosk` on `:0`, touch on, cursor hidden.
+- **Display**: `chromium --kiosk` on the real screen (X11 `:0` or the Wayland socket), touch on, cursor hidden.
 - **Watchdog**: `almanac-kiosk.sh` supervises all of the above: it relaunches any that
   die, restarts the engine if the feed goes stale (a hung websocket the classic UI would
   sit in), and re-checks for a blank/wedged render every ~2 min.
