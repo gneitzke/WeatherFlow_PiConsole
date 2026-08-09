@@ -93,6 +93,17 @@ The three connection modes are all WeatherFlow-only:
 | UDP + REST API | WeatherFlow device broadcasting on your local network |
 | UDP only | WeatherFlow device + serial number; no internet required after setup |
 
+**No hardware? Use a nearby public station.** Many WeatherFlow owners share
+their stations publicly, and the console can read one of them. During first-run
+setup (Websocket + REST mode), when you say you don't own hardware, the wizard
+offers to find nearby public stations: enter an approximate latitude and
+longitude and it lists the closest ones by distance, each with its hardware
+type. Pick one and it fills in the station and device IDs for you, so you get
+full live readings with no hardware of your own. All you need is a free
+WeatherFlow account and a Personal Access Token (see below). The station belongs
+to someone else, so the feed stops if its owner makes it private or takes it
+offline; re-run the wizard to choose another.
+
 **What works without a Tempest:** the Almanac's supplementary panels — air
 quality, weather forecasts, and astronomy — pull from public APIs keyed only on
 latitude and longitude. If you set those manually in `wfpiconsole.ini`, those
@@ -260,6 +271,12 @@ This includes your station ID and device IDs for your AIR, SKY, or TEMPEST
 modules. To find this information either open the WeatherFlow app or view your
 station page in a web browser. Click on the gear (settings) icon -> Stations ->
 [Station name] -> Status.
+
+If you don't own WeatherFlow hardware, the station-ID step (Websocket + REST
+mode) instead offers to search for a nearby public station. Answer yes, give an
+approximate latitude and longitude, and pick from the distance-sorted list; the
+console fills in the station and device IDs for you. See "Do I need a WeatherFlow
+Tempest?" above for the details and caveats.
 
 If all goes smoothly the console should automatically add the extra information
 it needs to your configuration file and then start running. You should not need
