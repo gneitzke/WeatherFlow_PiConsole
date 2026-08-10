@@ -10,6 +10,11 @@
 #   3. DISPLAY — chromium --kiosk shows the page fullscreen on the real display :0,
 #      with touch enabled and the cursor hidden.
 #
+#   HEADLESS MODE: set WFP_MODE=headless to run only steps 1-2 (engine + server)
+#   with NO local chromium — for a box with no screen, viewed from another device
+#   at http://<host>:PORT. Same self-healing watchdog, minus the display half.
+#   See almanac-headless.service and README.md.
+#
 # Prereq (one time):  sudo apt-get install -y xvfb   (chromium-browser is already present)
 # This launcher REPLACES the on-screen Kivy console: stop/disable wfpiconsole.service
 # and autostart this instead (see README.md). Revert = re-enable wfpiconsole.service.
@@ -21,6 +26,7 @@ WEB="${WFP_WEB:-$HOME/almanac_web}"                 # served dir (index.html + w
 DATA_DIR="/tmp/wfp_data"; DATA="$DATA_DIR/wx.json"
 PORT="${WFP_PORT:-8137}"; VDISP="${WFP_VDISP:-:1}"
 THEME="${WFP_THEME:-night}"                          # night (dark) | paper (light)
+MODE="${WFP_MODE:-kiosk}"                             # kiosk = on-screen chromium; headless = serve only, view remotely
 UDD="/tmp/almanac_chrome"                            # chromium profile (wiped each launch)
 HTTP_LOG="/tmp/almanac_http.log"
 
@@ -28,6 +34,9 @@ HTTP_LOG="/tmp/almanac_http.log"
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
 
+# The on-screen half below (backend detection, cold-boot display gate, chromium)
+# is skipped entirely when MODE=headless — there is no local screen to drive.
+if [ "$MODE" != headless ]; then
 # ── DISPLAY BACKEND — X11 (proven, the default) or Wayland ────────────────────
 # Older Pi OS installs (and any raspi-config "X11" choice) run LXDE-pi/openbox on
 # X11: the real screen is :0, gated by openbox + `xset q`. A fresh Raspberry Pi OS
@@ -84,6 +93,7 @@ else
   for _ in $(seq 1 30); do xset q          >/dev/null 2>&1 && break; sleep 1; done
 fi
 sleep 5
+fi   # end on-screen display setup (skipped when MODE=headless)
 
 # RESTART-SAFE: if a previous instance died uncleanly (SIGKILL, OOM), its Xvfb /
 # engine / server / chromium children are orphaned onto init and would collide
@@ -139,10 +149,12 @@ for _ in $(seq 1 45); do [ -s "$DATA" ] && break; sleep 1; done
 # stop the screen from blanking (kiosk has no working input). X11: xset. Wayland
 # has no xset — labwc/wayfire idle-blank is disabled via compositor config (see
 # design/almanac/kiosk/PI4-SETUP.md); chromium --kiosk also inhibits the idle.
-if [ "$BACKEND" = x11 ]; then
+if [ "$MODE" != headless ] && [ "${BACKEND:-}" = x11 ]; then
   xset s off -dpms s noblank 2>/dev/null || true
 fi
 
+CRPID=""                                             # defined even in headless so the watchdog guard is safe
+if [ "$MODE" != headless ]; then
 # ── chromium kiosk, with a self-healing watchdog ──────────────────────────────
 # Flags stay MINIMAL and use the REAL GPU (default). Do NOT add --disable-gpu
 # (software rendering can't composite on VC4 -> no window maps), nor
@@ -183,6 +195,7 @@ for attempt in 1 2 3 4; do
   fi
   echo "blank render on attempt $attempt — restarting chromium" >> /tmp/almanac_chrome.log
 done
+fi   # end chromium kiosk (skipped when MODE=headless)
 
 # keep the session alive; relaunch ANY critical process that dies (not just
 # chromium — a dead data engine or server used to leave the screen stale forever),
@@ -193,7 +206,7 @@ while true; do
   pgrep -f "Xvfb $VDISP" >/dev/null 2>&1 || { echo "Xvfb died — relaunching" >> "$CLOG"; launch_xvfb; sleep 2; }
   kill -0 "$ENGINE_PID" 2>/dev/null || { echo "data engine died — relaunching" >> "$CLOG"; launch_engine; }
   kill -0 "$SERVE_PID"  2>/dev/null || { echo "web server died — relaunching"  >> "$CLOG"; launch_server; }
-  if ! kill -0 "$CRPID" 2>/dev/null; then
+  if [ "$MODE" != headless ] && ! kill -0 "$CRPID" 2>/dev/null; then
     echo "chromium exited — relaunching" >> "$CLOG"
     launch_cr; sleep 12
   fi
@@ -220,7 +233,7 @@ while true; do
   fi
 
   loops=$((loops + 1))
-  if [ $((loops % 8)) -eq 0 ]; then                  # ~every 2 min (8 × 15s): alive-but-blank render
+  if [ "$MODE" != headless ] && [ $((loops % 8)) -eq 0 ]; then   # ~every 2 min (8 × 15s): alive-but-blank render
     polls_growing || { echo "render wedged — relaunching chromium" >> "$CLOG"; launch_cr; sleep 12; }
   fi
   sleep 15

@@ -1,0 +1,34 @@
+# systemd USER service for the almanac in HEADLESS mode — runs the console's data
+# engine + the web server with NO on-screen chromium, so a box with no display can
+# serve the live almanac to other devices on the network.
+#
+# Same launcher and same self-healing watchdog as almanac-kiosk.service (it
+# relaunches Xvfb / engine / server and restarts the engine if the feed goes
+# stale); WFP_MODE=headless just skips the chromium half. WFP_BIND=0.0.0.0 exposes
+# the page + wx.json on the LAN (that is the whole point here).
+#
+# Install (as the console user):
+#   mkdir -p ~/.config/systemd/user
+#   cp design/almanac/kiosk/almanac-headless.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now almanac-headless.service
+#   sudo loginctl enable-linger "$USER"          # start at boot without an interactive login
+# Then view http://<hostname>.local:8137 from any device on the LAN.
+#
+# Do NOT run this alongside almanac-kiosk.service: both drive the same data engine,
+# Xvfb :1, and port 8137. Pick one.
+[Unit]
+Description=Almanac weather (headless data engine + web server, no local display)
+After=default.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=%h/wfpiconsole/design/almanac/kiosk/almanac-kiosk.sh
+Restart=always
+RestartSec=3
+Environment=WFP_MODE=headless
+Environment=WFP_BIND=0.0.0.0
+
+[Install]
+WantedBy=default.target

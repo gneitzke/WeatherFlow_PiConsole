@@ -85,29 +85,33 @@ feed. Binding `0.0.0.0` also makes `wx.json` LAN-readable; leave it at the defau
 
 ## Run headless: no local screen, view from a laptop
 
-For a box with no monitor (a headless Pi, a spare server), skip the kiosk
-launcher. It drives a local display and would wait forever for one that never
-comes up. Run the two data pieces directly instead: a virtual display for the
-GUI-less engine, the engine, and the server.
+For a box with no monitor (a headless Pi, a spare server), run the launcher in
+**headless mode**: `WFP_MODE=headless` starts the data engine + web server with
+no chromium and no display gate, so it works with nothing plugged into the video
+out. The same watchdog still supervises the engine and server (including a
+restart if the feed goes stale), because that half never depended on a screen.
+
+One-time setup, then supervise it with the ready-made service:
 ```bash
 cd ~/wfpiconsole
-# the emitter only writes wx.json when the almanac layout is set:
+sudo apt-get install -y xvfb                        # headless Kivy still needs a virtual display
+# almanac layout so the emitter writes wx.json:
 sed -i 's/^LayoutStyle = .*/LayoutStyle = almanac/' wfpiconsole.ini \
   || sed -i '/^\[Display\]/a LayoutStyle = almanac' wfpiconsole.ini
-sudo apt-get install -y xvfb
 
-# 1. virtual display (headless Kivy still needs one, even with no panels)
-Xvfb :1 -screen 0 1024x600x24 -nolisten tcp &
-# 2. data engine, headless
-DISPLAY=:1 WFP_HEADLESS=1 KCFG_GRAPHICS_MAXFPS=10 venv/bin/python3 main.py &
-# 3. server, exposed to the LAN
-WFP_BIND=0.0.0.0 venv/bin/python3 design/almanac/kiosk/serve.py &
+mkdir -p ~/.config/systemd/user
+cp design/almanac/kiosk/almanac-headless.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now almanac-headless.service
+sudo loginctl enable-linger "$USER"                 # start at boot without an interactive login
 ```
 Then browse `http://<hostname>.local:8137` from your laptop, and check
-`curl -s <hostname>.local:8137/health` (status `ok`, `polls` climbing). To keep
-it up across reboots, the same systemd-user pattern as the kiosk applies; the only
-difference is you drop the chromium step. Ask if you want a ready-made headless
-service unit.
+`curl -s <hostname>.local:8137/health` (status `ok`, `dataAgeSec` small). The
+service sets `WFP_BIND=0.0.0.0`. Do not run it alongside `almanac-kiosk.service`;
+both drive the same engine, `Xvfb :1`, and port.
+
+To try it in the foreground first (no service), just run the launcher with the
+flag: `WFP_MODE=headless WFP_BIND=0.0.0.0 ./design/almanac/kiosk/almanac-kiosk.sh`.
 
 ## Run it on a laptop or PC instead of a Pi
 
