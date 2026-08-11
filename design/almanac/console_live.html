@@ -96,13 +96,19 @@
   html, body { height: 100%; }
   body {
     display: grid; place-items: center;
-    background: #4a4741;                /* bezel surround for judging only */
+    background: var(--paper);           /* letterbox matches the page so bars vanish */
+    overflow: hidden;                   /* clip any sub-pixel spill from the fit scale */
     font-family: var(--serif); color: var(--ink);
     -webkit-font-smoothing: antialiased;
   }
 
+  /* The design is a fixed 1024x600 artboard. `--fit` (set in JS to
+     min(vw/1024, vh/600)) zooms it to whatever panel it runs on — 1.0 on the
+     original 1024x600 screen, ~0.78 on an 800x480 DSI panel, up on a laptop.
+     `zoom` (not transform:scale) re-rasterizes at the target size so text stays
+     crisp, and shrinks the layout box so the body grid centers/letterboxes it. */
   .page {
-    position: relative; width: 1024px; height: 600px;
+    position: relative; width: 1024px; height: 600px; zoom: var(--fit, 1);
     background: var(--paper); overflow: hidden;
     padding: 9px 34px 6px;
     display: flex; flex-direction: column;
@@ -882,6 +888,16 @@
     /* tab bar is hidden by default (this kiosk has no working touch); show it
        only when ?tabs=1 is set */
     if (q.get("tabs") === "1" || q.has("tabs")) document.documentElement.dataset.tabs = "on";
+  })();
+
+  /* ———— fit the fixed 1024x600 artboard to the actual panel ———— */
+  (function () {
+    var W = 1024, H = 600, page = document.querySelector(".page");
+    function fit() {
+      page.style.setProperty("--fit", Math.min(window.innerWidth / W, window.innerHeight / H));
+    }
+    fit();
+    window.addEventListener("resize", fit);
   })();
 
   /* ════════════════════════════════════════════════════════════
