@@ -445,7 +445,12 @@
   .mast-moon  { display: inline-block; width: 16px; height: 16px; margin-left: 11px; vertical-align: -2px; }
   /* Sun & Sky ⇄ Moon & Sky (night swap); Air Quality stays below both */
   .sky-night  { display: none; }
-  .moon-row   { display: flex; align-items: center; gap: 15px; margin: 0 0 2px; }
+  /* night variant runs ~14px taller than the day one; with the outlook band up
+     it overflowed the tile and the AQI track painted over the band. Compacted:
+     smaller moon, tighter rows. */
+  .sky-night .moon-glyph { width: 46px; height: 46px; }
+  .sky-night .lrow { padding: 0; }
+  .moon-row   { display: flex; align-items: center; gap: 15px; margin: 0; }
   .moon-glyph { flex: none; }
   .moon-illum { display: flex; flex-direction: column; }
   .moon-illum .mi-num { font-size: 24px; font-weight: 800; line-height: 1; }
