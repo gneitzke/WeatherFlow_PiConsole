@@ -167,6 +167,21 @@ def _num(value, default=None):
     return default
 
 
+def _range_mid(value, default=None):
+    """ Midpoint of a formatted uncertainty range. The console core renders the
+    last strike distance as a +/-3 km band ("13-17"), never a bare number, so
+    every numeric consumer of it needs the middle of that band. Accepts a plain
+    number/numeric string too. Never raises. """
+    text = _text(value)
+    if text is None:
+        return default
+    parts = text.replace(u'\u2013', '-').split('-')
+    nums = [_num(p) for p in parts if _num(p) is not None]
+    if not nums:
+        return default
+    return sum(nums) / len(nums)
+
+
 def _text(value, default=None):
     """ Coerce a value into a clean display string: strips Kivy colour markup
     and blanks known placeholders. Never raises. """
@@ -845,7 +860,8 @@ class AlmanacEmitter:
             'rainMonth':    _num(_idx(Obs.get('MonthRain'), 0)),
             'rainYear':     _num(_idx(Obs.get('YearRain'), 0)),
             'rainUnit':     _text(_cfg(config, 'Units', 'Precip')),
-            'rainRate':     _num(_idx(Obs.get('RainRate'), 0)),   # index 0 is unit-converted (in/hr); [3] was raw mm/hr
+            'rainRate':     _num(_idx(Obs.get('RainRate'), 0)),   # index 0 is unit-converted (in/hr); [3] is raw mm/hr
+            'rainRateMm':   _num(_idx(Obs.get('RainRate'), 3)),   # raw mm/hr - drives the intensity-banded gauge
             'rainStatus':   _text(_idx(Obs.get('RainRate'), 2)),
             'drySpellDays': None,   # not reliably sourced - see report
             'lastRainDate': None,   # not sourced - no last-rain date/amount is tracked
@@ -892,10 +908,15 @@ class AlmanacEmitter:
 
             # Lightning
             'lightningActive':   lightning_active,
-            'lightningDist':     _text(_idx(Obs.get('StrikeDist'), 0)),
+            'lightningDist':     _text(_idx(Obs.get('StrikeDist'), 0)),   # the core's +/-3 km RANGE text, e.g. "13-17"
+            'lightningDistNum':  _range_mid(_idx(Obs.get('StrikeDist'), 0)),  # its midpoint, for ring geometry / big-number readouts
+            'lightningDistUnit': _text(_idx(Obs.get('StrikeDist'), 1)),
             'lightningSinceSec': lightning_since_sec,
-            'lightning3min':     None,   # not sourced - only 3hr/day/month/year counts exist
-            'lightning30min':    None,   # not sourced
+            # The core tracks strike FREQUENCY (/min) and a rolling 3-HOUR count -
+            # there is no 3-min/30-min bucket anywhere in the data path, so the
+            # panel reports what the station actually measures.
+            'lightningRate':     _num(_idx(Obs.get('StrikeFreq'), 0)),
+            'lightning3hr':      _num(_idx(Obs.get('Strikes3hr'), 0)),
             'lightningToday':    _num(_idx(Obs.get('StrikesToday'), 0)),
             'lightningLast':     _since_ago_text(strike_delta_t),
 

@@ -32,6 +32,15 @@ def test_rain_rate_uses_index0_not_index3(make_emitter):
     assert payload['rainRate'] != 1.27
 
 
+def test_rain_rate_mm_is_the_raw_index3(make_emitter):
+    # The intensity-banded gauge is defined in mm/hr (the units the console core
+    # thresholds rain in), so the payload carries the raw [3] alongside the
+    # display value. The two must NOT be confused - that was the 25x bug.
+    payload = make_emitter(scn.heavy_rain())._build_payload()
+    assert payload['rainRateMm'] == 1.27
+    assert payload['rainRate'] == 0.05
+
+
 def test_rain_status_and_unit(make_emitter):
     payload = make_emitter(scn.heavy_rain())._build_payload()
     assert payload['rainStatus'] == 'Heavy'
@@ -42,7 +51,7 @@ def test_rain_status_and_unit(make_emitter):
 def test_lightning_fields_from_obs(make_emitter):
     payload = make_emitter(scn.strike_active())._build_payload()
     assert payload['lightningActive'] is True
-    assert payload['lightningDist'] == '5'
+    assert payload['lightningDist'] == '2-8'
     assert payload['lightningSinceSec'] == 720.0
     assert payload['lightningToday'] == 3.0
     assert payload['lightningLast'] == '12 minutes ago'
@@ -61,6 +70,7 @@ def test_all_none_never_raises(make_emitter):
     assert payload['temp'] is None
     assert payload['windSpd'] is None
     assert payload['rainRate'] is None
+    assert payload['rainRateMm'] is None
     assert payload['lightningActive'] is False
     assert payload['slpSeries'] == []            # no api_data -> empty series
     json.dumps(payload, allow_nan=False)
@@ -151,3 +161,33 @@ def test_sun_fraction_after_sunset_clamps():
 def test_sun_fraction_no_tz_is_none():
     frac, daylight, till = ae.AlmanacEmitter._sun_fraction('06:00', '20:00', datetime.now(), None)
     assert (frac, daylight, till) == (None, None, None)
+
+
+def test_lightning_distance_range_yields_a_number(make_emitter):
+    # The core only ever renders strike distance as a +/-3 km RANGE ("2-8"), so
+    # the payload has to carry a numeric midpoint too - without it every numeric
+    # consumer in the overlay (ring radius, big-number readout) silently fell
+    # back to a dash whenever lightning was actually detected.
+    payload = make_emitter(scn.strike_active())._build_payload()
+    assert payload['lightningDistNum'] == 5.0
+    assert payload['lightningDistUnit'] == 'miles'
+
+
+def test_range_mid_handles_the_shapes_the_core_emits():
+    from lib.almanac_emit import _range_mid
+    assert _range_mid('13-17') == 15.0
+    assert _range_mid('0-3') == 1.5
+    assert _range_mid('15') == 15.0
+    assert _range_mid(u'13\u201317') == 15.0     # en dash
+    assert _range_mid('-') is None               # placeholder
+    assert _range_mid(None) is None
+
+
+def test_lightning_counts_report_what_the_core_measures(make_emitter):
+    # There is no 3-min/30-min strike bucket in the console data path, so those
+    # two rows were permanently dashed. The panel now carries the frequency and
+    # the rolling 3-hour count, which the core does track.
+    payload = make_emitter(scn.strike_active())._build_payload()
+    assert payload['lightningRate'] == 2.5
+    assert payload['lightning3hr'] == 11
+    assert payload['lightningToday'] == 3

@@ -355,12 +355,14 @@
   .dial-face.wind { fill: var(--verdigris-tint); }
   .arc-fill    { fill: var(--brass-tint); }
   .gauge-fill  { fill: var(--water-tint); }
-  .gauge-col   { fill: var(--water); opacity: 0.30;      /* rain tube fills as rate climbs */
+  .gauge-col   { fill: var(--water); opacity: 0.42;      /* rain tube fills as rate climbs */
                  transform-box: fill-box; transform-origin: 50% 100%; transition: transform 0.7s ease; }
   .gauge-ptr-g { transition: transform 0.7s ease; }      /* pointer rides the water level */
   @media (prefers-reduced-motion: reduce) { .gauge-col, .gauge-ptr-g { transition: none; } }
   #raingauge .tick       { stroke-width: 2.6; }
-  #raingauge .tick.minor { stroke-width: 1.5; }
+  /* band graduations sit over the water column so the level can be read
+     against the named intensity steps, not just as a bare height */
+  #raingauge .rain-band  { stroke: var(--ink); stroke-width: 1; opacity: 0.28; }
   /* two-tone wind-direction needle: bright accent north tip, light tail — high
      contrast on the dark dial and the direction reads at a glance */
   .needle-n { fill: var(--accent); }
@@ -431,8 +433,8 @@
   .sun-ray     { stroke: var(--brass); stroke-width: 1; }
   .arc-tick    { stroke: var(--rule); stroke-width: 1.4; }
   .arc-lbl     { fill: var(--ink-soft); font-size: 22px; font-weight: 800; letter-spacing: 0.18em; }
-  .gauge-lbl   { fill: var(--ink-soft); font-size: 14.5px; font-weight: 800; }
   .gauge-cap   { fill: var(--ink-soft); font-size: 12px; font-weight: 800; letter-spacing: 0.12em; }
+  .gauge-cap.sm { font-size: 9px; letter-spacing: 0.06em; }   /* "INTENSITY" has to fit the tube width */
   .gauge-ptr   { fill: var(--water); }
   #raingauge   { transition: opacity 0.85s ease; }               /* quiet furniture when dry, */
   #raingauge.is-dry { opacity: 0.5; }                            /* alight the moment it rains */
@@ -724,8 +726,8 @@
               <div class="p-value"><span class="n" id="bolt-dist">6</span><span class="u">mi away</span></div>
               <div class="p-sub">Last strike <b id="bolt-since">0:00</b> ago</div>
               <div class="ledger">
-                <div class="lrow"><span class="k">Last 3 min</span><span class="dots"></span><span class="v" id="bolt-3min">1</span></div>
-                <div class="lrow"><span class="k">Last 30 min</span><span class="dots"></span><span class="v" id="bolt-30min">1</span></div>
+                <div class="lrow"><span class="k">Rate</span><span class="dots"></span><span class="v" id="bolt-rate">1</span></div>
+                <div class="lrow"><span class="k">Last 3 hrs</span><span class="dots"></span><span class="v" id="bolt-3hr">1</span></div>
                 <div class="lrow"><span class="k">Today</span><span class="dots"></span><span class="v" id="bolt-today">1</span></div>
               </div>
             </div>
@@ -773,8 +775,8 @@
       <div>
         <div class="bignum"><span data-k="lightningToday">0</span> <small>STRIKES TODAY</small></div>
         <div class="sc-ledger">
-          <div class="lrow"><span class="k">Last 3 min</span><span class="dots"></span><span class="v" data-k="lightning3min">0</span></div>
-          <div class="lrow"><span class="k">Last 30 min</span><span class="dots"></span><span class="v" data-k="lightning30min">0</span></div>
+          <div class="lrow"><span class="k">Rate</span><span class="dots"></span><span class="v" data-k="lightningRate">0</span></div>
+          <div class="lrow"><span class="k">Last 3 hrs</span><span class="dots"></span><span class="v" data-k="lightning3hr">0</span></div>
           <div class="lrow"><span class="k">Last detected</span><span class="dots"></span><span class="v"><span data-k="lightningLast">3 days ago</span> <small id="lt-lastdist">≈ 18 mi</small></span></div>
         </div>
         <div class="sc-note" id="lt-note">No lightning detected within 40 miles in the last three hours.</div>
@@ -976,32 +978,53 @@
     baroBar.marker.style.transform = "translateX(" + x(1022.1).toFixed(1) + "px)";
   })();
 
-  /* ———— rain-rate gauge · vertical tube, 0–1 in/hr · water fill + pointer ———— */
-  var rainPtr, rainFill, rainGeom = { top: 22, bot: 136, x1: 24 };
+  /* ———— rain-rate gauge · vertical tube, INTENSITY-banded · water fill + pointer ————
+     The tube used to be a linear 0–1 in/hr scale, which never read: rain rate is
+     log-distributed, and on a linear axis everything through "Moderate Rain"
+     (< 0.16 in/hr) sits in the bottom 16% of the tube — a 1–2px sliver of 30%
+     water. So the axis is now the console core's OWN named intensity bands
+     (lib/derived_variables.rain_rate, mm/hr), each given an equal fifth of the
+     tube and interpolated logarithmically inside the band. A drizzle now reads
+     a quarter of the way up, a downpour three quarters, and the water level
+     agrees with the intensity word printed beside it. */
+  var RAIN_BANDS = [0.25, 1.0, 4.0, 16.0, 50.0];   /* mm/hr band ceilings; above 50 = Extreme */
+  var RAIN_MM_PER = { in: 25.4, cm: 10, mm: 1 };   /* fallback when rainRateMm is absent */
+
+  /* mm/hr -> 0..1 up the tube. The first band is linear (log(0) is -Infinity);
+     every band above it is log-interpolated between its own floor and ceiling. */
+  function rainFrac(mm) {
+    if (!isNum(mm) || mm <= 0) { return 0; }
+    var seg = 1 / RAIN_BANDS.length;
+    if (mm <= RAIN_BANDS[0]) { return (mm / RAIN_BANDS[0]) * seg; }
+    for (var i = 1; i < RAIN_BANDS.length; i++) {
+      var lo = RAIN_BANDS[i - 1], hi = RAIN_BANDS[i];
+      if (mm <= hi) { return (i + Math.log(mm / lo) / Math.log(hi / lo)) * seg; }
+    }
+    return 1;
+  }
+
+  var rainPtr, rainFill, rainGeom = { top: 22, bot: 136, x1: 15 };
   (function () {
     var svg = $("raingauge");
-    var top = rainGeom.top, bot = rainGeom.bot, x1 = rainGeom.x1, x2 = 48, cx = (x1 + x2) / 2;
+    var top = rainGeom.top, bot = rainGeom.bot, x1 = rainGeom.x1, x2 = 57, cx = (x1 + x2) / 2;
     el("text", { class: "gauge-cap", x: cx, y: 10, "text-anchor": "middle" }, svg).textContent = "RATE";
-    el("text", { class: "gauge-cap", x: cx, y: 152, "text-anchor": "middle" }, svg).textContent = "IN/HR";
+    el("text", { class: "gauge-cap sm", x: cx, y: 152, "text-anchor": "middle" }, svg).textContent = "INTENSITY";
     el("rect", { class: "gauge-fill", x: x1, y: top, width: x2 - x1, height: bot - top }, svg);
     /* full-height fill scaled from the bottom (scaleY) so the water level eases */
     rainFill = el("rect", { class: "gauge-col", x: x1 + 1, y: top, width: x2 - x1 - 2, height: bot - top }, svg);
     rainFill.style.transform = "scaleY(0)";
     el("line", { class: "tick", x1: x1, y1: top, x2: x1, y2: bot }, svg);
     el("line", { class: "tick", x1: x2, y1: top, x2: x2, y2: bot }, svg);
-    for (var v = 0; v <= 20; v++) {
-      var y = bot - (v / 20) * (bot - top);
-      var major = v % 5 === 0;
-      el("line", { class: "tick" + (major ? "" : " minor"),
-                   x1: x2, y1: y, x2: x2 + (major ? 8 : 4.5), y2: y }, svg);
-      if (major) {
-        var lbl = ["0", "¼", "½", "¾", "1"][v / 5];
-        el("text", { class: "gauge-lbl", x: 59, y: y + 4 }, svg).textContent = lbl;
-      }
+    /* graduations ACROSS the tube, one per band boundary — the five equal steps
+       are V.LIGHT · LIGHT · MODERATE · HEAVY · V.HEAVY, topping out at EXTREME.
+       Drawn over the water so you can read which band the level has reached. */
+    for (var v = 1; v < RAIN_BANDS.length; v++) {
+      var y = bot - (v / RAIN_BANDS.length) * (bot - top);
+      el("line", { class: "rain-band", x1: x1, y1: y, x2: x2 + 6, y2: y }, svg);
     }
     rainPtr = el("g", { class: "gauge-ptr-g" }, svg);              /* group rides the water level */
     el("polygon", { class: "gauge-ptr",
-      points: (x1 - 3) + "," + bot + " " + (x1 - 14) + "," + (bot - 7.5) + " " + (x1 - 14) + "," + (bot + 7.5) }, rainPtr);
+      points: (x1 - 2) + "," + bot + " " + (x1 - 13) + "," + (bot - 7.5) + " " + (x1 - 13) + "," + (bot + 7.5) }, rainPtr);
   })();
 
   /* ———— 24-hour barograph — pressure-trend shape, auto-scaled to its own range ———— */
@@ -1116,7 +1139,7 @@
     sunrise: String, sunset: String,
     moonPhase: String, moonIllum: r0,
     moonrise: String, moonset: String, nextFull: String, nextNew: String,
-    lightning3min: r0, lightning30min: r0, lightningToday: r0, lightningLast: String,
+    lightningRate: f1, lightning3hr: r0, lightningToday: r0, lightningLast: String,
     sagerSky: String
   };
 
@@ -1273,12 +1296,19 @@
       r.classList.toggle("on", isNum(data.slp) && slp >= r._lo && (slp < r._hi || r._hi === 1050));
     });
 
-    /* RAIN water fill + pointer 0..1 in/hr; dim the whole gauge when bone-dry so
-       it reads as quiet furniture and lights up the moment it rains */
+    /* RAIN water fill + pointer on the intensity scale; dim the whole gauge when
+       bone-dry so it reads as quiet furniture and lights up the moment it rains.
+       Prefer the emitter's raw mm/hr (rainRateMm) — the bands are defined in
+       mm/hr — and fall back to converting the display value by its own unit so
+       an older emitter payload still drives the gauge. */
+    var rainMm = isNum(data.rainRateMm) ? data.rainRateMm
+               : (isNum(data.rainRate)
+                    ? data.rainRate * (RAIN_MM_PER[data.rainUnit] || 25.4)
+                    : null);
     var dryGauge = (!isNum(data.rainRate) || data.rainRate === 0) &&
                    (!isNum(data.rainToday) || data.rainToday === 0);
     $("raingauge").classList.toggle("is-dry", dryGauge);
-    var rr = isNum(data.rainRate) ? clamp(data.rainRate, 0, 1) : 0;
+    var rr = clamp(rainFrac(rainMm), 0, 1);
     var rise = rr * (rainGeom.bot - rainGeom.top);
     rainFill.style.transform = "scaleY(" + rr.toFixed(3) + ")";   /* water level eases (CSS transition) */
     rainFill.style.opacity = isNum(data.rainRate) ? "" : "0";
@@ -1522,9 +1552,14 @@
       $("lt-note").textContent = active
         ? "Lightning is being detected near the station right now."
         : "No lightning detected within 40 miles in the last three hours.";
-      if (isNum(data.lightningDist)) {
-        $("lt-lastdist").textContent = "≈ " + Math.round(data.lightningDist) + " mi";
-        var rr = clamp(data.lightningDist / 30 * 75, 6, 78);
+      /* The core reports strike distance as a +/-3 km RANGE string ("13-17"),
+         never a bare number, so the geometry rides lightningDistNum (its
+         midpoint) while the readout keeps the honest range. */
+      var dnum = isNum(data.lightningDistNum) ? data.lightningDistNum : null;
+      var dunit = ({ miles: "mi", km: "km" })[data.lightningDistUnit] || "mi";
+      if (dnum !== null) {
+        $("lt-lastdist").textContent = "≈ " + (data.lightningDist || Math.round(dnum)) + " " + dunit;
+        var rr = clamp(dnum / 30 * 75, 6, 78);
         window.__ltRing.setAttribute("r", rr.toFixed(1));
         window.__ltRing.setAttribute("opacity", active ? "0.75" : "0.45");
       } else {
@@ -1536,15 +1571,15 @@
 
       if (active) {
         setActive(true);
-        $("bolt-dist").textContent  = isNum(data.lightningDist) ? Math.round(data.lightningDist) : DASH;
+        $("bolt-dist").textContent  = (dnum !== null) ? Math.round(dnum) : DASH;
         $("bolt-since").textContent = isNum(data.lightningSinceSec) ? fmtSince(data.lightningSinceSec) : DASH;
-        $("bolt-3min").textContent  = isNum(data.lightning3min) ? data.lightning3min : DASH;
-        $("bolt-30min").textContent = isNum(data.lightning30min) ? data.lightning30min : DASH;
+        $("bolt-rate").textContent  = isNum(data.lightningRate) ? data.lightningRate.toFixed(1) + "/min" : DASH;
+        $("bolt-3hr").textContent   = isNum(data.lightning3hr) ? data.lightning3hr : DASH;
         $("bolt-today").textContent = isNum(data.lightningToday) ? data.lightningToday : DASH;
-        flagtext.textContent = "Lightning · " + (isNum(data.lightningDist) ? Math.round(data.lightningDist) : DASH) + " mi";
+        flagtext.textContent = "Lightning · " + ((dnum !== null) ? Math.round(dnum) : DASH) + " " + dunit;
         clearMini();
-        if (isNum(data.lightningDist)) {
-          var r = clamp(data.lightningDist / 30 * mini.maxR, 4, mini.maxR);
+        if (dnum !== null) {
+          var r = clamp(dnum / 30 * mini.maxR, 4, mini.maxR);
           el("circle", { class: "strike-ring", cx: mini.cx, cy: mini.cy, r: r.toFixed(1), opacity: 0.8 }, mini.layer);
         }
       } else {
@@ -1583,8 +1618,8 @@
 
         $("bolt-dist").textContent = dist;
         $("bolt-since").textContent = fmtSince(since);
-        $("bolt-3min").textContent = recent;
-        $("bolt-30min").textContent = seen.length;
+        $("bolt-rate").textContent = (recent / 3).toFixed(1) + "/min";
+        $("bolt-3hr").textContent = seen.length;
         $("bolt-today").textContent = seen.length;
         flagtext.textContent = "Lightning · " + dist + " mi";
 

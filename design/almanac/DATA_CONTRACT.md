@@ -37,9 +37,11 @@ the HTML shows an em-dash for null. Emitter converts from the app's
   "slp24High": 1022.1, "slp24HighTime": "08:20",
   "slp24Low": 1020.2,  "slp24LowTime": "00:00", "slpOutlook": "Unchanged",
 
-  // Rainfall  (rate drives the tube pointer 0..1 in/hr)
+  // Rainfall  (rainRateMm drives the tube: mm/hr mapped onto the console core's
+  //  own intensity bands 0.25/1/4/16/50 mm/hr, each an equal fifth of the tube.
+  //  rainRate is the same rate in display units, for the printed readout.)
   "rainToday": 0.00, "rainYest": 0.00, "rainMonth": 0.15, "rainYear": 40.0,
-  "rainUnit": "in", "rainRate": 0, "rainStatus": "Currently Dry",
+  "rainUnit": "in", "rainRate": 0, "rainRateMm": 0, "rainStatus": "Currently Dry",
   "drySpellDays": 12, "lastRainDate": "Sun 19 Jul", "lastRainAmt": 0.11,
 
   // Sun & UV  (sunFrac 0..1 = elapsed fraction of daylight → sun position on the arc)
@@ -72,8 +74,13 @@ the HTML shows an em-dash for null. Emitter converts from the app's
   "moonrise": "22:14", "moonset": "09:38", "nextFull": "Aug 8", "nextNew": "Aug 23",
 
   // Lightning  (distance only — no bearing; null when quiet)
-  "lightningActive": false, "lightningDist": null, "lightningSinceSec": null,
-  "lightning3min": 0, "lightning30min": 0, "lightningToday": 0,
+  // lightningDist is the core's +/-3 km RANGE text ("13-17"); lightningDistNum is
+  // its midpoint, which is what the ring geometry and big-number readouts use.
+  "lightningActive": false, "lightningDist": null, "lightningDistNum": null,
+  "lightningDistUnit": "miles", "lightningSinceSec": null,
+  // lightningRate = strikes/min (the core's StrikeFreq); lightning3hr = the
+  // rolling 3-hour count. There is no 3-min/30-min bucket in the data path.
+  "lightningRate": 0, "lightning3hr": 0, "lightningToday": 0,
   "lightningLast": "3 days ago",
 
   // Sager

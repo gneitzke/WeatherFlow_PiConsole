@@ -10,8 +10,8 @@ Shapes that matter (from lib/almanac_emit._build_payload):
   outTemp      [value, unit-glyph]                 -> temp, tempUnit
   WindSpd      [spd, unit, force, force, descr]    -> windSpd, windStatus(descr, [4])
   WindDir      [deg, '', cardinal]                 -> windDir, windCardinal
-  RainRate     [in/hr, unit, status, raw_mm]       -> rainRate([0]!), rainStatus([2])
-  StrikeDist   [dist, unit]                         -> lightningDist([0])
+  RainRate     [in/hr, unit, status, raw_mm]       -> rainRate([0]!), rainStatus([2]), rainRateMm([3])
+  StrikeDist   [range_text, unit]                   -> lightningDist([0]), lightningDistNum(midpoint)
   StrikeDeltaT [n, unit, n2, unit2, epoch_sec]      -> lightningLast([0]+[1]), sinceSec([4])
   StrikesToday [count]                              -> lightningToday
 """
@@ -31,8 +31,12 @@ def strike_active():
         'outTemp':      ['64.0', '℉'],
         'WindSpd':      ['5.0', 'mph', '2', '2', 'Light Breeze'],
         'WindDir':      ['210', '', 'SSW'],
-        'StrikeDist':   ['5', 'miles'],
+        # the core formats strike distance as a +/-3 km uncertainty RANGE,
+        # never a bare number - see observation_format 'StrikeDistance'
+        'StrikeDist':   ['2-8', 'miles'],
         'StrikeDeltaT': ['12', 'minutes', '', '', 720.0],   # [4]=720 s ago
+        'StrikeFreq':   ['2.5', '/min'],
+        'Strikes3hr':   ['11'],
         'StrikesToday': ['3'],
     })
     return s
