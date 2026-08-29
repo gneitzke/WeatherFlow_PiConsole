@@ -27,6 +27,10 @@ the HTML shows an em-dash for null. Emitter converts from the app's
   "conditions": "Clear & Sunny",           // Met['Conditions']
   "conditionsNote": "Clear until 02:00 tomorrow",
   "fcHour": "10:00", "fcWind": "0 mph NW", "fcPrecipPct": 0, "fcDailyPct": 0,
+  // 7-day outlook (Open-Meteo daily, hourly refresh; [] hides the band).
+  // hi/lo are whole degrees in the console's own temp unit; code is the WMO
+  // weather code; pp is max precipitation probability for the day.
+  "fcDaily": [{"day": "SAT", "hi": 64, "lo": 54, "code": 95, "pp": 95}],
 
   // Wind  (dir in degrees; cardinal string; needle rotates to dir)
   "windSpd": 0.9, "windUnit": "mph", "windAvg": 0.1, "windGust": 2.9, "windMax": 4.3,

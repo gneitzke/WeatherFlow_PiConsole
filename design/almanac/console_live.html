@@ -110,7 +110,7 @@
   .page {
     position: relative; width: 1024px; height: 600px; zoom: var(--fit, 1);
     background: var(--paper); overflow: hidden;
-    padding: 9px 34px 6px;
+    padding: 7px 34px 4px;
     display: flex; flex-direction: column;
   }
   /* Paper-grain disabled on the kiosk: the feTurbulence SVG filter blanks the
@@ -148,7 +148,7 @@
   .mast-stale.on { opacity: 0.85; }
 
   /* ———— Screens ———— */
-  .screen { flex: 1 1 auto; min-height: 0; display: none; flex-direction: row; padding-top: 6px; }
+  .screen { flex: 1 1 auto; min-height: 0; display: none; flex-direction: row; padding-top: 3px; }
   .screen.active { display: flex; }
 
   /* ═════════ MAIN: OBSERVATIONS ═════════ */
@@ -172,7 +172,7 @@
   .trend-main b { color: var(--accent); font-weight: 800; }
   .trend-sub { font-family: var(--sans); font-size: 14.5px; color: var(--ink-soft); margin-top: 2px; }
 
-  .range { margin-top: 8px; }
+  .range { margin-top: 5px; }
   .range-labels { display: flex; justify-content: space-between; align-items: baseline;
     font-family: var(--sans); font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
     color: var(--ink-soft); margin-bottom: 4px; }
@@ -226,7 +226,7 @@
   }
 
   .p-head { display: flex; justify-content: space-between; align-items: baseline;
-    border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 8px; }
+    border-bottom: 1px solid var(--rule); padding-bottom: 4px; margin-bottom: 5px; }
   .p-title { font-family: var(--sans); font-size: 15px; font-weight: 800; letter-spacing: 0.20em; text-transform: uppercase; color: var(--ink); }
   .p-status { font-family: var(--sans); font-size: 15px; font-weight: 800; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ink-soft); }
 
@@ -273,14 +273,14 @@
   .lrow.out .v.word { flex: 1; min-width: 0; text-align: right; }
 
   /* Till sunset — sits right under the sun arc / rise-set */
-  .tillset { border-top: 1px solid var(--rule-faint); margin-top: 5px; padding-top: 4px; }
+  .tillset { border-top: 1px solid var(--rule-faint); margin-top: 2px; padding-top: 2px; }
   /* UV + Air Quality blocks (enlarged for the 7" screen) */
-  .uv { margin-top: 5px; }
-  .uv-line { display: flex; align-items: baseline; gap: 8px; }
+  .uv { margin-top: 2px; }
+  .uv-line { display: flex; align-items: baseline; gap: 8px; line-height: 1.15; }
   .uv-line .k { font-family: var(--sans); font-size: 16px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-soft); }
-  .uv-line .n { font-size: 28px; font-weight: 800; }
+  .uv-line .n { font-size: 26px; font-weight: 800; }
   .uv-line .w { font-family: var(--sans); font-size: 16.5px; color: var(--ink); font-weight: 800; letter-spacing: 0.05em; }
-  .uv-track { position: relative; height: 14px; margin-top: 2px; }
+  .uv-track { position: relative; height: 13px; margin-top: 1px; }
   /* Apple-Watch-style WHO UV scale: green(low)→amber→orange→red→violet(extreme) */
   .uv-bar { position: absolute; left: 0; right: 0; top: 2.5px; height: 9px; border-radius: 5px;
     background: linear-gradient(to right, #4E9E5B 5%, #D8BE44 32%, #E28C33 56%, #C43E2B 80%, #8E5AA8 100%); }
@@ -291,7 +291,7 @@
   .uv-ends { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 12px; color: var(--ink-soft); letter-spacing: 0.1em; margin-top: 2px; }
 
   /* Air Quality — EPA US-AQI colour bands (Good→Hazardous), mirrors the UV track */
-  .aq { margin-top: 2px; }
+  .aq { margin-top: 0; }
   /* keep the AQI line on ONE row even for long categories ("Very Unhealthy") */
   .aq .uv-line { flex-wrap: nowrap; min-width: 0; }
   .aq .uv-line .k { letter-spacing: 0.05em; white-space: nowrap; }
@@ -370,10 +370,10 @@
   .hub         { fill: var(--ink); }
 
   /* ———— barometer zone bar · stick-barometer scale, 950–1050 mb ———— */
-  .baro .p-value .n { font-size: 40px; }          /* dial gone: digits get the space */
+  .baro .p-value .n { font-size: 38px; }          /* dial gone: digits get the space */
   /* centre the panel content so freed space sits at the edges, not mid-panel */
   .baro .p-col  { justify-content: center; }
-  .baro .ledger { margin-top: 7px; border-top: none; padding-top: 0; }  /* barograph is the divider now */
+  .baro .ledger { margin-top: 4px; border-top: none; padding-top: 0; }  /* barograph is the divider now */
   #barobar   { width: 100%; height: auto; display: block; margin-top: 4px; }
   /* four pigment bands, severity left→right: vermilion / brass / verdigris / water.
      One translucent opacity for the field, a brighter one for the zone you're in. */
@@ -436,7 +436,7 @@
   .gauge-cap   { fill: var(--ink-soft); font-size: 12px; font-weight: 800; letter-spacing: 0.12em; }
   .gauge-cap.sm { font-size: 9px; letter-spacing: 0.06em; }   /* "INTENSITY" has to fit the tube width */
   .gauge-ptr   { fill: var(--water); }
-  #raingauge   { transition: opacity 0.85s ease; }               /* quiet furniture when dry, */
+  #raingauge   { display: block; transition: opacity 0.85s ease; }               /* quiet furniture when dry, */
   #raingauge.is-dry { opacity: 0.5; }                            /* alight the moment it rains */
   @media (prefers-reduced-motion: reduce) { #raingauge { transition: none; } }
   .moon-base   { fill: var(--moon-lit); stroke: var(--rule); stroke-width: 1; }
@@ -449,7 +449,7 @@
   .strike-ring { fill: none; stroke: var(--brass); stroke-width: 1.1; }
   .station-dot { fill: var(--ink); }
 
-  .sun-times { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 15.5px; color: var(--ink-soft); margin: 1px 2px 0; letter-spacing: 0.03em; }
+  .sun-times { display: flex; justify-content: space-between; font-family: var(--sans); font-size: 15px; color: var(--ink-soft); margin: 0 2px; letter-spacing: 0.03em; }
   .sun-times b { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
 
   /* ═════════ SECONDARY SCREENS ═════════ */
@@ -484,6 +484,33 @@
 
   /* ———— Footer tab bar ———— */
   /* tab bar hidden by default (no working touch); ?tabs=1 restores it */
+  /* ———— 7-day outlook band · Open-Meteo · range bars on one shared scale ————
+     Locked-scale range bars (each day's lo–hi drawn on the WEEK's min→max axis)
+     so relative warmth is visible at a glance — a number row can't show the
+     Saturday cool-down, a shared axis can. Drawn with divs on integer pixels:
+     at 170ppi / 1x there is no sub-pixel, so rounded geometry = sharp edges. */
+  .outlook { flex: 0 0 auto; padding: 2px 2px 0; }
+  .outlook .ol-rule { border-top: 1px solid var(--ink); opacity: 0.85; }
+  .ol-row { display: flex; padding-top: 3px; }
+  .od { flex: 1 1 0; min-width: 0; text-align: center; padding: 0 6px; }
+  .od + .od { border-left: 1px solid var(--rule); }
+  .od-day { font-family: var(--sans); font-size: 11px; font-weight: 800;
+            letter-spacing: 0.14em; color: var(--ink-soft); white-space: nowrap; }
+  .od.today .od-day { color: var(--accent); }
+  .od-day svg { vertical-align: -1px; margin-left: 4px; }
+  .od-hi { font-size: 21px; font-weight: 700; line-height: 1.05; font-variant-numeric: lining-nums; }
+  .od-hi .dg { font-size: 14px; vertical-align: 6px; margin-left: 1px; color: var(--ink-soft); }
+  /* range bar: full-width track, fill spans lo→hi on the shared week scale */
+  .od-bar { position: relative; height: 5px; margin: 2px 4px; background: var(--rule-faint); }
+  .od-bar .fill { position: absolute; top: 0; bottom: 0; background: var(--brass); opacity: 0.72; }
+  .od-bar .now  { position: absolute; top: -2px; width: 9px; height: 9px; border-radius: 50%;
+                  background: var(--accent); border: 1.5px solid var(--paper); }
+  .od-lo { font-family: var(--sans); font-size: 14px; font-weight: 600; line-height: 1.15; color: var(--ink-soft);
+           font-variant-numeric: lining-nums; white-space: nowrap; }
+  .od-lo .pp { font-size: 12px; line-height: 1; font-weight: 700; color: var(--water); margin-left: 6px; }
+  .ol-glyph { stroke: var(--water); stroke-width: 1.6; stroke-linecap: round; fill: none; }
+  .ol-glyph.storm { stroke: none; fill: var(--brass); }
+
   .foot { flex: 0 0 auto; padding-top: 6px; display: none; }
   :root[data-tabs="on"] .foot { display: block; }
   .tabs { display: flex; align-items: baseline; gap: 26px; padding-top: 7px; }
@@ -639,8 +666,8 @@
         <div class="p-col">
           <div class="p-value"><span class="n" data-k="slp">1022.1</span><span class="u" data-k="slpUnit">mb</span></div>
           <div class="p-sub"><span class="up-w" id="baro-arrow">↑</span> <span data-k="slpTrendDesc">Rising</span> <span data-k="slpTrendPerHr">0.4</span> <span data-k="slpUnit">mb</span>/hr</div>
-          <svg id="barobar" viewBox="0 0 250 50" preserveAspectRatio="xMidYMid meet"></svg>
-          <svg id="barograph" viewBox="0 0 250 46" preserveAspectRatio="xMidYMid meet"></svg>
+          <svg id="barobar" viewBox="0 0 250 48" preserveAspectRatio="xMidYMid meet"></svg>
+          <svg id="barograph" viewBox="0 0 250 42" preserveAspectRatio="xMidYMid meet"></svg>
           <div class="ledger">
             <div class="lrow out"><span class="k">Outlook</span><span class="dots"></span><span class="v word" data-k="slpOutlook">Unchanged</span></div>
           </div>
@@ -802,6 +829,12 @@
       </div>
     </div>
   </main>
+
+  <!-- ————— 7-DAY OUTLOOK (Open-Meteo; hidden until fcDaily arrives) ————— -->
+  <div class="outlook" id="outlook" hidden>
+    <div class="ol-rule"></div>
+    <div class="ol-row" id="ol-row"></div>
+  </div>
 
   <!-- ————— FOOTER: TAB BAR ————— -->
   <footer class="foot">
@@ -1333,6 +1366,58 @@
     renderSpark(data);
     renderMoon(data);
     renderBarograph(data);
+    renderOutlook(data);
+  }
+
+
+  /* ———— 7-day outlook: locked-scale range bars (Open-Meteo daily) ————
+     One shared min→max axis for the whole week so relative warmth reads at a
+     glance. Condition glyphs appear ONLY for rain / snow / storm days (WMO
+     code); a clear or cloudy day earns no decoration. Rebuilt only when the
+     forecast actually changes — not on every 2 s tick. */
+  var _olKey = null;
+  function _olGlyph(code) {
+    if (code == null) return "";
+    if (code >= 95) return ' <svg class="ol-glyph storm" width="7" height="10" viewBox="0 0 8 12"><path d="M4.6 0 L0 7 h2.8 L1.8 12 L8 4.6 H4.8 L6.2 0 Z"/></svg>';
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86)
+      return ' <svg class="ol-glyph" width="9" height="9" viewBox="0 0 10 10"><path d="M5 1v8M1.6 3l6.8 4M8.4 3l-6.8 4"/></svg>';
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82))
+      return ' <svg class="ol-glyph" width="8" height="9" viewBox="0 0 9 10"><path d="M2.6 1.5 1.2 5.5 M6.2 1.5 4.8 5.5 M4.2 6.5 3.2 9.5"/></svg>';
+    return "";
+  }
+  function renderOutlook(data) {
+    var band = $("outlook"), row = $("ol-row");
+    if (!band || !row) return;
+    var days = data.fcDaily;
+    /* the 600px budget fits the alert strip OR the outlook band, not both —
+       an active alert takes the space (safety beats planning); the band
+       returns the moment the alert clears */
+    var alertUp = Array.isArray(data.alerts) && data.alerts.length > 0;
+    if (alertUp || !Array.isArray(days) || days.length < 3) { band.hidden = true; _olKey = null; return; }
+    var key = JSON.stringify(days) + "|" + (isNum(data.temp) ? Math.round(data.temp) : "");
+    if (key === _olKey) { band.hidden = false; return; }
+    _olKey = key;
+    var lo = Infinity, hi = -Infinity;
+    days.forEach(function (d) { lo = Math.min(lo, d.lo); hi = Math.max(hi, d.hi); });
+    var span = Math.max(1, hi - lo);
+    var html = "";
+    days.slice(0, 7).forEach(function (d, i) {
+      var L = Math.round((d.lo - lo) / span * 100), R = Math.round((hi - d.hi) / span * 100);
+      var today = i === 0, nowDot = "";
+      if (today && isNum(data.temp)) {   /* observed temp rides today's bar */
+        var t = clamp((data.temp - lo) / span * 100, 0, 100);
+        nowDot = '<span class="now" style="left:calc(' + t.toFixed(1) + '% - 4px)"></span>';
+      }
+      var pp = (isNum(d.pp) && d.pp >= 20) ? '<span class="pp">' + Math.round(d.pp) + '%</span>' : "";
+      html += '<div class="od' + (today ? " today" : "") + '">'
+            +   '<div class="od-day">' + (today ? "TODAY" : d.day) + _olGlyph(d.code) + '</div>'
+            +   '<div class="od-hi">' + d.hi + '<span class="dg">\u00B0</span></div>'
+            +   '<div class="od-bar"><span class="fill" style="left:' + L + '%;right:' + R + '%"></span>' + nowDot + '</div>'
+            +   '<div class="od-lo">' + d.lo + '\u00B0' + pp + '</div>'
+            + '</div>';
+    });
+    row.innerHTML = html;
+    band.hidden = false;
   }
 
   /* ———— Sun arc: dot position from sunFrac (0..1 of daylight) ———— */

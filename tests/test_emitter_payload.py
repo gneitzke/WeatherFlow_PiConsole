@@ -191,3 +191,27 @@ def test_lightning_counts_report_what_the_core_measures(make_emitter):
     assert payload['lightningRate'] == 2.5
     assert payload['lightning3hr'] == 11
     assert payload['lightningToday'] == 3
+
+
+def test_fc_daily_shapes_open_meteo_arrays():
+    from lib.almanac_emit import AlmanacEmitter
+    daily = {
+        'time': ['2026-08-29', '2026-08-30', '2026-08-31'],
+        'temperature_2m_max': [63.6, 71.4, None],
+        'temperature_2m_min': [53.5, 52.8, 55.0],
+        'weather_code': [95, 61, 2],
+        'precipitation_probability_max': [95, 60, None],
+    }
+    rows = AlmanacEmitter._fc_daily_from(daily)
+    # the None-hi day is dropped: a partial bar lies on the shared scale
+    assert len(rows) == 2
+    assert rows[0] == {'day': 'SAT', 'hi': 64, 'lo': 54, 'code': 95, 'pp': 95}
+    assert rows[1]['day'] == 'SUN' and rows[1]['hi'] == 71 and rows[1]['pp'] == 60
+
+
+def test_fc_daily_empty_and_garbage_never_raise():
+    from lib.almanac_emit import AlmanacEmitter
+    assert AlmanacEmitter._fc_daily_from({}) == []
+    assert AlmanacEmitter._fc_daily_from({'time': ['not-a-date'],
+                                          'temperature_2m_max': [70],
+                                          'temperature_2m_min': [50]}) == []

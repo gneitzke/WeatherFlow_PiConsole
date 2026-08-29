@@ -48,6 +48,7 @@ EMIT_INTERVAL = 2.0     # seconds, per DATA_CONTRACT.md ("~every 2 s")
 VERSION_CHECK_INTERVAL = 900   # seconds (15 min) — how often we poll GitHub for a newer release
 AQI_CHECK_INTERVAL     = 600   # seconds (10 min) — refresh air quality; short enough to recover fast
 ALERTS_CHECK_INTERVAL  = 900   # seconds (15 min) — NWS alerts change slowly; be gentle on api.weather.gov
+FORECAST_CHECK_INTERVAL = 3600 # seconds (1 h) — the daily outlook barely moves intra-hour
 ALERTS_TIMEOUT         = 20    # seconds — socket timeout for the alerts fetch
 ALERT_STALE_SEC        = 3600  # seconds (1 h) without a successful alerts fetch -> mark alertsStale
 AQI_STALE_SEC          = 3600  # seconds (1 h) without a successful AQI fetch -> mark aqiStale
@@ -273,6 +274,10 @@ class AlmanacEmitter:
         self._aqi_fc_cat    = None   # AQI category at the peak
         self._aqi_trend     = None   # 'rising' | 'falling' | 'steady'
         self._aqi_trend_text = None  # "Moderate by 5 PM" | "Improving" | None
+        # 7-day outlook state (fetched off-thread from Open-Meteo by lat/lon)
+        self._fc_daily   = []        # [{day,hi,lo,code,pp}, ...] display-ready
+        self._fc_ts      = None      # epoch of last SUCCESSFUL forecast fetch
+        self._fc_event   = None
         # weather-alerts state (fetched off-thread from api.weather.gov by lat/lon)
         self._alerts       = []      # last-good, processed + collapsed + sorted
         self._alerts_ts    = None    # epoch of last SUCCESSFUL alerts fetch (staleness guard)
@@ -298,6 +303,9 @@ class AlmanacEmitter:
         # weather alerts: staggered a little after AQI, then periodically
         Clock.schedule_once(self._check_alerts, 40)
         self._alerts_event = Clock.schedule_interval(self._check_alerts, ALERTS_CHECK_INTERVAL)
+        # 7-day outlook: staggered after alerts, then hourly
+        Clock.schedule_once(self._check_forecast, 50)
+        self._fc_event = Clock.schedule_interval(self._check_forecast, FORECAST_CHECK_INTERVAL)
         return self._event
 
     def stop(self):
@@ -342,6 +350,72 @@ class AlmanacEmitter:
                     _v.parse(str(latest).lstrip('vV')) > _v.parse(str(current).lstrip('vV')))
         except Exception:                                                 # noqa: BLE001
             pass
+
+    def _check_forecast(self, _dt=None):
+        """ Kick off a non-blocking 7-day forecast fetch on a daemon thread. """
+        try:
+            import threading
+            threading.Thread(target=self._do_forecast, daemon=True).start()
+        except Exception:                                                 # noqa: BLE001
+            pass
+
+    def _do_forecast(self):
+        """ Fetch the 7-day daily outlook from Open-Meteo for the station's
+        lat/lon: hi/lo, WMO weather code, max precipitation probability. The
+        temperature unit follows the console's own Units/Temp setting so the
+        strip always matches the observed readings. Off-thread, never raises;
+        on failure the previous outlook is kept. """
+        try:
+            import urllib.request
+            config = getattr(self.app, 'config', {}) or {}
+            lat = _cfg(config, 'Station', 'Latitude')
+            lon = _cfg(config, 'Station', 'Longitude')
+            if not lat or not lon:
+                return
+            unit = 'fahrenheit' if (_cfg(config, 'Units', 'Temp') or 'c').lower() == 'f' else 'celsius'
+            url = ('https://api.open-meteo.com/v1/forecast'
+                   f'?latitude={lat}&longitude={lon}'
+                   '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max'
+                   f'&temperature_unit={unit}&forecast_days=7&timezone=auto')
+            req = urllib.request.Request(url, headers={'User-Agent': 'WeatherFlow-PiConsole-almanac'})
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+            days = self._fc_daily_from(data.get('daily') or {})
+            if days:
+                self._fc_daily = days
+                self._fc_ts    = time.time()
+        except Exception as error:                                        # noqa: BLE001
+            Logger.warning(f'almanac_emit: forecast fetch failed - {error}')
+
+    @staticmethod
+    def _fc_daily_from(daily):
+        """ Shape Open-Meteo's parallel daily arrays into display-ready rows:
+        [{day:'MON', hi:93, lo:56, code:3, pp:20}, ...]. Rows with a missing
+        hi or lo are dropped (a partial bar lies on the shared scale). Pure;
+        never raises. """
+        times = daily.get('time') or []
+        his   = daily.get('temperature_2m_max') or []
+        los   = daily.get('temperature_2m_min') or []
+        codes = daily.get('weather_code') or []
+        pps   = daily.get('precipitation_probability_max') or []
+        out = []
+        for i, t in enumerate(times[:7]):
+            hi = his[i]  if i < len(his)  else None
+            lo = los[i]  if i < len(los)  else None
+            if hi is None or lo is None:
+                continue
+            try:
+                day = datetime.fromisoformat(t).strftime('%a').upper()
+            except (ValueError, TypeError):
+                continue
+            code = codes[i] if i < len(codes) else None
+            pp   = pps[i]   if i < len(pps)   else None
+            out.append({'day':  day,
+                        'hi':   int(round(hi)),
+                        'lo':   int(round(lo)),
+                        'code': int(code) if code is not None else None,
+                        'pp':   int(round(pp)) if pp is not None else None})
+        return out
 
     def _check_aqi(self, _dt=None):
         """ Kick off a non-blocking air-quality fetch on a daemon thread. """
@@ -831,6 +905,7 @@ class AlmanacEmitter:
             'fcWind':          fc_wind,
             'fcPrecipPct':     _num(_idx(Met.get('PrecipPercnt'), 0)),
             'fcDailyPct':      _num(_idx(Met.get('PrecipDay'), 0)),
+            'fcDaily':         self._fc_daily,   # 7-day outlook [{day,hi,lo,code,pp},...] - Open-Meteo, hourly refresh
 
             # Wind
             'windSpd':      _num(_idx(Obs.get('WindSpd'), 0)),
