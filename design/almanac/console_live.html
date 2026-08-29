@@ -355,7 +355,10 @@
   .dial-face.wind { fill: var(--verdigris-tint); }
   .arc-fill    { fill: var(--brass-tint); }
   .gauge-fill  { fill: var(--water-tint); }
-  .gauge-col   { fill: var(--water); opacity: 0.42;      /* rain tube fills as rate climbs */
+  /* the water is a GROUP (column + wave-cap) so the 0.42 opacity composites
+     once — overlapping shapes can never show a darker seam */
+  .water-body  { opacity: 0.42; }
+  .gauge-col   { fill: var(--water);                     /* rain tube fills as rate climbs */
                  transform-box: fill-box; transform-origin: 50% 100%; transition: transform 0.7s ease; }
   /* while rain is actively falling the water breathes — a slow opacity swell
      that says "live" at a glance. Opacity only (GPU-composited on the Pi);
@@ -383,12 +386,17 @@
      Translated by exactly one wavelength per loop, so the drift is seamless. */
   .gauge-surf { stroke: var(--water); stroke-width: 1.8; stroke-linecap: round; fill: none; opacity: 0; }
   #raingauge.raining .gauge-surf { opacity: 0.8; animation: surf-drift linear infinite; }
+  /* the filled area under the wave — the water's own surface, not a line on top.
+     Lives inside .water-body so its fill fuses seamlessly with the column. */
+  .surf-fill  { fill: var(--water); opacity: 0; }
+  #raingauge.raining .surf-fill { opacity: 1; animation: surf-drift linear infinite; }
   @keyframes surf-drift { to { transform: translateX(20px); } }
 
   @media (prefers-reduced-motion: reduce) {
     #raingauge.raining .streak-far,
     #raingauge.raining .streak-near { animation: none; opacity: 0; }
     #raingauge.raining .gauge-surf  { animation: none; opacity: 0.6; }
+    #raingauge.raining .surf-fill   { animation: none; opacity: 1; }
   }
   .gauge-ptr-g { transition: transform 0.7s ease; }      /* pointer rides the water level */
   @media (prefers-reduced-motion: reduce) { .gauge-col, .gauge-ptr-g { transition: none; } }
@@ -1080,7 +1088,7 @@
     return 1;
   }
 
-  var rainPtr, rainFill, rainClipRect, rainStreaks = null, surfWave = null, rainGeom = { top: 22, bot: 136, x1: 15 };
+  var rainPtr, rainFill, rainClipRect, rainStreaks = null, surfWave = null, surfCap = null, surfCapG = null, rainGeom = { top: 22, bot: 136, x1: 15 };
   (function () {
     var svg = $("raingauge");
     var top = rainGeom.top, bot = rainGeom.bot, x1 = rainGeom.x1, x2 = 57, cx = (x1 + x2) / 2;
@@ -1088,7 +1096,8 @@
     el("text", { class: "gauge-cap sm", x: cx, y: 152, "text-anchor": "middle" }, svg).textContent = "INTENSITY";
     el("rect", { class: "gauge-fill", x: x1, y: top, width: x2 - x1, height: bot - top }, svg);
     /* full-height fill scaled from the bottom (scaleY) so the water level eases */
-    rainFill = el("rect", { class: "gauge-col", x: x1 + 1, y: top, width: x2 - x1 - 2, height: bot - top }, svg);
+    var waterG = el("g", { class: "water-body" }, svg);
+    rainFill = el("rect", { class: "gauge-col", x: x1 + 1, y: top, width: x2 - x1 - 2, height: bot - top }, waterG);
     rainFill.style.transform = "scaleY(0)";
     /* falling-rain streaks, clipped to the EMPTY part of the tube (the clip
        rect's height tracks the waterline in renderGauges) */
@@ -1128,9 +1137,16 @@
        The clip lives in the pointer group's space, so it rides the level too. */
     var surfClip = el("clipPath", { id: "surf-clip" }, defs);
     el("rect", { x: x1 + 1, y: bot - 5, width: x2 - x1 - 2, height: 10 }, surfClip);
-    var surfG = el("g", { "clip-path": "url(#surf-clip)" }, rainPtr);
     var wd = "M " + (x1 - 20) + " " + bot;
     for (var wv = 0; wv < 4; wv++) { wd += " q 5 -3.2 10 0 q 5 3.2 10 0"; }
+    /* filled area under the wave, inside the water body: sine top, closed 3px
+       down into the column so the two shapes fuse (group opacity hides the lap) */
+    surfCapG = el("g", { class: "gauge-ptr-g" }, waterG);          /* twin of the pointer ride */
+    var capClipG = el("g", { "clip-path": "url(#surf-clip)" }, surfCapG);
+    surfCap = el("path", { class: "surf-fill",
+      d: wd + " l 0 3 L " + (x1 - 20) + " " + (bot + 3) + " Z" }, capClipG);
+    /* crest highlight: the stroked sine, riding the pointer group as before */
+    var surfG = el("g", { "clip-path": "url(#surf-clip)" }, rainPtr);
     surfWave = el("path", { class: "gauge-surf", d: wd }, surfG);
     el("polygon", { class: "gauge-ptr",
       points: (x1 - 2) + "," + bot + " " + (x1 - 13) + "," + (bot - 7.5) + " " + (x1 - 13) + "," + (bot + 7.5) }, rainPtr);
@@ -1447,7 +1463,9 @@
     if (surfWave) {
       var surfDur = (4.2 - 2.4 * rr).toFixed(2) + "s";   /* gentle drift, quicker in a downpour */
       if (surfWave.style.animationDuration !== surfDur) surfWave.style.animationDuration = surfDur;
+      if (surfCap && surfCap.style.animationDuration !== surfDur) surfCap.style.animationDuration = surfDur;
     }
+    if (surfCapG) surfCapG.style.transform = rainPtr.style.transform;   /* cap rides the level */
     /* NOTE: no intensity word here — the tile header (rainStatus) and the tube
        level both carry it already, and a third copy overflowed the column
        ("… · Moderat" clipped against the gauge on the real panel) */
