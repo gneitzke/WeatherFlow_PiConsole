@@ -1088,7 +1088,7 @@
     return 1;
   }
 
-  var rainPtr, rainFill, rainClipRect, rainStreaks = null, surfWave = null, surfCap = null, surfCapG = null, rainGeom = { top: 22, bot: 136, x1: 15 };
+  var rainPtr, rainFill, rainClipRect, rainStreaks = null, surfWave = null, surfCap = null, surfCapG = null, _waveD = null, _waveAmp = null, rainGeom = { top: 22, bot: 136, x1: 15 };
   (function () {
     var svg = $("raingauge");
     var top = rainGeom.top, bot = rainGeom.bot, x1 = rainGeom.x1, x2 = 57, cx = (x1 + x2) / 2;
@@ -1136,9 +1136,13 @@
        tube, clipped to the tube walls; translateX(20px) per loop = seamless.
        The clip lives in the pointer group's space, so it rides the level too. */
     var surfClip = el("clipPath", { id: "surf-clip" }, defs);
-    el("rect", { x: x1 + 1, y: bot - 5, width: x2 - x1 - 2, height: 10 }, surfClip);
-    var wd = "M " + (x1 - 20) + " " + bot;
-    for (var wv = 0; wv < 4; wv++) { wd += " q 5 -3.2 10 0 q 5 3.2 10 0"; }
+    el("rect", { x: x1 + 1, y: bot - 6, width: x2 - x1 - 2, height: 12 }, surfClip);
+    _waveD = function (amp) {          /* sine of given amplitude, mean = waterline */
+      var d = "M " + (x1 - 20) + " " + bot, c = (amp * 2).toFixed(1);
+      for (var wv = 0; wv < 4; wv++) { d += " q 5 -" + c + " 10 0 q 5 " + c + " 10 0"; }
+      return d;
+    };
+    var wd = _waveD(1.6);
     /* filled area under the wave, inside the water body: sine top, closed 3px
        down into the column so the two shapes fuse (group opacity hides the lap) */
     surfCapG = el("g", { class: "gauge-ptr-g" }, waterG);          /* twin of the pointer ride */
@@ -1464,6 +1468,17 @@
       var surfDur = (4.2 - 2.4 * rr).toFixed(2) + "s";   /* gentle drift, quicker in a downpour */
       if (surfWave.style.animationDuration !== surfDur) surfWave.style.animationDuration = surfDur;
       if (surfCap && surfCap.style.animationDuration !== surfDur) surfCap.style.animationDuration = surfDur;
+      /* the sea state follows the rate: near-calm ±0.8px in drizzle, agitated
+         ±3px in a deluge. Amplitude is symmetric about the waterline, so the
+         MEAN — the measured level — never moves. Quantized to 0.2px steps so
+         the path rebuilds only on real change. */
+      var amp = Math.round((0.8 + 2.4 * rr) * 5) / 5;
+      if (amp !== _waveAmp && _waveD) {
+        _waveAmp = amp;
+        var wdn = _waveD(amp);
+        surfWave.setAttribute("d", wdn);
+        if (surfCap) surfCap.setAttribute("d", wdn + " l 0 3 L " + (rainGeom.x1 - 20) + " " + (rainGeom.bot + 3) + " Z");
+      }
     }
     if (surfCapG) surfCapG.style.transform = rainPtr.style.transform;   /* cap rides the level */
     /* NOTE: no intensity word here — the tile header (rainStatus) and the tube
