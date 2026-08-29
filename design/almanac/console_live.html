@@ -360,17 +360,36 @@
   /* while rain is actively falling the water breathes — a slow opacity swell
      that says "live" at a glance. Opacity only (GPU-composited on the Pi);
      the pointer never fakes motion: its position is data. */
-  #raingauge.raining .gauge-col { animation: water-breathe 4s ease-in-out infinite; }
-  @keyframes water-breathe { 0%, 100% { opacity: 0.42; } 50% { opacity: 0.66; } }
-  /* rain streaks falling into the tube while it rains — clipped to the empty
-     region above the waterline, fall speed scaled to the live rate in JS, so
-     a downpour visibly pours. Transform-only; the Pi composites it. */
-  .rain-streak { stroke: var(--water); stroke-width: 2; stroke-linecap: round; opacity: 0; }
-  #raingauge.raining .rain-streak { opacity: 0.6; animation: streak-fall linear infinite; }
-  @keyframes streak-fall { to { transform: translateY(150px); } }
+  /* while rain falls the water swells almost imperceptibly — alive, not throbbing */
+  #raingauge.raining .gauge-col { animation: water-breathe 6.5s ease-in-out infinite; }
+  @keyframes water-breathe { 0%, 100% { opacity: 0.42; } 50% { opacity: 0.52; } }
+
+  /* ———— falling rain · two-depth etched hatching (Fable design) ————
+     Continuous columns: one dashed line per column, translated by exactly one
+     dash period per loop, so the fall is seamless — living hatch-work, not
+     particle drops. Transform/opacity only — the Pi composites it. */
+  .streak-far, .streak-near { stroke: var(--water); stroke-linecap: round; opacity: 0; }
+  .streak-far  { stroke-width: 1.7; }
+  .streak-near { stroke-width: 2.2; }
+  #raingauge.raining .streak-far  { opacity: 0.30; animation: fall-far  2.6s linear infinite; }
+  #raingauge.raining .streak-near { opacity: 0.62; animation: fall-near 1.4s linear infinite; }
+  @keyframes fall-far  { to { transform: translate(-0.4px, 30px); } } /* vector matches the lean */
+  @keyframes fall-near { to { transform: translate(-0.7px, 40px); } }
+  /* density is data: third column of each depth appears at Heavy and above */
+  .r3 { visibility: hidden; }
+  #raingauge.pour .r3 { visibility: visible; }
+  #raingauge.pour .streak-near { opacity: 0.72; }
+  /* meniscus at the waterline — rides the pointer group (position = data),
+     shimmers in place while raining */
+  .gauge-surf { stroke: var(--water); stroke-width: 1.8; opacity: 0; }
+  #raingauge.raining .gauge-surf { animation: surf-shimmer 3.4s ease-in-out infinite; }
+  @keyframes surf-shimmer { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.9; } }
+
   @media (prefers-reduced-motion: reduce) {
-    #raingauge.raining .gauge-col { animation: none; }
-    #raingauge.raining .rain-streak { animation: none; opacity: 0; }
+    #raingauge.raining .gauge-col   { animation: none; }
+    #raingauge.raining .streak-far,
+    #raingauge.raining .streak-near { animation: none; opacity: 0; }
+    #raingauge.raining .gauge-surf  { animation: none; opacity: 0.6; }
   }
   .gauge-ptr-g { transition: transform 0.7s ease; }      /* pointer rides the water level */
   @media (prefers-reduced-motion: reduce) { .gauge-col, .gauge-ptr-g { transition: none; } }
@@ -1062,7 +1081,7 @@
     return 1;
   }
 
-  var rainPtr, rainFill, rainClipRect, rainStreaks = [], rainGeom = { top: 22, bot: 136, x1: 15 };
+  var rainPtr, rainFill, rainClipRect, rainStreaks = null, rainGeom = { top: 22, bot: 136, x1: 15 };
   (function () {
     var svg = $("raingauge");
     var top = rainGeom.top, bot = rainGeom.bot, x1 = rainGeom.x1, x2 = 57, cx = (x1 + x2) / 2;
@@ -1078,12 +1097,23 @@
     var clip = el("clipPath", { id: "rain-clip" }, defs);
     rainClipRect = el("rect", { x: x1 + 1, y: top, width: x2 - x1 - 2, height: bot - top }, clip);
     var streakG = el("g", { "clip-path": "url(#rain-clip)" }, svg);
-    rainStreaks = [];
-    [x1 + 7, cx + 2, x2 - 6].forEach(function (sx, i) {
-      var ln = el("line", { class: "rain-streak", x1: sx, y1: top - 26 - i * 34, x2: sx - 1.5, y2: top - 16 - i * 34 }, streakG);
-      ln.style.animationDelay = (i * 0.33) + "s";
-      rainStreaks.push(ln);
+    /* etched rain: each column is one long dashed line; the keyframe translates
+       it by exactly one dash period, so the fall is seamless and continuous.
+       Two depths — far (fine, faint, slow) behind near (bold, bright, fast). */
+    var rainFar = [], rainNear = [];
+    /* far layer · dash period 30 · [x, dasharray, dashoffset] */
+    [[20, "7 23", 0], [34, "9 21", 11], [47, "6 24", 22]].forEach(function (st, i) {
+      rainFar.push(el("line", { class: "streak-far" + (i === 2 ? " r3" : ""),
+        x1: st[0], y1: top - 36, x2: st[0] - 2, y2: bot + 6,
+        "stroke-dasharray": st[1], "stroke-dashoffset": st[2] }, streakG));
     });
+    /* near layer · dash period 40 */
+    [[26, "14 26", 0], [41, "11 29", 17], [52, "16 24", 31]].forEach(function (st, i) {
+      rainNear.push(el("line", { class: "streak-near" + (i === 2 ? " r3" : ""),
+        x1: st[0], y1: top - 46, x2: st[0] - 3, y2: bot + 6,
+        "stroke-dasharray": st[1], "stroke-dashoffset": st[2] }, streakG));
+    });
+    rainStreaks = { far: rainFar, near: rainNear };
     el("line", { class: "tick", x1: x1, y1: top, x2: x1, y2: bot }, svg);
     el("line", { class: "tick", x1: x2, y1: top, x2: x2, y2: bot }, svg);
     /* graduations ACROSS the tube, one per band boundary — the five equal steps
@@ -1094,6 +1124,7 @@
       el("line", { class: "rain-band", x1: x1, y1: y, x2: x2 + 6, y2: y }, svg);
     }
     rainPtr = el("g", { class: "gauge-ptr-g" }, svg);              /* group rides the water level */
+    el("line", { class: "gauge-surf", x1: x1 + 1, y1: bot, x2: x2 - 1, y2: bot }, rainPtr);
     el("polygon", { class: "gauge-ptr",
       points: (x1 - 2) + "," + bot + " " + (x1 - 13) + "," + (bot - 7.5) + " " + (x1 - 13) + "," + (bot + 7.5) }, rainPtr);
   })();
@@ -1391,8 +1422,17 @@
     if (rainClipRect) {
       rainClipRect.setAttribute("height", Math.max(0, (rainGeom.bot - rainGeom.top) - rise).toFixed(1));
     }
-    var fallDur = (1.8 - 1.1 * rr).toFixed(2) + "s";      /* 1.8s drizzle -> 0.7s deluge */
-    rainStreaks.forEach(function (ln) { ln.style.animationDuration = fallDur; });
+    /* rain falls faster as the rate climbs; the far layer lags for parallax.
+       Only rewrite durations on change — resetting mid-flight snaps the phase. */
+    var nearDur = (1.5 - 1.0 * rr).toFixed(2) + "s";   /* 40px period: drizzle 1.5s -> deluge 0.5s */
+    var farDur  = (2.85 - 1.9 * rr).toFixed(2) + "s";  /* 30px period: ~2.5x slower in px/s */
+    rainStreaks.near.forEach(function (ln) {
+      if (ln.style.animationDuration !== nearDur) ln.style.animationDuration = nearDur;
+    });
+    rainStreaks.far.forEach(function (ln) {
+      if (ln.style.animationDuration !== farDur) ln.style.animationDuration = farDur;
+    });
+    $("raingauge").classList.toggle("pour", rr >= 0.5);  /* Heavy+: third columns join */
     /* NOTE: no intensity word here — the tile header (rainStatus) and the tube
        level both carry it already, and a third copy overflowed the column
        ("… · Moderat" clipped against the gauge on the real panel) */
