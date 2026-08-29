@@ -386,6 +386,17 @@ class AlmanacEmitter:
                 self._fc_ts    = time.time()
         except Exception as error:                                        # noqa: BLE001
             Logger.warning(f'almanac_emit: forecast fetch failed - {error}')
+        finally:
+            # Boot resilience: the hourly interval is far too slow to recover
+            # from a failed FIRST fetch (the USB wifi is often still settling
+            # when the t+50s attempt fires - the same failure AQI's delayed
+            # start works around). Until one fetch has succeeded, retry every
+            # 2 minutes; after that the hourly cadence is plenty.
+            if self._fc_ts is None:
+                try:
+                    Clock.schedule_once(self._check_forecast, 120)
+                except Exception:                                         # noqa: BLE001
+                    pass
 
     @staticmethod
     def _fc_daily_from(daily):
