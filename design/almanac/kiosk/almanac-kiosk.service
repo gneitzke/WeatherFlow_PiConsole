@@ -24,6 +24,9 @@ Type=simple
 ExecStart=%h/wfpiconsole/design/almanac/kiosk/almanac-kiosk.sh
 Restart=always
 RestartSec=3
+# Bound the stop: chromium sometimes ignores TERM, and the 90s default left
+# restarts hanging until a SIGKILL (with a 5-min websocket recovery after).
+TimeoutStopSec=15
 Environment=WFP_BIND=0.0.0.0
 
 [Install]

@@ -452,8 +452,11 @@ class AlmanacEmitter:
         forecast (wifi out for a day+) can never mislabel yesterday as TODAY.
         As rows age out the band naturally shrinks below the HTML's 3-day
         minimum and hides itself - no separate staleness flag needed. """
-        return [r for r in self._fc_daily
+        rows = [dict(r) for r in self._fc_daily
                 if not r.get('date') or r['date'] >= today_iso]
+        for r in rows:
+            r['today'] = (r.get('date') == today_iso)
+        return rows
 
     def _check_aqi(self, _dt=None):
         """ Kick off a non-blocking air-quality fetch on a daemon thread. """
@@ -842,8 +845,8 @@ class AlmanacEmitter:
             st       = config['Station']
             device, idx = None, None
             for dev, blob in api_data.items():
-                if not isinstance(blob, dict) or '24Hrs' not in blob:
-                    continue
+                if not isinstance(blob, dict) or not blob.get('24Hrs'):
+                    continue                     # None = the REST call failed; ordinary, not an error
                 if str(dev) in (st['OutAirID'], st['OutAirSN']):
                     device, idx = dev, 1                    # AIR pressure bucket
                     break
@@ -864,8 +867,12 @@ class AlmanacEmitter:
                     step   = (len(series) - 1) / (target - 1)
                     series = [series[int(round(i * step))] for i in range(target)]
         except Exception as error:                                            # noqa: BLE001
-            Logger.warning(f'almanac_emit: barograph series unavailable - {error}')
+            if not getattr(self, '_baro_warned', False):
+                Logger.warning(f'almanac_emit: barograph series unavailable - {error}')
+                self._baro_warned = True         # one line per outage, not one per refresh
             series = []
+        if series:
+            self._baro_warned = False
         self._baro_series_cache = series
         self._baro_series_t     = now
         return series

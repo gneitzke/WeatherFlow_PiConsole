@@ -239,6 +239,7 @@ def test_stale_forecast_drops_past_days():
     ]
     rows = e._fc_daily_current('2026-08-29')
     assert [r['day'] for r in rows] == ['SAT', 'SUN']   # yesterday can never be TODAY
+    assert [r['today'] for r in rows] == [True, False]  # and only the real today is flagged
     # a row without a date (older cached shape) is kept, never crashed on
     e._fc_daily.append({'day': 'MON', 'hi': 70, 'lo': 50, 'code': 0, 'pp': 0})
     assert e._fc_daily_current('2026-08-29')[-1]['day'] == 'MON'

@@ -1434,7 +1434,7 @@
     var html = "";
     days.slice(0, 7).forEach(function (d, i) {
       var L = Math.round((d.lo - lo) / span * 100), R = Math.round((hi - d.hi) / span * 100);
-      var today = i === 0, nowDot = "";
+      var today = (d.today !== undefined) ? !!d.today : (i === 0), nowDot = "";
       if (today && isNum(data.temp)) {   /* observed temp rides today's bar */
         var t = clamp((data.temp - lo) / span * 100, 0, 100);
         nowDot = '<span class="now" style="left:calc(' + t.toFixed(1) + '% - 4px)"></span>';
@@ -1458,6 +1458,11 @@
       var L = Math.round(parseFloat(f.style.left) / 100 * w);
       var R = Math.round(parseFloat(f.style.right) / 100 * w);
       f.style.left = L + "px"; f.style.right = R + "px";
+      var dot = bar.querySelector(".now");
+      if (dot) {
+        var pct = parseFloat((dot.style.left.match(/([\d.]+)%/) || [])[1]);
+        if (!isNaN(pct)) dot.style.left = (Math.round(pct / 100 * w) - 4) + "px";
+      }
     });
   }
 
