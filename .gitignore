@@ -24,3 +24,12 @@ venv/
 .clubhouse/agents.json
 .clubhouse/agents.json.bak
 .clubhouse/settings.local.json
+
+# Machine-local Claude Code / MCP config — carries local tokens, never commit
+.mcp.json
+
+# Local test virtualenv
+venv-test/
+
+# Live emitter output dumped for debugging (carries the real station location)
+design/almanac/wx.json
