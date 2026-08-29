@@ -375,10 +375,12 @@
   #raingauge.raining .streak-near { opacity: 0.62; animation: fall-near 1.4s linear infinite; }
   @keyframes fall-far  { to { transform: translate(-0.4px, 30px); } } /* vector matches the lean */
   @keyframes fall-near { to { transform: translate(-0.7px, 40px); } }
-  /* density is data: third column of each depth appears at Heavy and above */
-  .r3 { visibility: hidden; }
-  #raingauge.pour .r3 { visibility: visible; }
-  #raingauge.pour .streak-near { opacity: 0.72; }
+  /* density is data, stepped on the gauge's own band graduations:
+     one column per depth in light rain, two at Moderate, three at Heavy+ */
+  .r2, .r3 { visibility: hidden; }
+  #raingauge.rain2 .r2 { visibility: visible; }
+  #raingauge.rain3 .r2, #raingauge.rain3 .r3 { visibility: visible; }
+  #raingauge.rain3 .streak-near { opacity: 0.72; }
   /* meniscus at the waterline — rides the pointer group (position = data),
      shimmers in place while raining */
   .gauge-surf { stroke: var(--water); stroke-width: 1.8; opacity: 0; }
@@ -1102,14 +1104,14 @@
        Two depths — far (fine, faint, slow) behind near (bold, bright, fast). */
     var rainFar = [], rainNear = [];
     /* far layer · dash period 30 · [x, dasharray, dashoffset] */
-    [[20, "7 23", 0], [34, "9 21", 11], [47, "6 24", 22]].forEach(function (st, i) {
-      rainFar.push(el("line", { class: "streak-far" + (i === 2 ? " r3" : ""),
+    [[34, "9 21", 11], [20, "7 23", 0], [47, "6 24", 22]].forEach(function (st, i) {
+      rainFar.push(el("line", { class: "streak-far r" + (i + 1),
         x1: st[0], y1: top - 36, x2: st[0] - 2, y2: bot + 6,
         "stroke-dasharray": st[1], "stroke-dashoffset": st[2] }, streakG));
     });
     /* near layer · dash period 40 */
-    [[26, "14 26", 0], [41, "11 29", 17], [52, "16 24", 31]].forEach(function (st, i) {
-      rainNear.push(el("line", { class: "streak-near" + (i === 2 ? " r3" : ""),
+    [[41, "11 29", 17], [26, "14 26", 0], [52, "16 24", 31]].forEach(function (st, i) {
+      rainNear.push(el("line", { class: "streak-near r" + (i + 1),
         x1: st[0], y1: top - 46, x2: st[0] - 3, y2: bot + 6,
         "stroke-dasharray": st[1], "stroke-dashoffset": st[2] }, streakG));
     });
@@ -1432,7 +1434,11 @@
     rainStreaks.far.forEach(function (ln) {
       if (ln.style.animationDuration !== farDur) ln.style.animationDuration = farDur;
     });
-    $("raingauge").classList.toggle("pour", rr >= 0.5);  /* Heavy+: third columns join */
+    /* density flips exactly on the band graduations: Moderate adds a second
+       column per depth, Heavy a third — the tube visibly rains harder as the
+       measured intensity crosses each engraved line */
+    $("raingauge").classList.toggle("rain2", rr >= 0.4);
+    $("raingauge").classList.toggle("rain3", rr >= 0.6);
     /* NOTE: no intensity word here — the tile header (rainStatus) and the tube
        level both carry it already, and a third copy overflowed the column
        ("… · Moderat" clipped against the gauge on the real panel) */
