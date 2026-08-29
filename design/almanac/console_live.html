@@ -482,7 +482,13 @@
   .gauge-cap   { fill: var(--ink-soft); font-size: 12px; font-weight: 800; letter-spacing: 0.12em; }
   .gauge-cap.sm { font-size: 9px; letter-spacing: 0.06em; }   /* "INTENSITY" has to fit the tube width */
   .gauge-ptr   { fill: var(--water); }
-  #raingauge   { display: block; transition: opacity 0.85s ease; }               /* quiet furniture when dry, */
+  #raingauge   { display: block; transition: opacity 0.85s ease; }
+  /* with an alert strip up the whole page is 23px poorer; the gauge is the
+     rain tile's tallest fixed element, so it yields a little (uniform scale)
+     for the alert's duration */
+  .alert-squeeze #raingauge { height: 150px; }
+  .alert-squeeze #tile-rain .p-value .n { font-size: 42px; }
+  .alert-squeeze #tile-rain .lrow { padding: 0; }               /* quiet furniture when dry, */
   #raingauge.is-dry { opacity: 0.5; }                            /* alight the moment it rains */
   @media (prefers-reduced-motion: reduce) { #raingauge { transition: none; } }
   .moon-base   { fill: var(--moon-lit); stroke: var(--rule); stroke-width: 1; }
@@ -553,6 +559,15 @@
                   background: var(--accent); border: 1.5px solid var(--paper); }
   .od-lo { font-family: var(--sans); font-size: 14px; font-weight: 600; line-height: 1.15; color: var(--ink-soft);
            font-variant-numeric: lining-nums; white-space: nowrap; }
+  /* alert coexistence: with a strip up the band compresses (day + hi + bar,
+     lows dropped) instead of vanishing - a winter storm warning can run for
+     days, exactly when the outlook matters most */
+  #outlook.compact .od-lo { display: none; }
+  #outlook.compact .ol-row { padding-top: 1px; }
+  #outlook.compact .od-hi { font-size: 19px; line-height: 1.0; }
+  #outlook.compact .od-hi svg { vertical-align: -2px; }
+  #outlook.compact .od-bar { height: 4px; margin-bottom: 0; }
+  #outlook.compact { padding-top: 0; }
   .od-lo .pp { font-size: 12px; line-height: 1; font-weight: 700; color: var(--water); margin-left: 6px; }
   /* condition glyphs, four-pigment discipline: brass = solar (this console's
      sun pigment already), ink-soft = neutral sky, water = wet, storm = filled
@@ -1540,11 +1555,12 @@
     var band = $("outlook"), row = $("ol-row");
     if (!band || !row) return;
     var days = data.fcDaily;
-    /* the 600px budget fits the alert strip OR the outlook band, not both —
-       an active alert takes the space (safety beats planning); the band
-       returns the moment the alert clears */
+    /* with an alert strip up, the band compresses (lows dropped) rather than
+       vanishing - alerts can run for days, and the outlook matters most then */
     var alertUp = Array.isArray(data.alerts) && data.alerts.length > 0;
-    if (alertUp || !Array.isArray(days) || days.length < 3) { band.hidden = true; _olKey = null; return; }
+    band.classList.toggle("compact", alertUp);
+    document.querySelector(".page").classList.toggle("alert-squeeze", alertUp);
+    if (!Array.isArray(days) || days.length < 3) { band.hidden = true; _olKey = null; return; }
     var key = JSON.stringify(days) + "|" + (isNum(data.temp) ? Math.round(data.temp) : "");
     if (key === _olKey) { band.hidden = false; return; }
     _olKey = key;

@@ -243,3 +243,19 @@ def test_stale_forecast_drops_past_days():
     # a row without a date (older cached shape) is kept, never crashed on
     e._fc_daily.append({'day': 'MON', 'hi': 70, 'lo': 50, 'code': 0, 'pp': 0})
     assert e._fc_daily_current('2026-08-29')[-1]['day'] == 'MON'
+
+
+def test_snow_rewrites_only_the_dry_status():
+    from lib.almanac_emit import AlmanacEmitter
+    fc = [{'day': 'SAT', 'date': '2027-01-17', 'today': True, 'code': 75}]
+    f = AlmanacEmitter._snowify_status
+    # freezing + snow forecast + dry sensor -> honest snow status
+    assert f('Currently Dry', 18.0, '\u00b0F', fc) == 'Snow Likely'
+    assert f('Currently Dry', -2.0, '\u00b0C', fc) == 'Snow Likely'
+    # measured rain always wins; warm or rainy-forecast days stay as-is
+    assert f('Light Rain', 18.0, '\u00b0F', fc) == 'Light Rain'
+    assert f('Currently Dry', 40.0, '\u00b0F', fc) == 'Currently Dry'
+    assert f('Currently Dry', 18.0, '\u00b0F',
+             [{'today': True, 'code': 61}]) == 'Currently Dry'
+    assert f('Currently Dry', 18.0, '\u00b0F', []) == 'Currently Dry'
+    assert f('Currently Dry', None, '\u00b0F', fc) == 'Currently Dry'

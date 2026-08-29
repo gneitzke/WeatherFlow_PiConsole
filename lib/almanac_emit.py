@@ -430,6 +430,25 @@ class AlmanacEmitter:
         return out
 
     @staticmethod
+    def _snowify_status(status, temp, temp_unit, fc_rows):
+        """ The Tempest's haptic rain sensor cannot register snowfall, so in
+        freezing weather with snow in today's forecast, 'Currently Dry' is
+        the sensor's truth but not the sky's. Rewrites ONLY the dry status -
+        any measured rain always wins. Never raises. """
+        if status != 'Currently Dry' or temp is None:
+            return status
+        try:
+            freezing = float(temp) <= (34.0 if (temp_unit or '').endswith('F') else 1.0)
+        except (TypeError, ValueError):
+            return status
+        if not freezing:
+            return status
+        today = next((r for r in (fc_rows or []) if r.get('today')), None)
+        if today and today.get('code') in (71, 72, 73, 74, 75, 76, 77, 85, 86):
+            return 'Snow Likely'   # forecast-derived; the haptic sensor cannot see snow
+        return status
+
+    @staticmethod
     def _rain_rate_display(Obs, config):
         """ Numeric rain rate in display units. Index [0] is the core's
         FORMATTED display value, which for a trace rate is the STRING
@@ -917,6 +936,10 @@ class AlmanacEmitter:
         lightning_since_sec = _num(_idx(strike_delta_t, 4))
         lightning_active = self._lightning_active(config, lightning_since_sec)
 
+        temp_val  = _num(_idx(Obs.get('outTemp'), 0))
+        temp_unit = _temp_unit(_idx(Obs.get('outTemp'), 1))
+        fc_rows   = self._fc_daily_current(now_local.strftime('%Y-%m-%d'))
+
         return {
             'ts':      int(time.time()),
             'station': _text(_cfg(config, 'Station', 'Name')),
@@ -928,8 +951,8 @@ class AlmanacEmitter:
             'time':    now_local.strftime('%H:%M'),
 
             # Temperature
-            'temp':            _num(_idx(Obs.get('outTemp'), 0)),
-            'tempUnit':        _temp_unit(_idx(Obs.get('outTemp'), 1)),
+            'temp':            temp_val,
+            'tempUnit':        temp_unit,
             'feelsLike':       _num(_idx(Obs.get('FeelsLike'), 0)),
             'feelsDesc':       _text(_idx(Obs.get('FeelsLike'), 2)),
             'tempTrendPerHr':  _num(_idx(Obs.get('outTempTrend'), 0)),
@@ -950,7 +973,7 @@ class AlmanacEmitter:
             'fcWind':          fc_wind,
             'fcPrecipPct':     _num(_idx(Met.get('PrecipPercnt'), 0)),
             'fcDailyPct':      _num(_idx(Met.get('PrecipDay'), 0)),
-            'fcDaily':         self._fc_daily_current(now_local.strftime('%Y-%m-%d')),   # outlook, past days dropped
+            'fcDaily':         fc_rows,   # outlook, past days dropped at emit time
 
             # Wind
             'windSpd':      _num(_idx(Obs.get('WindSpd'), 0)),
@@ -982,7 +1005,8 @@ class AlmanacEmitter:
             'rainUnit':     _text(_cfg(config, 'Units', 'Precip')),
             'rainRate':     self._rain_rate_display(Obs, config),
             'rainRateMm':   _num(_idx(Obs.get('RainRate'), 3)),   # raw mm/hr - drives the intensity-banded gauge
-            'rainStatus':   _text(_idx(Obs.get('RainRate'), 2)),
+            'rainStatus':   self._snowify_status(_text(_idx(Obs.get('RainRate'), 2)),
+                                                 temp_val, temp_unit, fc_rows),
             'drySpellDays': None,   # not reliably sourced - see report
             'lastRainDate': None,   # not sourced - no last-rain date/amount is tracked
             'lastRainAmt':  None,   # not sourced
