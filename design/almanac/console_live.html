@@ -503,7 +503,7 @@
   .od-day { font-family: var(--sans); font-size: 11px; font-weight: 800;
             letter-spacing: 0.14em; color: var(--ink-soft); white-space: nowrap; }
   .od.today .od-day { color: var(--accent); }
-  .od-day svg { vertical-align: -1px; margin-left: 4px; }
+  .od-hi svg { vertical-align: -2px; margin-left: 6px; }
   .od-hi { font-size: 21px; font-weight: 700; line-height: 1.05; font-variant-numeric: lining-nums; }
   .od-hi .dg { font-size: 14px; vertical-align: 6px; margin-left: 1px; color: var(--ink-soft); }
   /* range bar: full-width track, fill spans lo→hi on the shared week scale */
@@ -1387,14 +1387,15 @@
   /* WMO code -> one of seven engraved glyphs. 12x12 viewBox at 11px, stroke
      1.5-1.6 — the minimum that stays crisp at 170ppi 1:1. */
   function _olIcon(kind) {
+    /* inline with the 21px hi figure, so sized to its cap height (~17px) */
     var G = {
-      sun:    '<svg class="ol-glyph sun" width="11" height="11" viewBox="0 0 12 12"><circle cx="6" cy="6" r="2.4"/><path d="M6 .8v1.4 M6 9.8v1.4 M.8 6h1.4 M9.8 6h1.4 M2.3 2.3l1 1 M8.7 8.7l1 1 M9.7 2.3l-1 1 M3.3 8.7l-1 1"/></svg>',
-      partly: '<svg class="ol-glyph sun" width="12" height="11" viewBox="0 0 13 12"><circle cx="8.6" cy="4" r="1.9"/><path d="M8.6 .6v1 M11.6 4h1 M10.7 1.9l.7-.7 M10.7 6.1l.7 .7"/><path class="ol-glyph cloud" d="M2.6 10.4a1.9 1.9 0 0 1 0-3.8 2.6 2.6 0 0 1 5-.5 1.8 1.8 0 0 1-.5 4.3z"/></svg>',
-      cloud:  '<svg class="ol-glyph cloud" width="12" height="10" viewBox="0 0 13 11"><path d="M3 9.4a2.3 2.3 0 0 1 0-4.6 3.2 3.2 0 0 1 6.2-.5 2.2 2.2 0 0 1-.6 4.9z"/></svg>',
-      fog:    '<svg class="ol-glyph cloud" width="11" height="9" viewBox="0 0 12 10"><path d="M1.5 2.5h9 M1.5 5h9 M1.5 7.5h9"/></svg>',
-      rain:   '<svg class="ol-glyph" width="8" height="9" viewBox="0 0 9 10"><path d="M2.6 1.5 1.2 5.5 M6.2 1.5 4.8 5.5 M4.2 6.5 3.2 9.5"/></svg>',
-      snow:   '<svg class="ol-glyph" width="9" height="9" viewBox="0 0 10 10"><path d="M5 1v8 M1.6 3l6.8 4 M8.4 3l-6.8 4"/></svg>',
-      storm:  '<svg class="ol-glyph storm" width="7" height="10" viewBox="0 0 8 12"><path d="M4.6 0 L0 7 h2.8 L1.8 12 L8 4.6 H4.8 L6.2 0 Z"/></svg>'
+      sun:    '<svg class="ol-glyph sun" width="17" height="17" viewBox="0 0 12 12"><circle cx="6" cy="6" r="2.4"/><path d="M6 .8v1.4 M6 9.8v1.4 M.8 6h1.4 M9.8 6h1.4 M2.3 2.3l1 1 M8.7 8.7l1 1 M9.7 2.3l-1 1 M3.3 8.7l-1 1"/></svg>',
+      partly: '<svg class="ol-glyph sun" width="18" height="17" viewBox="0 0 13 12"><circle cx="8.6" cy="4" r="1.9"/><path d="M8.6 .6v1 M11.6 4h1 M10.7 1.9l.7-.7 M10.7 6.1l.7 .7"/><path class="ol-glyph cloud" d="M2.6 10.4a1.9 1.9 0 0 1 0-3.8 2.6 2.6 0 0 1 5-.5 1.8 1.8 0 0 1-.5 4.3z"/></svg>',
+      cloud:  '<svg class="ol-glyph cloud" width="18" height="15" viewBox="0 0 13 11"><path d="M3 9.4a2.3 2.3 0 0 1 0-4.6 3.2 3.2 0 0 1 6.2-.5 2.2 2.2 0 0 1-.6 4.9z"/></svg>',
+      fog:    '<svg class="ol-glyph cloud" width="16" height="13" viewBox="0 0 12 10"><path d="M1.5 2.5h9 M1.5 5h9 M1.5 7.5h9"/></svg>',
+      rain:   '<svg class="ol-glyph" width="13" height="14" viewBox="0 0 9 10"><path d="M2.6 1.5 1.2 5.5 M6.2 1.5 4.8 5.5 M4.2 6.5 3.2 9.5"/></svg>',
+      snow:   '<svg class="ol-glyph" width="14" height="14" viewBox="0 0 10 10"><path d="M5 1v8 M1.6 3l6.8 4 M8.4 3l-6.8 4"/></svg>',
+      storm:  '<svg class="ol-glyph storm" width="11" height="16" viewBox="0 0 8 12"><path d="M4.6 0 L0 7 h2.8 L1.8 12 L8 4.6 H4.8 L6.2 0 Z"/></svg>'
     };
     return G[kind] ? " " + G[kind] : "";
   }
@@ -1433,8 +1434,8 @@
       }
       var pp = (isNum(d.pp) && d.pp >= 20) ? '<span class="pp">' + Math.round(d.pp) + '%</span>' : "";
       html += '<div class="od' + (today ? " today" : "") + '">'
-            +   '<div class="od-day">' + (today ? "TODAY" : d.day) + _olIcon(_olKind(d.code)) + '</div>'
-            +   '<div class="od-hi">' + d.hi + '<span class="dg">\u00B0</span></div>'
+            +   '<div class="od-day">' + (today ? "TODAY" : d.day) + '</div>'
+            +   '<div class="od-hi">' + d.hi + '<span class="dg">\u00B0</span>' + _olIcon(_olKind(d.code)) + '</div>'
             +   '<div class="od-bar"><span class="fill" style="left:' + L + '%;right:' + R + '%"></span>' + nowDot + '</div>'
             +   '<div class="od-lo">' + d.lo + '\u00B0' + pp + '</div>'
             + '</div>';
