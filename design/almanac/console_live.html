@@ -361,8 +361,17 @@
      that says "live" at a glance. Opacity only (GPU-composited on the Pi);
      the pointer never fakes motion: its position is data. */
   #raingauge.raining .gauge-col { animation: water-breathe 4s ease-in-out infinite; }
-  @keyframes water-breathe { 0%, 100% { opacity: 0.42; } 50% { opacity: 0.58; } }
-  @media (prefers-reduced-motion: reduce) { #raingauge.raining .gauge-col { animation: none; } }
+  @keyframes water-breathe { 0%, 100% { opacity: 0.42; } 50% { opacity: 0.66; } }
+  /* rain streaks falling into the tube while it rains — clipped to the empty
+     region above the waterline, fall speed scaled to the live rate in JS, so
+     a downpour visibly pours. Transform-only; the Pi composites it. */
+  .rain-streak { stroke: var(--water); stroke-width: 2; stroke-linecap: round; opacity: 0; }
+  #raingauge.raining .rain-streak { opacity: 0.6; animation: streak-fall linear infinite; }
+  @keyframes streak-fall { to { transform: translateY(150px); } }
+  @media (prefers-reduced-motion: reduce) {
+    #raingauge.raining .gauge-col { animation: none; }
+    #raingauge.raining .rain-streak { animation: none; opacity: 0; }
+  }
   .gauge-ptr-g { transition: transform 0.7s ease; }      /* pointer rides the water level */
   @media (prefers-reduced-motion: reduce) { .gauge-col, .gauge-ptr-g { transition: none; } }
   #raingauge .tick       { stroke-width: 2.6; }
@@ -1053,7 +1062,7 @@
     return 1;
   }
 
-  var rainPtr, rainFill, rainGeom = { top: 22, bot: 136, x1: 15 };
+  var rainPtr, rainFill, rainClipRect, rainStreaks = [], rainGeom = { top: 22, bot: 136, x1: 15 };
   (function () {
     var svg = $("raingauge");
     var top = rainGeom.top, bot = rainGeom.bot, x1 = rainGeom.x1, x2 = 57, cx = (x1 + x2) / 2;
@@ -1063,6 +1072,18 @@
     /* full-height fill scaled from the bottom (scaleY) so the water level eases */
     rainFill = el("rect", { class: "gauge-col", x: x1 + 1, y: top, width: x2 - x1 - 2, height: bot - top }, svg);
     rainFill.style.transform = "scaleY(0)";
+    /* falling-rain streaks, clipped to the EMPTY part of the tube (the clip
+       rect's height tracks the waterline in renderGauges) */
+    var defs = el("defs", {}, svg);
+    var clip = el("clipPath", { id: "rain-clip" }, defs);
+    rainClipRect = el("rect", { x: x1 + 1, y: top, width: x2 - x1 - 2, height: bot - top }, clip);
+    var streakG = el("g", { "clip-path": "url(#rain-clip)" }, svg);
+    rainStreaks = [];
+    [x1 + 7, cx + 2, x2 - 6].forEach(function (sx, i) {
+      var ln = el("line", { class: "rain-streak", x1: sx, y1: top - 26 - i * 34, x2: sx - 1.5, y2: top - 16 - i * 34 }, streakG);
+      ln.style.animationDelay = (i * 0.33) + "s";
+      rainStreaks.push(ln);
+    });
     el("line", { class: "tick", x1: x1, y1: top, x2: x1, y2: bot }, svg);
     el("line", { class: "tick", x1: x2, y1: top, x2: x2, y2: bot }, svg);
     /* graduations ACROSS the tube, one per band boundary — the five equal steps
@@ -1366,6 +1387,12 @@
     rainFill.style.opacity = isNum(rainMm) ? "" : "0";
     rainPtr.style.transform = "translateY(" + (-rise).toFixed(1) + "px)";
     rainPtr.style.opacity = isNum(rainMm) ? "1" : "0.35";
+    /* streaks fall only through the air above the water; harder rain falls faster */
+    if (rainClipRect) {
+      rainClipRect.setAttribute("height", Math.max(0, (rainGeom.bot - rainGeom.top) - rise).toFixed(1));
+    }
+    var fallDur = (1.8 - 1.1 * rr).toFixed(2) + "s";      /* 1.8s drizzle -> 0.7s deluge */
+    rainStreaks.forEach(function (ln) { ln.style.animationDuration = fallDur; });
     /* NOTE: no intensity word here — the tile header (rainStatus) and the tube
        level both carry it already, and a third copy overflowed the column
        ("… · Moderat" clipped against the gauge on the real panel) */
