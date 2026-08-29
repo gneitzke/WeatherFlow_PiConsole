@@ -411,11 +411,38 @@ class AlmanacEmitter:
             code = codes[i] if i < len(codes) else None
             pp   = pps[i]   if i < len(pps)   else None
             out.append({'day':  day,
+                        'date': t[:10],
                         'hi':   int(round(hi)),
                         'lo':   int(round(lo)),
                         'code': int(code) if code is not None else None,
                         'pp':   int(round(pp)) if pp is not None else None})
         return out
+
+    @staticmethod
+    def _rain_rate_display(Obs, config):
+        """ Numeric rain rate in display units. Index [0] is the core's
+        FORMATTED display value, which for a trace rate is the STRING
+        '<0.01' (in/hr) / '<0.1' (mm/hr) - unparseable, so the overlay
+        showed a dash and hid the water while it was actually drizzling.
+        Fall back to converting the raw mm/hr at [3] by the configured
+        precip unit. Never raises. """
+        rate = _num(_idx(Obs.get('RainRate'), 0))
+        if rate is not None:
+            return rate
+        raw_mm = _num(_idx(Obs.get('RainRate'), 3))
+        if raw_mm is None:
+            return None
+        unit = (_cfg(config, 'Units', 'Precip') or 'mm').lower()
+        per_mm = {'in': 1 / 25.4, 'cm': 0.1, 'mm': 1.0}.get(unit, 1.0)
+        return round(raw_mm * per_mm, 4)
+
+    def _fc_daily_current(self, today_iso):
+        """ The stored outlook with any already-past days dropped, so a stale
+        forecast (wifi out for a day+) can never mislabel yesterday as TODAY.
+        As rows age out the band naturally shrinks below the HTML's 3-day
+        minimum and hides itself - no separate staleness flag needed. """
+        return [r for r in self._fc_daily
+                if not r.get('date') or r['date'] >= today_iso]
 
     def _check_aqi(self, _dt=None):
         """ Kick off a non-blocking air-quality fetch on a daemon thread. """
@@ -905,7 +932,7 @@ class AlmanacEmitter:
             'fcWind':          fc_wind,
             'fcPrecipPct':     _num(_idx(Met.get('PrecipPercnt'), 0)),
             'fcDailyPct':      _num(_idx(Met.get('PrecipDay'), 0)),
-            'fcDaily':         self._fc_daily,   # 7-day outlook [{day,hi,lo,code,pp},...] - Open-Meteo, hourly refresh
+            'fcDaily':         self._fc_daily_current(now_local.strftime('%Y-%m-%d')),   # outlook, past days dropped
 
             # Wind
             'windSpd':      _num(_idx(Obs.get('WindSpd'), 0)),
@@ -935,7 +962,7 @@ class AlmanacEmitter:
             'rainMonth':    _num(_idx(Obs.get('MonthRain'), 0)),
             'rainYear':     _num(_idx(Obs.get('YearRain'), 0)),
             'rainUnit':     _text(_cfg(config, 'Units', 'Precip')),
-            'rainRate':     _num(_idx(Obs.get('RainRate'), 0)),   # index 0 is unit-converted (in/hr); [3] is raw mm/hr
+            'rainRate':     self._rain_rate_display(Obs, config),
             'rainRateMm':   _num(_idx(Obs.get('RainRate'), 3)),   # raw mm/hr - drives the intensity-banded gauge
             'rainStatus':   _text(_idx(Obs.get('RainRate'), 2)),
             'drySpellDays': None,   # not reliably sourced - see report

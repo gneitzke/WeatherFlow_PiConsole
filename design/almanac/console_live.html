@@ -907,7 +907,13 @@
     });
   }
   document.querySelectorAll(".tab[data-screen]").forEach(function (b) {
-    b.addEventListener("click", function () { activate(b.dataset.screen); });
+    b.addEventListener("click", function () {
+      activate(b.dataset.screen);
+      /* the outlook band is part of the observations layout; the other
+         screens were composed for the full height */
+      var ol = $("outlook");
+      if (ol) ol.style.display = (b.dataset.screen === "s-obs") ? "" : "none";
+    });
   });
 
   /* Touch: brief tap-flash on any tab; pointerdown makes the active state feel
@@ -1183,7 +1189,8 @@
     sunrise: String, sunset: String,
     moonPhase: String, moonIllum: r0,
     moonrise: String, moonset: String, nextFull: String, nextNew: String,
-    lightningRate: f1, lightning3hr: r0, lightningToday: r0, lightningLast: String,
+    lightningRate: function (v) { return v.toFixed(1) + "/min"; },
+    lightning3hr: r0, lightningToday: r0, lightningLast: String,
     sagerSky: String
   };
 
@@ -1356,9 +1363,9 @@
     var rr = clamp(rainFrac(rainMm), 0, 1);
     var rise = rr * (rainGeom.bot - rainGeom.top);
     rainFill.style.transform = "scaleY(" + rr.toFixed(3) + ")";   /* water level eases (CSS transition) */
-    rainFill.style.opacity = isNum(data.rainRate) ? "" : "0";
+    rainFill.style.opacity = isNum(rainMm) ? "" : "0";
     rainPtr.style.transform = "translateY(" + (-rise).toFixed(1) + "px)";
-    rainPtr.style.opacity = isNum(data.rainRate) ? "1" : "0.35";
+    rainPtr.style.opacity = isNum(rainMm) ? "1" : "0.35";
     /* NOTE: no intensity word here — the tile header (rainStatus) and the tube
        level both carry it already, and a third copy overflowed the column
        ("… · Moderat" clipped against the gauge on the real panel) */
@@ -1442,6 +1449,16 @@
     });
     row.innerHTML = html;
     band.hidden = false;
+    /* snap fills to whole pixels - %-positioning lands on fractions of a px
+       (1% of a 146px column = 1.46px) and at 170ppi 1:1 that soft edge shows */
+    row.querySelectorAll(".od-bar").forEach(function (bar) {
+      var f = bar.querySelector(".fill");
+      if (!f) return;
+      var w = bar.clientWidth;
+      var L = Math.round(parseFloat(f.style.left) / 100 * w);
+      var R = Math.round(parseFloat(f.style.right) / 100 * w);
+      f.style.left = L + "px"; f.style.right = R + "px";
+    });
   }
 
   /* ———— Sun arc: dot position from sunFrac (0..1 of daylight) ———— */

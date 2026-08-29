@@ -205,7 +205,7 @@ def test_fc_daily_shapes_open_meteo_arrays():
     rows = AlmanacEmitter._fc_daily_from(daily)
     # the None-hi day is dropped: a partial bar lies on the shared scale
     assert len(rows) == 2
-    assert rows[0] == {'day': 'SAT', 'hi': 64, 'lo': 54, 'code': 95, 'pp': 95}
+    assert rows[0] == {'day': 'SAT', 'date': '2026-08-29', 'hi': 64, 'lo': 54, 'code': 95, 'pp': 95}
     assert rows[1]['day'] == 'SUN' and rows[1]['hi'] == 71 and rows[1]['pp'] == 60
 
 
@@ -215,3 +215,30 @@ def test_fc_daily_empty_and_garbage_never_raise():
     assert AlmanacEmitter._fc_daily_from({'time': ['not-a-date'],
                                           'temperature_2m_max': [70],
                                           'temperature_2m_min': [50]}) == []
+
+
+def test_trace_rain_rate_string_still_yields_a_number(make_emitter):
+    # The core formats a trace rate as the STRING '<0.01' (in/hr). That made
+    # rainRate null, which read as a dash AND hid the gauge water while it
+    # was actually drizzling. The emitter now falls back to converting the
+    # raw mm/hr by the configured precip unit.
+    s = scn.heavy_rain()
+    s['Obs']['RainRate'] = ['<0.01', 'in/hr', 'Very Light Rain', 0.2]
+    payload = make_emitter(s)._build_payload()
+    assert payload['rainRate'] == round(0.2 / 25.4, 4)
+    assert payload['rainRateMm'] == 0.2
+
+
+def test_stale_forecast_drops_past_days():
+    from lib.almanac_emit import AlmanacEmitter
+    e = AlmanacEmitter.__new__(AlmanacEmitter)
+    e._fc_daily = [
+        {'day': 'FRI', 'date': '2026-08-28', 'hi': 70, 'lo': 50, 'code': 0, 'pp': 0},
+        {'day': 'SAT', 'date': '2026-08-29', 'hi': 64, 'lo': 54, 'code': 95, 'pp': 93},
+        {'day': 'SUN', 'date': '2026-08-30', 'hi': 68, 'lo': 52, 'code': 61, 'pp': 60},
+    ]
+    rows = e._fc_daily_current('2026-08-29')
+    assert [r['day'] for r in rows] == ['SAT', 'SUN']   # yesterday can never be TODAY
+    # a row without a date (older cached shape) is kept, never crashed on
+    e._fc_daily.append({'day': 'MON', 'hi': 70, 'lo': 50, 'code': 0, 'pp': 0})
+    assert e._fc_daily_current('2026-08-29')[-1]['day'] == 'MON'
