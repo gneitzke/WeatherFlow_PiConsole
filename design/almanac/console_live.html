@@ -357,6 +357,12 @@
   .gauge-fill  { fill: var(--water-tint); }
   .gauge-col   { fill: var(--water); opacity: 0.42;      /* rain tube fills as rate climbs */
                  transform-box: fill-box; transform-origin: 50% 100%; transition: transform 0.7s ease; }
+  /* while rain is actively falling the water breathes — a slow opacity swell
+     that says "live" at a glance. Opacity only (GPU-composited on the Pi);
+     the pointer never fakes motion: its position is data. */
+  #raingauge.raining .gauge-col { animation: water-breathe 4s ease-in-out infinite; }
+  @keyframes water-breathe { 0%, 100% { opacity: 0.42; } 50% { opacity: 0.58; } }
+  @media (prefers-reduced-motion: reduce) { #raingauge.raining .gauge-col { animation: none; } }
   .gauge-ptr-g { transition: transform 0.7s ease; }      /* pointer rides the water level */
   @media (prefers-reduced-motion: reduce) { .gauge-col, .gauge-ptr-g { transition: none; } }
   #raingauge .tick       { stroke-width: 2.6; }
@@ -508,8 +514,13 @@
   .od-lo { font-family: var(--sans); font-size: 14px; font-weight: 600; line-height: 1.15; color: var(--ink-soft);
            font-variant-numeric: lining-nums; white-space: nowrap; }
   .od-lo .pp { font-size: 12px; line-height: 1; font-weight: 700; color: var(--water); margin-left: 6px; }
-  .ol-glyph { stroke: var(--water); stroke-width: 1.6; stroke-linecap: round; fill: none; }
-  .ol-glyph.storm { stroke: none; fill: var(--brass); }
+  /* condition glyphs, four-pigment discipline: brass = solar (this console's
+     sun pigment already), ink-soft = neutral sky, water = wet, storm = filled
+     brass bolt. Strokes >=1.5px so nothing dissolves at 170ppi 1:1. */
+  .ol-glyph        { stroke: var(--water);    stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+  .ol-glyph.sun    { stroke: var(--brass);    opacity: 0.9; }
+  .ol-glyph.cloud  { stroke: var(--ink-soft); opacity: 0.9; }
+  .ol-glyph.storm  { stroke: none; fill: var(--brass); }
 
   .foot { flex: 0 0 auto; padding-top: 6px; display: none; }
   :root[data-tabs="on"] .foot { display: block; }
@@ -1341,6 +1352,7 @@
     var dryGauge = (!isNum(data.rainRate) || data.rainRate === 0) &&
                    (!isNum(data.rainToday) || data.rainToday === 0);
     $("raingauge").classList.toggle("is-dry", dryGauge);
+    $("raingauge").classList.toggle("raining", isNum(rainMm) && rainMm > 0);
     var rr = clamp(rainFrac(rainMm), 0, 1);
     var rise = rr * (rainGeom.bot - rainGeom.top);
     rainFill.style.transform = "scaleY(" + rr.toFixed(3) + ")";   /* water level eases (CSS transition) */
@@ -1372,14 +1384,29 @@
      code); a clear or cloudy day earns no decoration. Rebuilt only when the
      forecast actually changes — not on every 2 s tick. */
   var _olKey = null;
-  function _olGlyph(code) {
-    if (code == null) return "";
-    if (code >= 95) return ' <svg class="ol-glyph storm" width="7" height="10" viewBox="0 0 8 12"><path d="M4.6 0 L0 7 h2.8 L1.8 12 L8 4.6 H4.8 L6.2 0 Z"/></svg>';
-    if ((code >= 71 && code <= 77) || code === 85 || code === 86)
-      return ' <svg class="ol-glyph" width="9" height="9" viewBox="0 0 10 10"><path d="M5 1v8M1.6 3l6.8 4M8.4 3l-6.8 4"/></svg>';
-    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82))
-      return ' <svg class="ol-glyph" width="8" height="9" viewBox="0 0 9 10"><path d="M2.6 1.5 1.2 5.5 M6.2 1.5 4.8 5.5 M4.2 6.5 3.2 9.5"/></svg>';
-    return "";
+  /* WMO code -> one of seven engraved glyphs. 12x12 viewBox at 11px, stroke
+     1.5-1.6 — the minimum that stays crisp at 170ppi 1:1. */
+  function _olIcon(kind) {
+    var G = {
+      sun:    '<svg class="ol-glyph sun" width="11" height="11" viewBox="0 0 12 12"><circle cx="6" cy="6" r="2.4"/><path d="M6 .8v1.4 M6 9.8v1.4 M.8 6h1.4 M9.8 6h1.4 M2.3 2.3l1 1 M8.7 8.7l1 1 M9.7 2.3l-1 1 M3.3 8.7l-1 1"/></svg>',
+      partly: '<svg class="ol-glyph sun" width="12" height="11" viewBox="0 0 13 12"><circle cx="8.6" cy="4" r="1.9"/><path d="M8.6 .6v1 M11.6 4h1 M10.7 1.9l.7-.7 M10.7 6.1l.7 .7"/><path class="ol-glyph cloud" d="M2.6 10.4a1.9 1.9 0 0 1 0-3.8 2.6 2.6 0 0 1 5-.5 1.8 1.8 0 0 1-.5 4.3z"/></svg>',
+      cloud:  '<svg class="ol-glyph cloud" width="12" height="10" viewBox="0 0 13 11"><path d="M3 9.4a2.3 2.3 0 0 1 0-4.6 3.2 3.2 0 0 1 6.2-.5 2.2 2.2 0 0 1-.6 4.9z"/></svg>',
+      fog:    '<svg class="ol-glyph cloud" width="11" height="9" viewBox="0 0 12 10"><path d="M1.5 2.5h9 M1.5 5h9 M1.5 7.5h9"/></svg>',
+      rain:   '<svg class="ol-glyph" width="8" height="9" viewBox="0 0 9 10"><path d="M2.6 1.5 1.2 5.5 M6.2 1.5 4.8 5.5 M4.2 6.5 3.2 9.5"/></svg>',
+      snow:   '<svg class="ol-glyph" width="9" height="9" viewBox="0 0 10 10"><path d="M5 1v8 M1.6 3l6.8 4 M8.4 3l-6.8 4"/></svg>',
+      storm:  '<svg class="ol-glyph storm" width="7" height="10" viewBox="0 0 8 12"><path d="M4.6 0 L0 7 h2.8 L1.8 12 L8 4.6 H4.8 L6.2 0 Z"/></svg>'
+    };
+    return G[kind] ? " " + G[kind] : "";
+  }
+  function _olKind(code) {
+    if (code == null) return null;
+    if (code >= 95) return "storm";
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "snow";
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return "rain";
+    if (code === 45 || code === 48) return "fog";
+    if (code === 3) return "cloud";
+    if (code === 2) return "partly";
+    return "sun";                      /* 0, 1 — clear / mainly clear */
   }
   function renderOutlook(data) {
     var band = $("outlook"), row = $("ol-row");
@@ -1406,7 +1433,7 @@
       }
       var pp = (isNum(d.pp) && d.pp >= 20) ? '<span class="pp">' + Math.round(d.pp) + '%</span>' : "";
       html += '<div class="od' + (today ? " today" : "") + '">'
-            +   '<div class="od-day">' + (today ? "TODAY" : d.day) + _olGlyph(d.code) + '</div>'
+            +   '<div class="od-day">' + (today ? "TODAY" : d.day) + _olIcon(_olKind(d.code)) + '</div>'
             +   '<div class="od-hi">' + d.hi + '<span class="dg">\u00B0</span></div>'
             +   '<div class="od-bar"><span class="fill" style="left:' + L + '%;right:' + R + '%"></span>' + nowDot + '</div>'
             +   '<div class="od-lo">' + d.lo + '\u00B0' + pp + '</div>'
