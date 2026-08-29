@@ -37,10 +37,19 @@ falling barometer has already switched its outlook to rain:
 ![The Almanac interface during heavy rain, with the 7-day outlook band](design/almanac/screenshots/almanac.png)
 
 While it rains, etched rain falls into the rate gauge — hatching at two depths,
-its speed and density following the measured rate, with a shimmering meniscus
-at the waterline:
+its speed and density following the measured rate, into a sine-wave water
+surface whose swell and drift also track the intensity:
 
 ![The rainfall panel during heavy rain: etched rain falls into the intensity gauge](design/almanac/screenshots/rainfall.gif)
+
+Winter is a first-class citizen. A pre-dawn January morning at −3.8 °F: the
+Winter Storm Warning shares the page with a compressed 7-day outlook (snow
+glyphs, sub-zero lows on the shared axis), and the rainfall panel reads
+"Snow Likely" — the Tempest's haptic sensor cannot register snowfall, so in
+freezing weather with snow forecast, the console says so instead of
+pretending it is dry:
+
+![The console on a winter morning: storm warning, snow outlook, Snow Likely status](design/almanac/screenshots/winter.png)
 
 The classic six-panel console (the upstream default) for comparison:
 
@@ -50,12 +59,13 @@ What it changes:
 
 - One dominant temperature and a plain-language forecast line, in place of six equal-weight panels.
 - A barometer zone bar (Stormy / Change / Fair / Dry) and a 24-hour pressure barograph labelled with the day's high and low.
-- Active weather alerts (US National Weather Service) in a single strip below the masthead, coloured by severity and collapsed to one line when several are active.
+- Active weather alerts (US National Weather Service) in a single strip below the masthead, coloured by severity and collapsed to one line when several are active. The 7-day outlook stays on screen through an alert (compressed to highs and bars) — a winter storm warning can run for days, exactly when the week ahead matters most.
 - Air quality (AQI) by the station's own latitude and longitude, with a short forecast so a rising smoke event shows before the number climbs.
 - A 7-day outlook band: each day's low–high drawn as a bar on ONE shared axis for the week (so a cool-down is visibly a shorter, lower bar), condition glyphs beside the highs, precipitation probability only when it matters, and today's bar carrying a dot at the observed temperature.
 - A rainfall rate gauge scaled by intensity rather than linearly — the five named bands (Very Light through Very Heavy) each take an equal fifth of the tube, so drizzle registers and a downpour doesn't pin the needle.
 - A wind panel that resolves to one current reading, with a bolder compass.
-- Animated updates: values count up, the vane swings — and while rain falls, etched rain falls through the gauge, speed and density tracking the measured rate.
+- Animated updates: values count up, the vane swings — and while rain falls, etched rain falls through the gauge into a waving water surface, with fall speed, density, swell, and drift all tracking the measured rate.
+- Snow-aware: in freezing weather with snow in the forecast, a dry rain sensor reads "Snow Likely" rather than "Currently Dry" (the Tempest's haptic sensor cannot register snowfall).
 - Day/night aware. After sunset the Sun & Sky panel becomes Moon & Sky (phase, illumination, moonrise/set).
 
 Both extra data sources degrade quietly. Weather alerts come from the US National
