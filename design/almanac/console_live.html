@@ -735,7 +735,7 @@
           <div class="p-body">
             <div class="p-col">
               <div class="p-value"><span class="n" data-k="rainToday">0.00</span><span class="u"><span data-k="rainUnit">in</span> today</span></div>
-              <div class="p-sub">Rate <span data-k="rainRate">0</span> <span data-k="rainUnit">in</span>/hr<span id="rain-intensity"></span></div>
+              <div class="p-sub">Rate <span data-k="rainRate">0</span> <span data-k="rainUnit">in</span>/hr</div>
               <div class="ledger">
                 <div class="lrow"><span class="k">Yesterday</span><span class="dots"></span><span class="v"><span class="amt" data-k="rainYest">0.00</span> <small data-k="rainUnit">in</small></span></div>
                 <div class="lrow"><span class="k">Month</span><span class="dots"></span><span class="v"><span class="amt" data-k="rainMonth">0.15</span> <small data-k="rainUnit">in</small></span></div>
@@ -1347,13 +1347,9 @@
     rainFill.style.opacity = isNum(data.rainRate) ? "" : "0";
     rainPtr.style.transform = "translateY(" + (-rise).toFixed(1) + "px)";
     rainPtr.style.opacity = isNum(data.rainRate) ? "1" : "0.35";
-    /* rate intensity word (Light / Moderate / Heavy …) from the core's rainStatus */
-    var ri = $("rain-intensity");
-    if (ri) {
-      var st = (data.rainStatus || "").replace(/\s*Rain$/i, "").trim();
-      ri.innerHTML = (isNum(data.rainRate) && data.rainRate > 0 && st && !/dry/i.test(st))
-        ? " · <b>" + st + "</b>" : "";
-    }
+    /* NOTE: no intensity word here — the tile header (rainStatus) and the tube
+       level both carry it already, and a third copy overflowed the column
+       ("… · Moderat" clipped against the gauge on the real panel) */
 
     /* UV marker 0..11 */
     var mk = $("uv-marker");
