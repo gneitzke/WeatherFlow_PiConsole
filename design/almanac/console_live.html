@@ -360,9 +360,6 @@
   /* while rain is actively falling the water breathes — a slow opacity swell
      that says "live" at a glance. Opacity only (GPU-composited on the Pi);
      the pointer never fakes motion: its position is data. */
-  /* while rain falls the water swells almost imperceptibly — alive, not throbbing */
-  #raingauge.raining .gauge-col { animation: water-breathe 6.5s ease-in-out infinite; }
-  @keyframes water-breathe { 0%, 100% { opacity: 0.42; } 50% { opacity: 0.52; } }
 
   /* ———— falling rain · two-depth etched hatching (Fable design) ————
      Continuous columns: one dashed line per column, translated by exactly one
@@ -381,14 +378,14 @@
   #raingauge.rain2 .r2 { visibility: visible; }
   #raingauge.rain3 .r2, #raingauge.rain3 .r3 { visibility: visible; }
   #raingauge.rain3 .streak-near { opacity: 0.72; }
-  /* meniscus at the waterline — rides the pointer group (position = data),
-     shimmers in place while raining */
-  .gauge-surf { stroke: var(--water); stroke-width: 1.8; opacity: 0; }
-  #raingauge.raining .gauge-surf { animation: surf-shimmer 3.4s ease-in-out infinite; }
-  @keyframes surf-shimmer { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.9; } }
+  /* the waterline itself waves — a gentle sine surface riding the pointer
+     group (its MEAN position is the data; the ±1.6px undulation is texture).
+     Translated by exactly one wavelength per loop, so the drift is seamless. */
+  .gauge-surf { stroke: var(--water); stroke-width: 1.8; stroke-linecap: round; fill: none; opacity: 0; }
+  #raingauge.raining .gauge-surf { opacity: 0.8; animation: surf-drift linear infinite; }
+  @keyframes surf-drift { to { transform: translateX(20px); } }
 
   @media (prefers-reduced-motion: reduce) {
-    #raingauge.raining .gauge-col   { animation: none; }
     #raingauge.raining .streak-far,
     #raingauge.raining .streak-near { animation: none; opacity: 0; }
     #raingauge.raining .gauge-surf  { animation: none; opacity: 0.6; }
@@ -1083,7 +1080,7 @@
     return 1;
   }
 
-  var rainPtr, rainFill, rainClipRect, rainStreaks = null, rainGeom = { top: 22, bot: 136, x1: 15 };
+  var rainPtr, rainFill, rainClipRect, rainStreaks = null, surfWave = null, rainGeom = { top: 22, bot: 136, x1: 15 };
   (function () {
     var svg = $("raingauge");
     var top = rainGeom.top, bot = rainGeom.bot, x1 = rainGeom.x1, x2 = 57, cx = (x1 + x2) / 2;
@@ -1126,7 +1123,15 @@
       el("line", { class: "rain-band", x1: x1, y1: y, x2: x2 + 6, y2: y }, svg);
     }
     rainPtr = el("g", { class: "gauge-ptr-g" }, svg);              /* group rides the water level */
-    el("line", { class: "gauge-surf", x1: x1 + 1, y1: bot, x2: x2 - 1, y2: bot }, rainPtr);
+    /* sine surface: four 20px wavelengths starting one wavelength left of the
+       tube, clipped to the tube walls; translateX(20px) per loop = seamless.
+       The clip lives in the pointer group's space, so it rides the level too. */
+    var surfClip = el("clipPath", { id: "surf-clip" }, defs);
+    el("rect", { x: x1 + 1, y: bot - 5, width: x2 - x1 - 2, height: 10 }, surfClip);
+    var surfG = el("g", { "clip-path": "url(#surf-clip)" }, rainPtr);
+    var wd = "M " + (x1 - 20) + " " + bot;
+    for (var wv = 0; wv < 4; wv++) { wd += " q 5 -3.2 10 0 q 5 3.2 10 0"; }
+    surfWave = el("path", { class: "gauge-surf", d: wd }, surfG);
     el("polygon", { class: "gauge-ptr",
       points: (x1 - 2) + "," + bot + " " + (x1 - 13) + "," + (bot - 7.5) + " " + (x1 - 13) + "," + (bot + 7.5) }, rainPtr);
   })();
@@ -1439,6 +1444,10 @@
        measured intensity crosses each engraved line */
     $("raingauge").classList.toggle("rain2", rr >= 0.4);
     $("raingauge").classList.toggle("rain3", rr >= 0.6);
+    if (surfWave) {
+      var surfDur = (4.2 - 2.4 * rr).toFixed(2) + "s";   /* gentle drift, quicker in a downpour */
+      if (surfWave.style.animationDuration !== surfDur) surfWave.style.animationDuration = surfDur;
+    }
     /* NOTE: no intensity word here — the tile header (rainStatus) and the tube
        level both carry it already, and a third copy overflowed the column
        ("… · Moderat" clipped against the gauge on the real panel) */
