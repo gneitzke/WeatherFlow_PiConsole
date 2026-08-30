@@ -49,6 +49,7 @@ VERSION_CHECK_INTERVAL = 900   # seconds (15 min) — how often we poll GitHub f
 AQI_CHECK_INTERVAL     = 600   # seconds (10 min) — refresh air quality; short enough to recover fast
 ALERTS_CHECK_INTERVAL  = 900   # seconds (15 min) — NWS alerts change slowly; be gentle on api.weather.gov
 FORECAST_CHECK_INTERVAL = 3600 # seconds (1 h) — the daily outlook barely moves intra-hour
+FC_STALE_SEC           = 86400 # seconds (24 h) without a successful forecast fetch -> fcStale (band hides)
 ALERTS_TIMEOUT         = 20    # seconds — socket timeout for the alerts fetch
 ALERT_STALE_SEC        = 3600  # seconds (1 h) without a successful alerts fetch -> mark alertsStale
 AQI_STALE_SEC          = 3600  # seconds (1 h) without a successful AQI fetch -> mark aqiStale
@@ -61,7 +62,7 @@ ALERTS_UA_FALLBACK = 'WeatherFlow-PiConsole-almanac (+https://github.com/gneitzk
 # NWS product level parsed from the LAST word of the event name — a controlled
 # vocabulary that stays reliable even when CAP severity/urgency are 'Unknown'.
 # 'Alert' products (e.g. Air Quality Alert) bucket as advisory-tier. Higher = more urgent.
-_ALERT_LEVEL     = {'warning': 4, 'watch': 3, 'advisory': 2, 'alert': 2, 'statement': 1, 'outlook': 0}
+_ALERT_LEVEL     = {'emergency': 4, 'warning': 4, 'watch': 3, 'advisory': 2, 'alert': 2, 'danger': 2, 'statement': 1, 'outlook': 0}
 _ALERT_LEVELNAME = {4: 'warning', 3: 'watch', 2: 'advisory', 1: 'statement', 0: 'outlook'}
 # Hazard family — for the label/nuance only; the banner colour is derived from the level.
 _EVENT_CLASS_MAP = [
@@ -688,8 +689,16 @@ class AlmanacEmitter:
         """ NWS product level from the last word of the event name. 'Alert' products
         bucket as advisory-tier; unknown products as statement-tier. Returns
         (level_int, level_str) with higher int = more urgent. """
-        last = (event or '').strip().lower().rsplit(' ', 1)[-1]
-        lvl = _ALERT_LEVEL.get(last, 1)
+        words = (event or '').strip().lower().split()
+        last = words[-1] if words else ''
+        if last in _ALERT_LEVEL:
+            lvl = _ALERT_LEVEL[last]
+        else:
+            # products like "Small Craft Advisory for Hazardous Seas" or
+            # "911 Telephone Outage Emergency" carry their tier mid-name;
+            # take the most urgent tier word found anywhere, else statement
+            found = [_ALERT_LEVEL[w] for w in words if w in _ALERT_LEVEL]
+            lvl = max(found) if found else 1
         return lvl, _ALERT_LEVELNAME[lvl]
 
     @staticmethod
@@ -974,6 +983,7 @@ class AlmanacEmitter:
             'fcPrecipPct':     _num(_idx(Met.get('PrecipPercnt'), 0)),
             'fcDailyPct':      _num(_idx(Met.get('PrecipDay'), 0)),
             'fcDaily':         fc_rows,   # outlook, past days dropped at emit time
+            'fcStale':         (self._fc_ts is None) or (time.time() - self._fc_ts) > FC_STALE_SEC,
 
             # Wind
             'windSpd':      _num(_idx(Obs.get('WindSpd'), 0)),

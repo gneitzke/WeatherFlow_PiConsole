@@ -48,7 +48,7 @@ def heavy_rain():
     s = _base()
     s['Obs'].update({
         'outTemp':   ['58.0', '℉'],
-        'RainRate':  ['0.05', 'in/hr', 'Heavy', 1.27],      # [0]=0.05 in/hr, [3]=1.27 mm/hr
+        'RainRate':  ['0.05', 'in/hr', 'Heavy Rain', 1.27],      # [0]=0.05 in/hr, [3]=1.27 mm/hr
         'TodayRain': ['1.2', 'in'],
     })
     return s

@@ -872,7 +872,7 @@
           <div class="lrow"><span class="k">Last 3 hrs</span><span class="dots"></span><span class="v" data-k="lightning3hr">0</span></div>
           <div class="lrow"><span class="k">Last detected</span><span class="dots"></span><span class="v"><span data-k="lightningLast">3 days ago</span> <small id="lt-lastdist">≈ 18 mi</small></span></div>
         </div>
-        <div class="sc-note" id="lt-note">No lightning detected within 40 miles in the last three hours.</div>
+        <div class="sc-note" id="lt-note">No lightning detected near the station recently.</div>
       </div>
     </div>
   </main>
@@ -940,12 +940,16 @@
     return [cx + r * Math.sin(a), cy - r * Math.cos(a)];
   }
   function isNum(v) { return typeof v === "number" && isFinite(v); }
-  function hm(t) {                          /* "HH:MM" -> hours as float, or null */
+  function hm(t) {                          /* "HH:MM" or "H:MM AM/PM" -> hours as float, or null */
     if (typeof t !== "string") return null;
-    var p = t.split(":");
-    if (p.length < 2) return null;
-    var h = parseInt(p[0], 10), m = parseInt(p[1], 10);
-    if (isNaN(h) || isNaN(m)) return null;
+    var mt = /^\s*(\d{1,2}):(\d{2})\s*([AaPp][Mm])?/.exec(t);
+    if (!mt) return null;
+    var h = +mt[1], m = +mt[2];
+    if (mt[3]) {                            /* Display/TimeFormat = 12 hr consoles */
+      var pm = mt[3].toLowerCase() === "pm";
+      if (pm && h !== 12) h += 12;
+      if (!pm && h === 12) h = 0;
+    }
     return h + m / 60;
   }
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
@@ -1246,7 +1250,7 @@
     var svg = $("minirings"), cx = 60, cy = 60, maxR = 48;
     [[16, ""], [32, ""], [48, "30 MI"]].forEach(function (r) {
       el("circle", { class: "ring", cx: cx, cy: cy, r: r[0] }, svg);
-      if (r[1]) el("text", { class: "ring-lbl", x: cx + 3, y: cy - r[0] + 9 }, svg).textContent = r[1];
+      if (r[1]) mini.unitLbl = el("text", { class: "ring-lbl", x: cx + 3, y: cy - r[0] + 9 }, svg), mini.unitLbl.textContent = r[1];
     });
     el("circle", { class: "station-dot", cx: cx, cy: cy, r: 2 }, svg);
     mini.layer = el("g", {}, svg);
@@ -1280,7 +1284,7 @@
     slp24High: f1, slp24HighTime: String, slp24Low: f1, slp24LowTime: String,
     slpOutlook: String,
     rainStatus: String, rainToday: f2, rainUnit: String,
-    rainRate: function (v) { return v ? v.toFixed(2) : "0"; },
+    rainRate: function (v) { return !v ? "0" : (v > 0 && v < 0.005) ? "<0.01" : v.toFixed(2); },
     drySpellDays: r0, lastRainDate: String, lastRainAmt: f2,
     rainYest: f2, rainMonth: f2, rainYear: f2,
     uvIndex: f1, uvDesc: String, radiation: r0, radUnit: String,
@@ -1435,8 +1439,13 @@
     animRotate(windNeedle, 75, 75, dir, true);
     windNeedle.style.opacity = isNum(data.windDir) ? "1" : "0.25";
 
-    /* BAROMETER zone bar — marker slides to the reading, active zone lights up */
-    var slp = isNum(data.slp) ? clamp(data.slp, 950, 1050) : 1013;
+    /* BAROMETER zone bar — marker slides to the reading, active zone lights up.
+       The engraved 950-1050 scale is millibars; a console configured for inHg
+       or mmHg emits those units, so convert before placing the marker (else
+       29.9 inHg clamps to 950 and STORMY stays lit in fair weather). */
+    var SLP_TO_MB = { mb: 1, hpa: 1, inhg: 33.8639, mmhg: 1.33322 };
+    var slpMbFactor = SLP_TO_MB[(data.slpUnit || "mb").toLowerCase().replace(/\s/g, "")] || 1;
+    var slp = isNum(data.slp) ? clamp(data.slp * slpMbFactor, 950, 1050) : 1013;
     baroBar.marker.style.transform = "translateX(" + baroBar.x(slp).toFixed(1) + "px)";
     baroBar.marker.style.opacity = isNum(data.slp) ? "1" : "0.3";
     baroBar.words.forEach(function (w) {
@@ -1560,7 +1569,7 @@
     var alertUp = Array.isArray(data.alerts) && data.alerts.length > 0;
     band.classList.toggle("compact", alertUp);
     document.querySelector(".page").classList.toggle("alert-squeeze", alertUp);
-    if (!Array.isArray(days) || days.length < 3) { band.hidden = true; _olKey = null; return; }
+    if (data.fcStale || !Array.isArray(days) || days.length < 3) { band.hidden = true; _olKey = null; return; }
     var key = JSON.stringify(days) + "|" + (isNum(data.temp) ? Math.round(data.temp) : "");
     if (key === _olKey) { band.hidden = false; return; }
     _olKey = key;
@@ -1768,7 +1777,10 @@
   function renderMoon(data) { drawMoonTerminator($("moon-dark-path"), 75, 75, 60, data.moonIllum, data.moonPhase); }
 
   /* ———— Sun & Sky ⇄ Moon & Sky: show the sky that's actually overhead ———— */
-  function toMin(hhmm) { var m = /^(\d{1,2}):(\d{2})/.exec(hhmm || ""); return m ? (+m[1]) * 60 + (+m[2]) : null; }
+  function toMin(hhmm) {                    /* accepts "HH:MM" and "H:MM AM/PM" */
+    var h = hm(hhmm);
+    return h === null ? null : Math.round(h * 60);
+  }
   function isDaytime(data) {
     var now = toMin(data.time), sr = toMin(data.sunrise), ss = toMin(data.sunset);
     if (now != null && sr != null && ss != null) return now >= sr && now < ss;
@@ -1818,12 +1830,13 @@
       $("lt-status").textContent = active ? "Active" : "All Quiet";
       $("lt-note").textContent = active
         ? "Lightning is being detected near the station right now."
-        : "No lightning detected within 40 miles in the last three hours.";
+        : "No lightning detected near the station recently.";
       /* The core reports strike distance as a +/-3 km RANGE string ("13-17"),
          never a bare number, so the geometry rides lightningDistNum (its
          midpoint) while the readout keeps the honest range. */
       var dnum = isNum(data.lightningDistNum) ? data.lightningDistNum : null;
       var dunit = ({ miles: "mi", km: "km" })[data.lightningDistUnit] || "mi";
+      if (mini.unitLbl) mini.unitLbl.textContent = "30 " + dunit.toUpperCase();
       if (dnum !== null) {
         $("lt-lastdist").textContent = "≈ " + (data.lightningDist || Math.round(dnum)) + " " + dunit;
         var rr = clamp(dnum / 30 * 75, 6, 78);
@@ -2047,7 +2060,7 @@
     box.classList.toggle("stale", stale);
     var fwd = $("aqi-fwd"), seg = $("aqi-seg"), tr = $("aq-trend"), catEl = $("aqi-cat");
     var peak = data.aqiPeak;
-    var rising = !stale && isNum(peak) && aqiBand(peak).cat !== b.cat && peak > a;
+    var rising = data.aqiTrend === "rising" && isNum(peak);
     var falling = !stale && data.aqiTrend === "falling" && !!data.aqiTrendText;
     if (rising) {
       var pb = aqiBand(peak), pPct = clamp(peak / 300 * 100, 0, 100);

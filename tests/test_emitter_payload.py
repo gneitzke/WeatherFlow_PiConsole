@@ -43,7 +43,7 @@ def test_rain_rate_mm_is_the_raw_index3(make_emitter):
 
 def test_rain_status_and_unit(make_emitter):
     payload = make_emitter(scn.heavy_rain())._build_payload()
-    assert payload['rainStatus'] == 'Heavy'
+    assert payload['rainStatus'] == 'Heavy Rain'   # the exact string the core emits
     assert payload['rainUnit'] == 'in'        # from config Units/Precip
     assert payload['rainToday'] == 1.2
 

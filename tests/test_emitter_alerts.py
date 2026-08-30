@@ -215,3 +215,18 @@ def test_do_aqi_null_is_graceful(make_emitter, monkeypatch):
     e._do_aqi()
     assert e._aqi is None
     assert e._build_payload()['aqi'] is None
+
+
+def test_alert_level_tier_word_anywhere_in_name():
+    from lib.almanac_emit import AlmanacEmitter
+    f = AlmanacEmitter._alert_level
+    # tier word mid-name (audit finding: these demoted to statement before)
+    assert f('Small Craft Advisory for Hazardous Seas')[0] == 2
+    assert f('911 Telephone Outage Emergency')[0] == 4
+    assert f('Child Abduction Emergency')[0] == 4
+    assert f('Extreme Fire Danger')[0] == 2
+    # last-word fast path unchanged
+    assert f('Winter Storm Warning')[0] == 4
+    assert f('Air Quality Alert')[0] == 2
+    assert f('Hydrologic Outlook')[0] == 0
+    assert f('Some Novel Product')[0] == 1
