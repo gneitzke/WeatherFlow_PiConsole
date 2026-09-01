@@ -270,6 +270,8 @@ def test_tomorrow_hint_speaks_only_when_tomorrow_is_a_story():
     assert f(rows(95)) == 'Thunderstorms tomorrow'
     assert f(rows(73)) == 'Snow tomorrow'
     assert f(rows(61)) == 'Rain tomorrow'
+    assert f(rows(66)) == 'Freezing rain tomorrow'
+    assert f(rows(56)) == 'Freezing rain tomorrow'
     assert f(rows(2, gust=52)) == 'Windy tomorrow'
     assert f(rows(45)) == 'Fog tomorrow'
     # storms outrank wind; ordinary days say nothing
