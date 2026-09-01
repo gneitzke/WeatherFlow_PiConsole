@@ -465,6 +465,19 @@ class AlmanacEmitter:
             pass
         return None
 
+    # The core's barometer outlook sentences are too long for the ledger row
+    # ("Becoming clearer and cooler" wrapped, then overran). The vocabulary is
+    # closed, so map to the compact editorial forms the design contract always
+    # showed ("Unchanged"); unknown strings pass through untouched.
+    _OUTLOOK_COMPACT = {
+        'Conditions unchanged':        'Unchanged',
+        'Fair conditions likely':      'Fair conditions',
+        'Rainy conditions likely':     'Rain likely',
+        'Stormy conditions likely':    'Storm likely',
+        'Becoming clearer and cooler': 'Clearer, cooler',
+        'Becoming cloudy and warmer':  'Cloudier, warmer',
+    }
+
     @staticmethod
     def _snowify_status(status, temp, temp_unit, fc_rows):
         """ The Tempest's haptic rain sensor cannot register snowfall, so in
@@ -1039,7 +1052,9 @@ class AlmanacEmitter:
             'slp24HighTime':  _text(_idx(Obs.get('SLPMax'), 2)),
             'slp24Low':       _num(_idx(Obs.get('SLPMin'), 0)),
             'slp24LowTime':   _text(_idx(Obs.get('SLPMin'), 2)),
-            'slpOutlook':     _text(_idx(Obs.get('SLPTrend'), 3)),
+            'slpOutlook':      self._OUTLOOK_COMPACT.get(
+                                   _text(_idx(Obs.get('SLPTrend'), 3)) or '',
+                                   _text(_idx(Obs.get('SLPTrend'), 3))),
             'slpSeries':      self._baro_series(),   # 24h [[t,slp],...] for the barograph
 
             # Rainfall

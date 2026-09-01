@@ -294,3 +294,16 @@ def test_fc_daily_carries_gusts():
         'weather_code': [61], 'precipitation_probability_max': [60],
         'wind_gusts_10m_max': [47.6]})
     assert rows[0]['gust'] == 48
+
+
+def test_outlook_compacts_the_closed_vocabulary(make_emitter):
+    from lib.almanac_emit import AlmanacEmitter
+    m = AlmanacEmitter._OUTLOOK_COMPACT
+    assert m['Becoming clearer and cooler'] == 'Clearer, cooler'
+    assert m['Conditions unchanged'] == 'Unchanged'
+    # every compact form fits the ledger row (the bug was a 27-char sentence)
+    assert all(len(v) <= 16 for v in m.values())
+    # an unknown string passes through rather than vanishing
+    s = scn.heavy_rain()
+    s['Obs']['SLPTrend'] = ['-0.2', 'mb/hr', 'Falling', 'Some Novel Outlook']
+    assert make_emitter(s)._build_payload()['slpOutlook'] == 'Some Novel Outlook'

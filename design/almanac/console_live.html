@@ -267,7 +267,11 @@
   #tile-rain .lrow .v .amt .ai { display: inline-block; text-align: right; min-width: 1.6em; }
   #tile-rain .lrow .v .amt .af { display: inline-block; text-align: left;  width: 1.5em; }
   .lrow .v small { font-family: var(--sans); font-size: 15px; font-weight: 800; color: var(--ink-soft); }
-  .lrow .v.word { font-size: 14.5px; white-space: normal; text-align: right; line-height: 1.18; }
+  /* the outlook vocabulary is closed (six strings, worst 27 chars): one line,
+     never wrapped — flex gave a wrapping value ~95px and the second line
+     spilled past the tile. The dot leader yields the space instead. */
+  .lrow .v.word { font-size: 14.5px; white-space: nowrap; text-align: right; line-height: 1.18;
+                  overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
   .lrow.out { align-items: baseline; gap: 10px; }
   .lrow.out .dots { display: none; }
   .lrow.out .v.word { flex: 1; min-width: 0; text-align: right; }
