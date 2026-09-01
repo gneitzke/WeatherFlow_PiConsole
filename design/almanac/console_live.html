@@ -459,7 +459,10 @@
   .hub-dot     { fill: var(--paper); }
   /* wind compass: 8 bold ticks + big sans cardinals + heavy needle — the rose
      star is gone; at 120px on a 7" panel fewer, thicker elements read farther */
-  #rose { transform: translateY(-4px); }
+  #rose { transform: translateY(-2px); width: 112px; height: 112px; }  /* -8px buys the third ledger row */
+  .panel:nth-child(1) .p-value .n { font-size: 42px; }                  /* -4 more */
+  .panel:nth-child(1) .ledger .lrow { padding: 0; }                     /* -6 across three rows */
+  .panel:nth-child(1) .p-col.snug .ledger { margin-top: 8px; }          /* -5 (was 13) */
   #rose .dial-ring   { stroke-width: 3; }
   #rose .tick        { stroke: var(--ink);  stroke-width: 5; }    /* N/E/S/W ticks */
   #rose .tick.minor  { stroke: var(--rule); stroke-width: 2.2; }  /* intercardinals */
@@ -721,6 +724,7 @@
             <div class="ledger">
               <div class="lrow"><span class="k">Average</span><span class="dots"></span><span class="v"><span data-k="windAvg">0.1</span> <small data-k="windUnit">mph</small></span></div>
               <div class="lrow"><span class="k">Gust</span><span class="dots"></span><span class="v"><span data-k="windGust">2.9</span> <small data-k="windUnit">mph</small></span></div>
+              <div class="lrow"><span class="k">Max</span><span class="dots"></span><span class="v"><span data-k="windMax">4.3</span> <small data-k="windUnit">mph</small></span></div>
             </div>
           </div>
         </div>
