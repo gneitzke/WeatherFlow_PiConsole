@@ -31,8 +31,11 @@ six-panel console untouched.
 
 The Almanac (this fork) reads at a glance and finds room for things the classic
 layout can't. Here, heavy rain is falling through the intensity gauge, a 7-day
-outlook runs along the foot of the page on one shared temperature scale, and the
-falling barometer has already switched its outlook to rain:
+outlook runs along the foot of the page on one shared temperature scale, the
+falling barometer has already switched its outlook to rain — and a quiet "Rain
+tomorrow" sits under the headline (that line appears only when tomorrow is a
+story: thunderstorms, snow, rain, wind, or fog; ordinary days say nothing).
+Thursday in the band wears the wind glyph — a dry day whose story is its gusts:
 
 ![The Almanac interface during heavy rain, with the 7-day outlook band](design/almanac/screenshots/almanac.png)
 
@@ -61,7 +64,8 @@ What it changes:
 - A barometer zone bar (Stormy / Change / Fair / Dry) and a 24-hour pressure barograph labelled with the day's high and low.
 - Active weather alerts (US National Weather Service) in a single strip below the masthead, coloured by severity and collapsed to one line when several are active. The 7-day outlook stays on screen through an alert (compressed to highs and bars) — a winter storm warning can run for days, exactly when the week ahead matters most.
 - Air quality (AQI) by the station's own latitude and longitude, with a short forecast so a rising smoke event shows before the number climbs.
-- A 7-day outlook band: each day's low–high drawn as a bar on ONE shared axis for the week (so a cool-down is visibly a shorter, lower bar), condition glyphs beside the highs, precipitation probability only when it matters, and today's bar carrying a dot at the observed temperature.
+- A 7-day outlook band: each day's low–high drawn as a bar on ONE shared axis for the week (so a cool-down is visibly a shorter, lower bar), condition glyphs beside the highs — sun, cloud, fog, rain, snow, thunderstorm, and wind (a dry day gusting ≥45 km/h is a wind story; precipitation always outranks it) — precipitation probability only when it matters, and today's bar carrying a dot at the observed temperature.
+- A one-line hint about tomorrow under the conditions headline ("Rain tomorrow", "Freezing rain tomorrow", "Windy tomorrow"…) that appears only when tomorrow is a story — its absence is the fair-weather signal.
 - A rainfall rate gauge scaled by intensity rather than linearly — the five named bands (Very Light through Very Heavy) each take an equal fifth of the tube, so drizzle registers and a downpour doesn't pin the needle.
 - A wind panel that resolves to one current reading, with a bolder compass.
 - Animated updates: values count up, the vane swings — and while rain falls, etched rain falls through the gauge into a waving water surface, with fall speed, density, swell, and drift all tracking the measured rate.
