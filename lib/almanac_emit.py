@@ -450,12 +450,13 @@ class AlmanacEmitter:
             code, gust = t.get('code'), t.get('gust')
             if code is not None and code >= 95:
                 return 'Thunderstorms tomorrow'
+            windy = gust is not None and gust >= cls.WINDY_GUST_KMH
             if code in (71, 73, 75, 77, 85, 86):
-                return 'Snow tomorrow'
+                return 'Blowing snow tomorrow' if windy else 'Snow tomorrow'
             if code in (56, 57, 66, 67):
                 return 'Freezing rain tomorrow'   # the one rain worth distinguishing: it's a hazard
             if code in (51, 53, 55, 61, 63, 65, 80, 81, 82):
-                return 'Rain tomorrow'
+                return 'Wind-driven rain tomorrow' if windy else 'Rain tomorrow'
             if gust is not None and gust >= cls.WINDY_GUST_KMH:
                 return 'Windy tomorrow'
             if code in (45, 48):

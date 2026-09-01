@@ -1547,6 +1547,11 @@
       rain:   '<svg class="ol-glyph" width="13" height="14" viewBox="0 0 9 10"><path d="M2.6 1.5 1.2 5.5 M6.2 1.5 4.8 5.5 M4.2 6.5 3.2 9.5"/></svg>',
       snow:   '<svg class="ol-glyph" width="14" height="14" viewBox="0 0 10 10"><path d="M5 1v8 M1.6 3l6.8 4 M8.4 3l-6.8 4"/></svg>',
       storm:  '<svg class="ol-glyph storm" width="11" height="16" viewBox="0 0 8 12"><path d="M4.6 0 L0 7 h2.8 L1.8 12 L8 4.6 H4.8 L6.2 0 Z"/></svg>',
+      /* wind-driven precipitation: ONE mark, not two icons — a single ink-soft
+         curl (quoting the dry-wind glyph) leads drops slanted ~32°, the
+         engraver's convention for driving rain. Water stays water. */
+      windrain: '<svg class="ol-glyph" width="17" height="14" viewBox="0 0 12 10"><path class="ol-glyph cloud" d="M0.7 1.9 h4.6 a1.4 1.4 0 1 0 -1.4 -1.4"/><path d="M7.8 3 5.2 7.2 M11.2 3 8.6 7.2 M7.4 6.4 5.8 9.4"/></svg>',
+      windsnow: '<svg class="ol-glyph" width="17" height="14" viewBox="0 0 12 10"><path class="ol-glyph cloud" d="M0.7 1.9 h4.6 a1.4 1.4 0 1 0 -1.4 -1.4"/><path d="M8.2 3.4v6 M5.6 4.9l5.2 3 M10.8 4.9l-5.2 3"/></svg>',
       wind:   '<svg class="ol-glyph cloud" width="18" height="15" viewBox="0 0 13 11"><path d="M1 4 h7 a1.9 1.9 0 1 0 -1.9 -1.9 M1 7 h9.4 a1.9 1.9 0 1 1 -1.9 1.9"/></svg>'
     };
     return G[kind] ? " " + G[kind] : "";
@@ -1561,11 +1566,14 @@
     else if (code === 3) kind = "cloud";
     else if (code === 2) kind = "partly";
     else kind = "sun";                 /* 0, 1 — clear / mainly clear */
-    /* a dry day with strong gusts is a WIND story (>=45 km/h ~ 28 mph);
-       precipitation and storms always outrank it */
-    if (isNum(gust) && gust >= 45 &&
-        (kind === "sun" || kind === "partly" || kind === "cloud" || kind === "fog" || kind === null))
-      return "wind";
+    /* strong gusts (>=45 km/h ~ 28 mph) make the day a wind story. Wet days
+       keep their water: the glyph becomes wind-DRIVEN rain / blowing snow.
+       Only the storm bolt outranks wind — thunder already implies it. */
+    if (isNum(gust) && gust >= 45) {
+      if (kind === "rain") return "windrain";
+      if (kind === "snow") return "windsnow";
+      if (kind !== "storm") return "wind";
+    }
     return kind;
   }
   function renderOutlook(data) {
