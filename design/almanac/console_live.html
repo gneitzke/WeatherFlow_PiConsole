@@ -1546,19 +1546,27 @@
       fog:    '<svg class="ol-glyph cloud" width="16" height="13" viewBox="0 0 12 10"><path d="M1.5 2.5h9 M1.5 5h9 M1.5 7.5h9"/></svg>',
       rain:   '<svg class="ol-glyph" width="13" height="14" viewBox="0 0 9 10"><path d="M2.6 1.5 1.2 5.5 M6.2 1.5 4.8 5.5 M4.2 6.5 3.2 9.5"/></svg>',
       snow:   '<svg class="ol-glyph" width="14" height="14" viewBox="0 0 10 10"><path d="M5 1v8 M1.6 3l6.8 4 M8.4 3l-6.8 4"/></svg>',
-      storm:  '<svg class="ol-glyph storm" width="11" height="16" viewBox="0 0 8 12"><path d="M4.6 0 L0 7 h2.8 L1.8 12 L8 4.6 H4.8 L6.2 0 Z"/></svg>'
+      storm:  '<svg class="ol-glyph storm" width="11" height="16" viewBox="0 0 8 12"><path d="M4.6 0 L0 7 h2.8 L1.8 12 L8 4.6 H4.8 L6.2 0 Z"/></svg>',
+      wind:   '<svg class="ol-glyph cloud" width="18" height="14" viewBox="0 0 13 10"><path d="M1 3.4 h7 a1.5 1.5 0 1 0 -1.5 -1.5 M1 6.4 h9.4 a1.6 1.6 0 1 1 -1.6 1.6"/></svg>'
     };
     return G[kind] ? " " + G[kind] : "";
   }
-  function _olKind(code) {
-    if (code == null) return null;
-    if (code >= 95) return "storm";
-    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "snow";
-    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return "rain";
-    if (code === 45 || code === 48) return "fog";
-    if (code === 3) return "cloud";
-    if (code === 2) return "partly";
-    return "sun";                      /* 0, 1 — clear / mainly clear */
+  function _olKind(code, gust) {
+    var kind;
+    if (code == null) kind = null;
+    else if (code >= 95) kind = "storm";
+    else if ((code >= 71 && code <= 77) || code === 85 || code === 86) kind = "snow";
+    else if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) kind = "rain";
+    else if (code === 45 || code === 48) kind = "fog";
+    else if (code === 3) kind = "cloud";
+    else if (code === 2) kind = "partly";
+    else kind = "sun";                 /* 0, 1 — clear / mainly clear */
+    /* a dry day with strong gusts is a WIND story (>=45 km/h ~ 28 mph);
+       precipitation and storms always outrank it */
+    if (isNum(gust) && gust >= 45 &&
+        (kind === "sun" || kind === "partly" || kind === "cloud" || kind === "fog" || kind === null))
+      return "wind";
+    return kind;
   }
   function renderOutlook(data) {
     var band = $("outlook"), row = $("ol-row");
@@ -1587,7 +1595,7 @@
       var pp = (isNum(d.pp) && d.pp >= 20) ? '<span class="pp">' + Math.round(d.pp) + '%</span>' : "";
       html += '<div class="od' + (today ? " today" : "") + '">'
             +   '<div class="od-day">' + (today ? "TODAY" : d.day) + '</div>'
-            +   '<div class="od-hi">' + d.hi + '<span class="dg">\u00B0</span>' + _olIcon(_olKind(d.code)) + '</div>'
+            +   '<div class="od-hi">' + d.hi + '<span class="dg">\u00B0</span>' + _olIcon(_olKind(d.code, d.gust)) + '</div>'
             +   '<div class="od-bar"><span class="fill" style="left:' + L + '%;right:' + R + '%"></span>' + nowDot + '</div>'
             +   '<div class="od-lo">' + d.lo + '\u00B0' + pp + '</div>'
             + '</div>';

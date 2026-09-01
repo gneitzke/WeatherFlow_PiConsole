@@ -376,7 +376,8 @@ class AlmanacEmitter:
             unit = 'fahrenheit' if (_cfg(config, 'Units', 'Temp') or 'c').lower() == 'f' else 'celsius'
             url = ('https://api.open-meteo.com/v1/forecast'
                    f'?latitude={lat}&longitude={lon}'
-                   '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max'
+                   '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_gusts_10m_max'
+                   '&wind_speed_unit=kmh'
                    f'&temperature_unit={unit}&forecast_days=7&timezone=auto')
             req = urllib.request.Request(url, headers={'User-Agent': 'WeatherFlow-PiConsole-almanac'})
             with urllib.request.urlopen(req, timeout=25) as resp:
@@ -410,6 +411,7 @@ class AlmanacEmitter:
         los   = daily.get('temperature_2m_min') or []
         codes = daily.get('weather_code') or []
         pps   = daily.get('precipitation_probability_max') or []
+        gusts = daily.get('wind_gusts_10m_max') or []
         out = []
         for i, t in enumerate(times[:7]):
             hi = his[i]  if i < len(his)  else None
@@ -422,13 +424,43 @@ class AlmanacEmitter:
                 continue
             code = codes[i] if i < len(codes) else None
             pp   = pps[i]   if i < len(pps)   else None
+            gust = gusts[i] if i < len(gusts) else None
             out.append({'day':  day,
                         'date': t[:10],
                         'hi':   int(round(hi)),
                         'lo':   int(round(lo)),
                         'code': int(code) if code is not None else None,
-                        'pp':   int(round(pp)) if pp is not None else None})
+                        'pp':   int(round(pp)) if pp is not None else None,
+                        'gust': int(round(gust)) if gust is not None else None})   # km/h, fixed unit
         return out
+
+    WINDY_GUST_KMH = 45   # ~28 mph gusts: the day is a wind story
+
+    @classmethod
+    def _tomorrow_hint(cls, fc_rows):
+        """ One quiet line about tomorrow, only when tomorrow is a story:
+        "Thunderstorms tomorrow" / "Snow tomorrow" / "Rain tomorrow" /
+        "Windy tomorrow" / "Fog tomorrow". Ordinary days say nothing -
+        absence is information. Requires row 0 to be flagged today so
+        row 1 is provably tomorrow. Never raises. """
+        try:
+            if len(fc_rows) < 2 or not fc_rows[0].get('today'):
+                return None
+            t = fc_rows[1]
+            code, gust = t.get('code'), t.get('gust')
+            if code is not None and code >= 95:
+                return 'Thunderstorms tomorrow'
+            if code in (71, 73, 75, 77, 85, 86):
+                return 'Snow tomorrow'
+            if code in (51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82):
+                return 'Rain tomorrow'
+            if gust is not None and gust >= cls.WINDY_GUST_KMH:
+                return 'Windy tomorrow'
+            if code in (45, 48):
+                return 'Fog tomorrow'
+        except Exception:                                                 # noqa: BLE001
+            pass
+        return None
 
     @staticmethod
     def _snowify_status(status, temp, temp_unit, fc_rows):
@@ -977,7 +1009,7 @@ class AlmanacEmitter:
 
             # Conditions / short-term forecast
             'conditions':      _text(Met.get('Conditions')),
-            'conditionsNote':  None,   # not sourced - no composed "note" field exists
+            'conditionsNote':  self._tomorrow_hint(fc_rows),   # "Rain tomorrow" etc; None on quiet days
             'fcHour':          _text(Met.get('Valid')),
             'fcWind':          fc_wind,
             'fcPrecipPct':     _num(_idx(Met.get('PrecipPercnt'), 0)),

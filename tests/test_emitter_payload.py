@@ -205,7 +205,7 @@ def test_fc_daily_shapes_open_meteo_arrays():
     rows = AlmanacEmitter._fc_daily_from(daily)
     # the None-hi day is dropped: a partial bar lies on the shared scale
     assert len(rows) == 2
-    assert rows[0] == {'day': 'SAT', 'date': '2026-08-29', 'hi': 64, 'lo': 54, 'code': 95, 'pp': 95}
+    assert rows[0] == {'day': 'SAT', 'date': '2026-08-29', 'hi': 64, 'lo': 54, 'code': 95, 'pp': 95, 'gust': None}
     assert rows[1]['day'] == 'SUN' and rows[1]['hi'] == 71 and rows[1]['pp'] == 60
 
 
@@ -259,3 +259,32 @@ def test_snow_rewrites_only_the_dry_status():
              [{'today': True, 'code': 61}]) == 'Currently Dry'
     assert f('Currently Dry', 18.0, '\u00b0F', []) == 'Currently Dry'
     assert f('Currently Dry', None, '\u00b0F', fc) == 'Currently Dry'
+
+
+def test_tomorrow_hint_speaks_only_when_tomorrow_is_a_story():
+    from lib.almanac_emit import AlmanacEmitter
+    f = AlmanacEmitter._tomorrow_hint
+    def rows(code, gust=10):
+        return [{'day': 'SAT', 'today': True, 'code': 0, 'gust': 10},
+                {'day': 'SUN', 'today': False, 'code': code, 'gust': gust}]
+    assert f(rows(95)) == 'Thunderstorms tomorrow'
+    assert f(rows(73)) == 'Snow tomorrow'
+    assert f(rows(61)) == 'Rain tomorrow'
+    assert f(rows(2, gust=52)) == 'Windy tomorrow'
+    assert f(rows(45)) == 'Fog tomorrow'
+    # storms outrank wind; ordinary days say nothing
+    assert f(rows(96, gust=60)) == 'Thunderstorms tomorrow'
+    assert f(rows(1)) is None
+    assert f(rows(3)) is None
+    # no provable today flag -> no guess
+    assert f([{'today': False, 'code': 61}, {'today': False, 'code': 61}]) is None
+    assert f([]) is None
+
+
+def test_fc_daily_carries_gusts():
+    from lib.almanac_emit import AlmanacEmitter
+    rows = AlmanacEmitter._fc_daily_from({
+        'time': ['2026-08-29'], 'temperature_2m_max': [64], 'temperature_2m_min': [54],
+        'weather_code': [61], 'precipitation_probability_max': [60],
+        'wind_gusts_10m_max': [47.6]})
+    assert rows[0]['gust'] == 48
