@@ -582,6 +582,15 @@
   #outlook.compact .od-bar { height: 4px; margin-bottom: 0; }
   #outlook.compact { padding-top: 0; }
   .od-lo .pp { font-size: 12px; line-height: 1; font-weight: 700; color: var(--water); margin-left: 6px; }
+  /* how much rain the day is expected to bring. One step down from the chance
+     so the reading order stays lo -> chance -> amount and the temperatures
+     keep the column. The margin is WIDER than .pp's 6px, not narrower: the
+     chance and the amount are the confusable pair (both numeric, both
+     water-pigment, one size step apart), so the row's widest gap belongs
+     between them. Dry days print nothing: a row of 0.00 across the band is
+     noise, and its absence already says dry. */
+  .od-lo .qpf { font-size: 11px; line-height: 1; font-weight: 600; color: var(--water);
+                opacity: 0.78; margin-left: 8px; font-variant-numeric: lining-nums; }
   /* condition glyphs, four-pigment discipline: brass = solar (this console's
      sun pigment already), ink-soft = neutral sky, water = wet, storm = filled
      brass bolt. Strokes >=1.5px so nothing dissolves at 170ppi 1:1. */
@@ -1647,11 +1656,22 @@
         nowDot = '<span class="now" style="left:calc(' + t.toFixed(1) + '% - 4px)"></span>';
       }
       var pp = (isNum(d.pp) && d.pp >= 20) ? '<span class="pp">' + Math.round(d.pp) + '%</span>' : "";
+      /* the amount, in the station's own precipitation unit. Below what the
+         unit can print (0.01 in / 0.1 mm) there is nothing worth a column. */
+      var qpf = "";
+      if (isNum(d.qpf)) {
+        var inches = (data.rainUnit || "in") === "in";
+        var floor = inches ? 0.005 : 0.05;
+        if (d.qpf >= floor) {
+          qpf = '<span class="qpf">' + d.qpf.toFixed(inches ? 2 : 1)
+              + (inches ? '"' : '<small>mm</small>') + '</span>';
+        }
+      }
       html += '<div class="od' + (today ? " today" : "") + '">'
             +   '<div class="od-day">' + (today ? "TODAY" : d.day) + '</div>'
             +   '<div class="od-hi">' + d.hi + '<span class="dg">\u00B0</span>' + _olIcon(_olKind(d.code, d.gust)) + '</div>'
             +   '<div class="od-bar"><span class="fill" style="left:' + L + '%;right:' + R + '%"></span>' + nowDot + '</div>'
-            +   '<div class="od-lo">' + d.lo + '\u00B0' + pp + '</div>'
+            +   '<div class="od-lo">' + d.lo + '\u00B0' + pp + qpf + '</div>'
             + '</div>';
     });
     row.innerHTML = html;
