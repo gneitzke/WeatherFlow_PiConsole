@@ -563,7 +563,11 @@
             letter-spacing: 0.14em; color: var(--ink-soft); white-space: nowrap; }
   .od.today .od-day { color: var(--accent); }
   .od-hi svg { vertical-align: -2px; margin-left: 6px; }
-  .od-hi { font-size: 21px; font-weight: 700; line-height: 1.05; font-variant-numeric: lining-nums; }
+  /* nowrap like the .od-day and .od-lo siblings: _olIcon prepends a space
+     before the <svg>, which is a break opportunity, so a wet AND windy day
+     in a narrow column can drop its glyph onto its own line. */
+  .od-hi { font-size: 21px; font-weight: 700; line-height: 1.05; font-variant-numeric: lining-nums;
+           white-space: nowrap; }
   .od-hi .dg { font-size: 14px; vertical-align: 6px; margin-left: 1px; color: var(--ink-soft); }
   /* range bar: full-width track, fill spans lo→hi on the shared week scale */
   .od-bar { position: relative; height: 5px; margin: 2px 4px; background: var(--rule-faint); }
@@ -1596,8 +1600,21 @@
       /* wind-driven precipitation: ONE mark, not two icons — a single ink-soft
          curl (quoting the dry-wind glyph) leads drops slanted ~32°, the
          engraver's convention for driving rain. Water stays water. */
-      windrain: '<svg class="ol-glyph" width="17" height="14" viewBox="0 0 12 10"><path class="ol-glyph cloud" d="M0.7 1.9 h4.6 a1.4 1.4 0 1 0 -1.4 -1.4"/><path d="M7.8 3 5.2 7.2 M11.2 3 8.6 7.2 M7.4 6.4 5.8 9.4"/></svg>',
-      windsnow: '<svg class="ol-glyph" width="17" height="14" viewBox="0 0 12 10"><path class="ol-glyph cloud" d="M0.7 1.9 h4.6 a1.4 1.4 0 1 0 -1.4 -1.4"/><path d="M8.2 3.4v6 M5.6 4.9l5.2 3 M10.8 4.9l-5.2 3"/></svg>',
+      /* Two drops, not three, in a 14-wide box. The third drop's ink merged
+         with both its neighbours (their centrelines were 1.48 apart against a
+         1.6 stroke), it was slanted 28 degrees against the others' 32, and its
+         tip reached y 10.2 in a 10-tall viewBox so it was clipped. Two drops
+         at a consistent 31.5 clear each other by 1.64, and the wider box gives
+         the water 1.99 of air from the curl instead of 0.59 - enough for the
+         wind mark and the rain to read as two marks. Same density as windsnow
+         (curl plus one mark). Measured with svgpathtools against the curl's
+         true arc: it is a 270 degree loop, so measuring to its chord reads
+         about 35% too generous. */
+      windrain: '<svg class="ol-glyph" width="20" height="14" viewBox="0 0 14 10"><path class="ol-glyph cloud" d="M0.7 1.9 h4.6 a1.4 1.4 0 1 0 -1.4 -1.4"/><path d="M9.3 3.4 6.6 7.8 M13.1 3.4 10.4 7.8"/></svg>',
+      /* The flake's lower tip reached y 10.2 and was shaved by the viewBox.
+         Centred (10, 6.1) at r 2.9 in the same 14-wide box it stops at 9.8,
+         and clears the curl by 1.70 instead of 1.15. */
+      windsnow: '<svg class="ol-glyph" width="20" height="14" viewBox="0 0 14 10"><path class="ol-glyph cloud" d="M0.7 1.9 h4.6 a1.4 1.4 0 1 0 -1.4 -1.4"/><path d="M10 3.2v5.8 M7.5 4.6l5 2.9 M12.5 4.6l-5 2.9"/></svg>',
       wind:   '<svg class="ol-glyph cloud" width="18" height="15" viewBox="0 0 13 11"><path d="M1 4 h7 a1.9 1.9 0 1 0 -1.9 -1.9 M1 7 h9.4 a1.9 1.9 0 1 1 -1.9 1.9"/></svg>'
     };
     return G[kind] ? " " + G[kind] : "";
