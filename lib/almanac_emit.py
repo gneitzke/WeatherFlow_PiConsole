@@ -925,9 +925,13 @@ class AlmanacEmitter:
         os.replace(tmp_path, self.output_path)
 
     # --------------------------------------------------------------------
+    _SLP_FROM_MB = {'mb': (1.0, 1), 'hpa': (1.0, 1), 'inhg': (0.0295301, 3), 'mmhg': (0.750063, 2)}
+
     def _baro_series(self):
         """ 24 h sea-level-pressure trace for the barograph, downsampled to
-        ~48 points [[epoch_s, slp_mb], ...] oldest->newest.
+        ~48 points [[epoch_s, slp], ...] oldest->newest, in the station's
+        configured pressure unit (the same unit as 'slp', so the trace's hi/lo
+        numerals and the big reading can never be in two unit systems).
 
         Sourced from the core's cached WeatherFlow REST 24 h obs
         (app.obsParser.api_data[device]['24Hrs']) — the same payload the core
@@ -962,10 +966,14 @@ class AlmanacEmitter:
                 raw = [(ob[0], ob[idx]) for ob in obs
                        if ob and ob[0] is not None and len(ob) > idx and ob[idx] is not None]
                 raw.sort(key=lambda p: p[0])
+                # derive.SLP always answers in mb; the core's observation_format
+                # converts to the configured unit with these factors/precisions
+                unit = (_cfg(config, 'Units', 'Pressure') or 'mb').lower()
+                factor, places = self._SLP_FROM_MB.get(unit, (1.0, 1))
                 for t, p in raw:
                     slp = derive.SLP([p, 'mb'], device, config)[0]
                     if slp is not None and slp == slp:   # not None, not NaN (NaN breaks allow_nan=False)
-                        series.append([int(t), round(slp, 1)])
+                        series.append([int(t), round(slp * factor, places)])
                 target = 48
                 if len(series) > target:
                     step   = (len(series) - 1) / (target - 1)

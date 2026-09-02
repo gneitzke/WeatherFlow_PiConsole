@@ -104,7 +104,7 @@ class obs_parser():
 
         # Discard duplicate TEMPEST Websocket messages
         if 'obs_st' in self.display_obs:
-            if self.display_obs['obs_st']['obs'][0] == latest_ob[0]:
+            if self.display_obs['obs_st']['obs'][0][0] == latest_ob[0]:
                 return
 
         # Extract required observations from latest TEMPEST Websocket JSON
@@ -198,7 +198,7 @@ class obs_parser():
 
         # Discard duplicate SKY Websocket messages
         if 'obs_sky' in self.display_obs:
-            if self.display_obs['obs_sky']['obs'][0] == latest_ob[0]:
+            if self.display_obs['obs_sky']['obs'][0][0] == latest_ob[0]:
                 return
 
         # Extract required observations from latest SKY Websocket JSON
@@ -266,7 +266,7 @@ class obs_parser():
 
         # Discard duplicate outdoor AIR Websocket messages
         if 'obs_out_air' in self.display_obs:
-            if self.display_obs['obs_out_air']['obs'][0] == latest_ob[0]:
+            if self.display_obs['obs_out_air']['obs'][0][0] == latest_ob[0]:
                 return
 
         # Extract required observations from latest outdoor AIR Websocket JSON
@@ -336,7 +336,7 @@ class obs_parser():
 
         # Discard duplicate indoor AIR Websocket messages
         if 'obs_in_air' in self.display_obs:
-            if self.display_obs['obs_in_air']['obs'][0] == latest_ob[0]:
+            if self.display_obs['obs_in_air']['obs'][0][0] == latest_ob[0]:
                 return
 
         # Extract required observations from latest indoor AIR Websocket JSON

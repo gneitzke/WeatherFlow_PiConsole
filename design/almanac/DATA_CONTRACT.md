@@ -41,6 +41,7 @@ the HTML shows an em-dash for null. Emitter converts from the app's
 
   // Barometer  (needle maps slp on 980..1050)
   "slp": 1022.1, "slpUnit": "mb", "slpTrendPerHr": 0.4, "slpTrendDesc": "Rising",
+  "slpSeries": [[1756400000, 1018.4], [1756401800, 1018.2]],   // 24h barograph trace, <=48 [epoch, slp] points in slpUnit; [] hides the graph
   "slp24High": 1022.1, "slp24HighTime": "08:20",
   "slp24Low": 1020.2,  "slp24LowTime": "00:00", "slpOutlook": "Unchanged",
 

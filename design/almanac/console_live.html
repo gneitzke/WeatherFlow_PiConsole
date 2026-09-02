@@ -1211,6 +1211,11 @@
     el("text", { class: "bg-cap", x: geo.X1, y: 43, "text-anchor": "end" }, svg).textContent = "NOW";
   })();
 
+  /* pressure arrives in the station's unit; the zone bar's engraved scale and
+     the barograph's padding floor are millibars, so scale by this */
+  var SLP_TO_MB = { mb: 1, hpa: 1, inhg: 33.8639, mmhg: 1.33322 };
+  function slpToMb(unit) { return SLP_TO_MB[(unit || "mb").toLowerCase().replace(/\s/g, "")] || 1; }
+
   function renderBarograph(data) {
     var g = baroGraph, s = data.slpSeries, geo = g.geo;
     if (!s || s.length < 3) { g.svg.style.display = "none"; return; }
@@ -1218,7 +1223,8 @@
     var n = s.length, vals = [];
     for (var j = 0; j < n; j++) vals.push(s[j][1]);
     var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
-    var pad = Math.max(0.6, (hi - lo) * 0.18); lo -= pad; hi += pad;
+    var mb = slpToMb(data.slpUnit), places = mb > 20 ? 2 : 1;   /* inHg reads 29.85; mb/mmHg one decimal */
+    var pad = Math.max(0.6 / mb, (hi - lo) * 0.18); lo -= pad; hi += pad;
     function X(i) { return geo.X0 + i / (n - 1) * (geo.X1 - geo.X0); }
     function Y(v) { return geo.YB - (v - lo) / (hi - lo) * (geo.YB - geo.YT); }
     var d = "M " + X(0).toFixed(1) + " " + Y(vals[0]).toFixed(1);
@@ -1235,13 +1241,13 @@
     for (var m = 1; m < n; m++) { if (vals[m] > vals[iMax]) iMax = m; if (vals[m] < vals[iMin]) iMin = m; }
     g.hi.setAttribute("x", clamp(X(iMax), 20, geo.X1 - 20).toFixed(1));
     g.hi.setAttribute("y", Math.max(9, Y(vals[iMax]) - 4).toFixed(1));
-    g.hi.textContent = vals[iMax].toFixed(1);
+    g.hi.textContent = vals[iMax].toFixed(places);
     g.hi.style.opacity = (n - 1 - iMax) <= 2 ? "0" : "1";
     /* low label sits ABOVE its trough, not below — otherwise a trough near the
        start/end overlaps the −24H / NOW captions on the axis row */
     g.lo.setAttribute("x", clamp(X(iMin), 20, geo.X1 - 20).toFixed(1));
     g.lo.setAttribute("y", Math.max(geo.YT + 9, Y(vals[iMin]) - 5).toFixed(1));
-    g.lo.textContent = vals[iMin].toFixed(1);
+    g.lo.textContent = vals[iMin].toFixed(places);
     g.lo.style.opacity = (n - 1 - iMin) <= 2 ? "0" : "1";
   }
 
@@ -1473,8 +1479,7 @@
        The engraved 950-1050 scale is millibars; a console configured for inHg
        or mmHg emits those units, so convert before placing the marker (else
        29.9 inHg clamps to 950 and STORMY stays lit in fair weather). */
-    var SLP_TO_MB = { mb: 1, hpa: 1, inhg: 33.8639, mmhg: 1.33322 };
-    var slpMbFactor = SLP_TO_MB[(data.slpUnit || "mb").toLowerCase().replace(/\s/g, "")] || 1;
+    var slpMbFactor = slpToMb(data.slpUnit);
     var slp = isNum(data.slp) ? clamp(data.slp * slpMbFactor, 950, 1050) : 1013;
     baroBar.marker.style.transform = "translateX(" + baroBar.x(slp).toFixed(1) + "px)";
     baroBar.marker.style.opacity = isNum(data.slp) ? "1" : "0.3";

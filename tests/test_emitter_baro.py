@@ -41,7 +41,7 @@ def test_baro_series_downsamples_to_48(make_emitter):
     for epoch, slp in series:
         assert isinstance(epoch, int)
         assert isinstance(slp, float)
-        assert 900 < slp < 1100                  # sane sea-level pressure
+        assert 28 < slp < 31                     # sane sea-level pressure in the fixture's inHg
     # strictly time-ordered oldest -> newest
     times = [p[0] for p in series]
     assert times == sorted(times)
@@ -54,3 +54,21 @@ def test_baro_series_is_cached(make_emitter):
     # mutate the source; cache (TTL 300s) should return the same object
     emitter.app.obsParser.api_data = {}
     assert emitter._baro_series() is first
+
+
+def test_baro_series_follows_the_station_pressure_unit(make_emitter):
+    # an inHg console must get an inHg trace - the big reading and the trace's
+    # hi/lo numerals live in one tile and must share a unit system
+    from tests.fixtures.config import make_config
+    rows = [[1_700_000_000 + i * 60, 0, 0, 0, 0, 0, 1000.0 + i, 0] for i in range(5)]
+    api_data = {'111': {'24Hrs': FakeResp(rows)}}
+    config = make_config()
+    config['Units']['Pressure'] = 'inhg'
+    series = make_emitter(api_data=api_data, config=config)._baro_series()
+    assert series and all(28.0 < slp < 31.0 for _, slp in series)
+    assert all(round(slp, 3) == slp for _, slp in series)      # the core's inHg precision
+    config_mb = make_config()
+    config_mb['Units']['Pressure'] = 'mb'
+    mb = make_emitter(api_data=api_data, config=config_mb)._baro_series()
+    assert all(900 < slp < 1100 and round(slp, 1) == slp for _, slp in mb)
+    assert abs(series[0][1] - mb[0][1] * 0.0295301) < 0.002    # same samples, converted
