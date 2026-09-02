@@ -333,3 +333,36 @@ def test_today_row_takes_the_hero_hi_lo():
     rows3 = [{'day': 'TUE', 'today': True, 'hi': 60, 'lo': 50}]
     r = AlmanacEmitter._unify_today(rows3, 65, None)[0]
     assert r['lo'] <= r['hi']
+
+
+def test_rain_window_bridges_the_drizzle_gaps():
+    # The haptic sensor sees drizzle as one trace minute then zeros. The
+    # window keeps the rate alive (and honest: rain that fell, as a rate)
+    # and drains linearly after the rain stops.
+    from lib.almanac_emit import _RainWindow
+    w = _RainWindow(600)
+    t = 1_000_000
+    assert w.effective(t, 0.25) == 0.25                    # first sample stands alone
+    assert w.effective(t + 60, 0.0) == 0.25                # one wet minute of 60 s covered
+    e = w.effective(t + 300, 0.0)
+    assert 0 < e < 0.25                                    # bridged, decaying (0.25*60/300 = 0.05)
+    assert abs(e - 0.05) < 1e-6
+    assert w.effective(t + 700, 0.0) == 0.0                # window drained - dry
+    assert w.effective(t + 760, None) is None              # no reading -> no rate
+    assert w.effective(t + 820, 8.0) == 8.0                # a downpour is never understated
+
+
+def test_payload_keeps_raining_through_a_dry_minute(make_emitter):
+    s = scn.heavy_rain()
+    s['Obs']['RainRate'] = [0.01, 'in/hr', 'Very Light Rain', 0.2]
+    e = make_emitter(s)
+    first = e._build_payload()
+    assert first['rainRateMm'] == 0.2 and first['rainRateInstMm'] == 0.2
+    s['Obs']['RainRate'] = [0.0, 'in/hr', 'Currently Dry', 0.0]   # the sensor's next minute
+    t, r = e._rain_win.samples[0]
+    e._rain_win.samples[0] = (t - 60, r)                          # that wet minute was 60 s ago
+    second = e._build_payload()
+    assert second['rainRateInstMm'] == 0.0
+    assert second['rainRateMm'] > 0                                # gauge stays alive
+    assert second['rainStatus'] == 'Very Light Rain'               # header agrees with the tube
+    assert second['rainRate'] == round(second['rainRateMm'] / 25.4, 4)   # readout agrees too

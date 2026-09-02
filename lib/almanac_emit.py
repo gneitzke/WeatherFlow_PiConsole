@@ -50,6 +50,7 @@ AQI_CHECK_INTERVAL     = 600   # seconds (10 min) — refresh air quality; short
 ALERTS_CHECK_INTERVAL  = 900   # seconds (15 min) — NWS alerts change slowly; be gentle on api.weather.gov
 FORECAST_CHECK_INTERVAL = 3600 # seconds (1 h) — the daily outlook barely moves intra-hour
 FC_STALE_SEC           = 86400 # seconds (24 h) without a successful forecast fetch -> fcStale (band hides)
+RAIN_WINDOW_SEC        = 600   # seconds (10 min) — light rain is bridged across the sensor's dry minutes
 ALERTS_TIMEOUT         = 20    # seconds — socket timeout for the alerts fetch
 ALERT_STALE_SEC        = 3600  # seconds (1 h) without a successful alerts fetch -> mark alertsStale
 AQI_STALE_SEC          = 3600  # seconds (1 h) without a successful AQI fetch -> mark aqiStale
@@ -120,6 +121,35 @@ def _get(d, key, default=None):
         return d[key]
     except (KeyError, TypeError, IndexError):
         return default
+
+
+class _RainWindow:
+    """ Time-weighted mean rain rate over the last `span` seconds. Each sample
+    holds until the next one, so sampling on the 2 s emit tick reproduces the
+    sensor's per-minute steps faithfully; the mean over the window is the
+    rain that actually fell, expressed as a rate. effective() returns
+    max(raw, mean): a drizzle's dry minutes are bridged, a downpour is never
+    understated, and the window drains linearly once rain stops. """
+
+    def __init__(self, span):
+        self.span    = span
+        self.samples = []            # [(epoch_s, mm_per_hr), ...] oldest first
+
+    def effective(self, now, rate_mm_hr):
+        if rate_mm_hr is not None:
+            self.samples.append((now, float(rate_mm_hr)))
+        cutoff = now - self.span
+        self.samples = [s for s in self.samples if s[0] >= cutoff]
+        if rate_mm_hr is None or not self.samples:
+            return None
+        total = 0.0
+        for (t0, r), (t1, _) in zip(self.samples, self.samples[1:]):
+            total += r * (t1 - t0)
+        t_last, r_last = self.samples[-1]
+        total += r_last * (now - t_last)
+        covered = max(now - self.samples[0][0], 1.0)
+        mean = total / covered
+        return round(max(float(rate_mm_hr), mean), 4)
 
 
 def _cfg(config, section, option, default=None):
@@ -263,6 +293,10 @@ class AlmanacEmitter:
         # don't re-parse the 1440-point REST payload on every 2 s emit tick)
         self._baro_series_cache = []
         self._baro_series_t     = 0.0
+        # rolling rain-rate window: the Tempest's haptic sensor reports drizzle
+        # as an occasional 0.01 in minute with zeros between, so the raw
+        # per-minute rate flickers 0 <-> trace and the gauge went dry mid-drizzle
+        self._rain_win = _RainWindow(RAIN_WINDOW_SEC)
         # air-quality state (fetched off-thread from Open-Meteo by station lat/lon)
         self._aqi          = None
         self._aqi_category = None
@@ -498,22 +532,41 @@ class AlmanacEmitter:
         return status
 
     @staticmethod
-    def _rain_rate_display(Obs, config):
+    def _rain_rate_display(Obs, config, eff_mm=None):
         """ Numeric rain rate in display units. Index [0] is the core's
         FORMATTED display value, which for a trace rate is the STRING
         '<0.01' (in/hr) / '<0.1' (mm/hr) - unparseable, so the overlay
         showed a dash and hid the water while it was actually drizzling.
         Fall back to converting the raw mm/hr at [3] by the configured
-        precip unit. Never raises. """
-        rate = _num(_idx(Obs.get('RainRate'), 0))
-        if rate is not None:
-            return rate
+        precip unit. When the rolling window lifts the rate above the raw
+        minute (eff_mm > raw), that effective rate is what gets converted,
+        so the readout agrees with the gauge. Never raises. """
         raw_mm = _num(_idx(Obs.get('RainRate'), 3))
-        if raw_mm is None:
-            return None
+        bridged = eff_mm is not None and raw_mm is not None and eff_mm > raw_mm
+        if not bridged:
+            rate = _num(_idx(Obs.get('RainRate'), 0))
+            if rate is not None:
+                return rate
+            if raw_mm is None:
+                return None
+        mm = eff_mm if bridged else raw_mm
         unit = (_cfg(config, 'Units', 'Precip') or 'mm').lower()
         per_mm = {'in': 1 / 25.4, 'cm': 0.1, 'mm': 1.0}.get(unit, 1.0)
-        return round(raw_mm * per_mm, 4)
+        return round(mm * per_mm, 4)
+
+    @staticmethod
+    def _rain_status_for(eff_mm, core_status):
+        """ The core's intensity word, except that a minute the sensor calls
+        'Currently Dry' inside a drizzle (window rate > 0) gets the word for
+        the windowed rate - the same bands derived_variables.rain_rate uses. """
+        if core_status != 'Currently Dry' or eff_mm is None or eff_mm <= 0:
+            return core_status
+        if eff_mm < 0.25: return 'Very Light Rain'
+        if eff_mm < 1.0:  return 'Light Rain'
+        if eff_mm < 4.0:  return 'Moderate Rain'
+        if eff_mm < 16.0: return 'Heavy Rain'
+        if eff_mm < 50.0: return 'Very Heavy Rain'
+        return 'Extreme Rain'
 
     @staticmethod
     def _feels_desc(text):
@@ -1031,6 +1084,8 @@ class AlmanacEmitter:
 
         temp_val  = _num(_idx(Obs.get('outTemp'), 0))
         temp_unit = _temp_unit(_idx(Obs.get('outTemp'), 1))
+        rain_raw_mm = _num(_idx(Obs.get('RainRate'), 3))
+        rain_eff_mm = self._rain_win.effective(time.time(), rain_raw_mm)
         fc_low    = _num(_idx(Met.get('lowTemp'), 0))
         fc_high   = _num(_idx(Met.get('highTemp'), 0))
         fc_rows   = self._unify_today(
@@ -1103,10 +1158,12 @@ class AlmanacEmitter:
             'rainMonth':    _num(_idx(Obs.get('MonthRain'), 0)),
             'rainYear':     _num(_idx(Obs.get('YearRain'), 0)),
             'rainUnit':     _text(_cfg(config, 'Units', 'Precip')),
-            'rainRate':     self._rain_rate_display(Obs, config),
-            'rainRateMm':   _num(_idx(Obs.get('RainRate'), 3)),   # raw mm/hr - drives the intensity-banded gauge
-            'rainStatus':   self._snowify_status(_text(_idx(Obs.get('RainRate'), 2)),
-                                                 temp_val, temp_unit, fc_rows),
+            'rainRate':     self._rain_rate_display(Obs, config, rain_eff_mm),
+            'rainRateMm':   rain_eff_mm,    # mm/hr, max(raw minute, 10-min mean) - drives the gauge
+            'rainRateInstMm': rain_raw_mm,  # the sensor's raw minute, for the record
+            'rainStatus':   self._snowify_status(
+                                self._rain_status_for(rain_eff_mm, _text(_idx(Obs.get('RainRate'), 2))),
+                                temp_val, temp_unit, fc_rows),
             'drySpellDays': None,   # not reliably sourced - see report
             'lastRainDate': None,   # not sourced - no last-rain date/amount is tracked
             'lastRainAmt':  None,   # not sourced

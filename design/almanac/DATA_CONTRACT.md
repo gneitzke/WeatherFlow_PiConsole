@@ -49,7 +49,12 @@ the HTML shows an em-dash for null. Emitter converts from the app's
   //  own intensity bands 0.25/1/4/16/50 mm/hr, each an equal fifth of the tube.
   //  rainRate is the same rate in display units, for the printed readout.)
   "rainToday": 0.00, "rainYest": 0.00, "rainMonth": 0.15, "rainYear": 40.0,
-  "rainUnit": "in", "rainRate": 0, "rainRateMm": 0, "rainStatus": "Currently Dry",
+  //  rainRateMm is max(the sensor's raw minute, the 10-min time-weighted mean):
+  //  the haptic sensor reports drizzle as an occasional trace minute with zeros
+  //  between, and the window bridges those so light rain never reads as dry.
+  //  rainRateInstMm is the raw minute; rainStatus takes the band word for the
+  //  windowed rate when the core says "Currently Dry" inside a drizzle.)
+  "rainUnit": "in", "rainRate": 0, "rainRateMm": 0, "rainRateInstMm": 0, "rainStatus": "Currently Dry",
   "drySpellDays": 12, "lastRainDate": "Sun 19 Jul", "lastRainAmt": 0.11,
 
   // Sun & UV  (sunFrac 0..1 = elapsed fraction of daylight → sun position on the arc)

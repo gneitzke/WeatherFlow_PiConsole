@@ -1523,10 +1523,21 @@
     rainStreaks.far.forEach(function (ln) {
       if (ln.style.animationDuration !== farDur) ln.style.animationDuration = farDur;
     });
-    /* density flips exactly on the band graduations: Moderate adds a second
-       column per depth, Heavy a third — the tube visibly rains harder as the
-       measured intensity crosses each engraved line */
-    $("raingauge").classList.toggle("rain2", rr >= 0.4);
+    /* streak LENGTH follows the rate too: short ticks in a drizzle, long
+       strokes in a downpour. The dash period (40 near / 30 far) is what the
+       keyframe translates by, so it stays fixed and only the dash grows. */
+    var dn = (6 + 12 * rr).toFixed(1), df = (4 + 6 * rr).toFixed(1);
+    var dan = dn + " " + (40 - dn).toFixed(1), daf = df + " " + (30 - df).toFixed(1);
+    rainStreaks.near.forEach(function (ln) {
+      if (ln.getAttribute("stroke-dasharray") !== dan) ln.setAttribute("stroke-dasharray", dan);
+    });
+    rainStreaks.far.forEach(function (ln) {
+      if (ln.getAttribute("stroke-dasharray") !== daf) ln.setAttribute("stroke-dasharray", daf);
+    });
+    /* density steps up the tube: one column per depth in a drizzle, two from
+       mid-Light, three from Heavy — the tube visibly rains harder as the
+       measured intensity climbs */
+    $("raingauge").classList.toggle("rain2", rr >= 0.3);
     $("raingauge").classList.toggle("rain3", rr >= 0.6);
     if (surfWave) {
       var surfDur = (4.2 - 2.4 * rr).toFixed(2) + "s";   /* gentle drift, quicker in a downpour */
