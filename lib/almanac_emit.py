@@ -408,10 +408,15 @@ class AlmanacEmitter:
             if not lat or not lon:
                 return
             unit = 'fahrenheit' if (_cfg(config, 'Units', 'Temp') or 'c').lower() == 'f' else 'celsius'
+            # Ask for precipitation in the unit the console already displays,
+            # so the amount needs no conversion and cannot disagree with the
+            # rainfall panel's rainUnit.
+            precip_unit = 'inch' if (_cfg(config, 'Units', 'Precip') or 'mm').lower() == 'in' else 'mm'
             url = ('https://api.open-meteo.com/v1/forecast'
                    f'?latitude={lat}&longitude={lon}'
-                   '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_gusts_10m_max'
+                   '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max'
                    '&wind_speed_unit=kmh'
+                   f'&precipitation_unit={precip_unit}'
                    f'&temperature_unit={unit}&forecast_days=7&timezone=auto')
             req = urllib.request.Request(url, headers={'User-Agent': 'WeatherFlow-PiConsole-almanac'})
             with urllib.request.urlopen(req, timeout=25) as resp:
@@ -437,7 +442,7 @@ class AlmanacEmitter:
     @staticmethod
     def _fc_daily_from(daily):
         """ Shape Open-Meteo's parallel daily arrays into display-ready rows:
-        [{day:'MON', hi:93, lo:56, code:3, pp:20}, ...]. Rows with a missing
+        [{day:'MON', hi:93, lo:56, code:3, pp:20, qpf:0.34}, ...]. Rows with a missing
         hi or lo are dropped (a partial bar lies on the shared scale). Pure;
         never raises. """
         times = daily.get('time') or []
@@ -445,6 +450,9 @@ class AlmanacEmitter:
         los   = daily.get('temperature_2m_min') or []
         codes = daily.get('weather_code') or []
         pps   = daily.get('precipitation_probability_max') or []
+        # Amount, already in the console's precipitation unit (see the
+        # precipitation_unit above), so no conversion here.
+        qpfs  = daily.get('precipitation_sum') or []
         gusts = daily.get('wind_gusts_10m_max') or []
         out = []
         for i, t in enumerate(times[:7]):
@@ -458,6 +466,7 @@ class AlmanacEmitter:
                 continue
             code = codes[i] if i < len(codes) else None
             pp   = pps[i]   if i < len(pps)   else None
+            qpf  = qpfs[i]  if i < len(qpfs)  else None
             gust = gusts[i] if i < len(gusts) else None
             out.append({'day':  day,
                         'date': t[:10],
@@ -465,6 +474,9 @@ class AlmanacEmitter:
                         'lo':   int(round(lo)),
                         'code': int(code) if code is not None else None,
                         'pp':   int(round(pp)) if pp is not None else None,
+                        # two decimals covers both units; the board hides
+                        # anything below what the unit can print
+                        'qpf':  round(float(qpf), 2) if qpf is not None else None,
                         'gust': int(round(gust)) if gust is not None else None})   # km/h, fixed unit
         return out
 
