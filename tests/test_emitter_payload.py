@@ -307,3 +307,29 @@ def test_outlook_compacts_the_closed_vocabulary(make_emitter):
     s = scn.heavy_rain()
     s['Obs']['SLPTrend'] = ['-0.2', 'mb/hr', 'Falling', 'Some Novel Outlook']
     assert make_emitter(s)._build_payload()['slpOutlook'] == 'Some Novel Outlook'
+
+
+def test_feels_desc_drops_the_doubled_prefix():
+    from lib.almanac_emit import AlmanacEmitter
+    f = AlmanacEmitter._feels_desc
+    assert f('Feeling warm') == 'Warm'                  # "Feels like 62° · Warm"
+    assert f('Feeling extremely cold') == 'Extremely cold'
+    assert f('-') == '-'                                # the core's unknown marker passes through
+    assert f(None) is None
+    assert f('') == ''
+
+
+def test_today_row_takes_the_hero_hi_lo():
+    from lib.almanac_emit import AlmanacEmitter
+    rows = [{'day': 'TUE', 'today': True,  'hi': 66, 'lo': 54},
+            {'day': 'WED', 'today': False, 'hi': 66, 'lo': 52}]
+    out = AlmanacEmitter._unify_today(rows, 52.4, 66.0)
+    assert (out[0]['lo'], out[0]['hi']) == (52, 66)     # WeatherFlow owns today
+    assert (out[1]['lo'], out[1]['hi']) == (52, 66)     # other days untouched
+    # unknown hero figures leave Open-Meteo's numbers in place
+    rows2 = [{'day': 'TUE', 'today': True, 'hi': 66, 'lo': 54}]
+    assert AlmanacEmitter._unify_today(rows2, None, None)[0] == rows2[0]
+    # a stale hero low above the band's high can never invert the bar
+    rows3 = [{'day': 'TUE', 'today': True, 'hi': 60, 'lo': 50}]
+    r = AlmanacEmitter._unify_today(rows3, 65, None)[0]
+    assert r['lo'] <= r['hi']

@@ -157,8 +157,14 @@
 
   .cond { display: flex; align-items: center; gap: 12px; }
   .cond .sun-icon line, .cond .sun-icon circle { stroke: var(--ink); }
-  .cond-name { font-size: 27px; font-weight: 800; }
-  .cond-note { font-family: var(--sans); font-size: 14px; color: var(--ink-soft); margin-top: 2px; letter-spacing: 0.02em; }
+  .cond-name { font-size: 27px; font-weight: 800; text-wrap: balance; }
+  /* the tomorrow hint sits between the headline and the big figure, where it
+     can read as a caption for the temperature; the glyph (tomorrow's own band
+     mark) anchors it to the forecast instead */
+  .cond-note { font-family: var(--sans); font-size: 15px; color: var(--ink-soft); margin-top: 2px; letter-spacing: 0.02em;
+               display: flex; align-items: center; gap: 6px; }
+  .cond-note:empty { display: none; }
+  .cond-note .ol-glyph { height: 12px; width: auto; flex: 0 0 auto; }
 
   .bigtemp { margin: 4px 0 0 -5px; display: flex; align-items: flex-start; line-height: 0.86; }
   .bigtemp .num { font-size: 117.5px; font-weight: 800; letter-spacing: -0.028em; }
@@ -739,7 +745,7 @@
         <div class="p-head"><span class="p-title">Barometer</span><span class="p-status" data-k="slpTrendDesc">Rising</span></div>
         <div class="p-col">
           <div class="p-value"><span class="n" data-k="slp">1022.1</span><span class="u" data-k="slpUnit">mb</span></div>
-          <div class="p-sub"><span class="up-w" id="baro-arrow">↑</span> <span data-k="slpTrendDesc">Rising</span> <span data-k="slpTrendPerHr">0.4</span> <span data-k="slpUnit">mb</span>/hr</div>
+          <div class="p-sub"><span class="up-w" id="baro-arrow">↑</span> <span data-k="slpTrendDesc">Rising</span> <span id="baro-rate"><span data-k="slpTrendPerHr">0.4</span> <span data-k="slpUnit">mb</span>/hr</span></div>
           <svg id="barobar" viewBox="0 0 250 48" preserveAspectRatio="xMidYMid meet"></svg>
           <svg id="barograph" viewBox="0 0 250 42" preserveAspectRatio="xMidYMid meet"></svg>
           <div class="ledger">
@@ -1242,9 +1248,12 @@
   /* ———— lightning range rings (full-screen view) ———— */
   (function () {
     var svg = $("rings"), cx = 85, cy = 85;
+    window.__ltRingLbls = [];                         /* relabelled per lightningDistUnit */
     [[25, "10"], [50, "20"], [75, "30"]].forEach(function (r) {
       el("circle", { class: "ring", cx: cx, cy: cy, r: r[0] }, svg);
-      el("text", { class: "ring-lbl", x: cx + 3, y: cy - r[0] + 8 }, svg).textContent = r[1] + " MI";
+      var t = el("text", { class: "ring-lbl", x: cx + 3, y: cy - r[0] + 8 }, svg);
+      t.textContent = r[1] + " MI"; t._n = r[1];
+      window.__ltRingLbls.push(t);
     });
     el("circle", { class: "station-dot", cx: cx, cy: cy, r: 2.5 }, svg);
     /* faint "last detected" ring — updated from data when a distance is known */
@@ -1292,7 +1301,9 @@
     slp24High: f1, slp24HighTime: String, slp24Low: f1, slp24LowTime: String,
     slpOutlook: String,
     rainStatus: String, rainToday: f2, rainUnit: String,
-    rainRate: function (v) { return !v ? "0" : (v > 0 && v < 0.005) ? "<0.01" : v.toFixed(2); },
+    /* a non-number here (an older emitter's "<0.01" string) must not throw:
+       poll() would count the render as a failed tick and flag the page stale */
+    rainRate: function (v) { return !isNum(v) ? DASH : v <= 0 ? "0.00" : v < 0.005 ? "<0.01" : v.toFixed(2); },
     drySpellDays: r0, lastRainDate: String, lastRainAmt: f2,
     rainYest: f2, rainMonth: f2, rainYear: f2,
     uvIndex: f1, uvDesc: String, radiation: r0, radUnit: String,
@@ -1387,6 +1398,17 @@
        which a raw ±0.02 threshold would wrongly draw as a rising arrow) */
     var td = (data.slpTrendDesc || "").toLowerCase();
     $("baro-arrow").textContent = !td ? "" : (td.indexOf("ris") >= 0 ? "↑" : td.indexOf("fall") >= 0 ? "↓" : "→");
+    $("baro-rate").hidden = !isNum(data.slpTrendPerHr);   /* "Steady — mb/hr" is worse than "Steady" */
+
+    /* tomorrow hint: lead with tomorrow's own band glyph so the line reads as
+       forecast, not as a caption on the big temperature beneath it */
+    var note = document.querySelector(".cond-note");
+    if (note && data.conditionsNote) {
+      var fr = Array.isArray(data.fcDaily) ? data.fcDaily : [];
+      var tm = (fr.length > 1 && fr[0].today) ? fr[1] : null;
+      var g = tm ? _olIcon(_olKind(tm.code, tm.gust)).trim() : "";
+      note.innerHTML = g + "<span>" + escapeHtml(data.conditionsNote) + "</span>";
+    }
 
     /* "2h 24m" -> small unit markers (time remaining until sunset) */
     function hmMarkers(id, val) {
@@ -1861,6 +1883,7 @@
       var dnum = isNum(data.lightningDistNum) ? data.lightningDistNum : null;
       var dunit = ({ miles: "mi", km: "km" })[data.lightningDistUnit] || "mi";
       if (mini.unitLbl) mini.unitLbl.textContent = "30 " + dunit.toUpperCase();
+      (window.__ltRingLbls || []).forEach(function (t) { t.textContent = t._n + " " + dunit.toUpperCase(); });
       if (dnum !== null) {
         $("lt-lastdist").textContent = "≈ " + (data.lightningDist || Math.round(dnum)) + " " + dunit;
         var rr = clamp(dnum / 30 * 75, 6, 78);

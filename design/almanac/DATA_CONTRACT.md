@@ -15,7 +15,7 @@ the HTML shows an em-dash for null. Emitter converts from the app's
 
   // Temperature
   "temp": 64.0, "tempUnit": "°F",   // Obs['outTemp'][0],[1]
-  "feelsLike": 64, "feelsDesc": "Feeling warm",   // Obs['FeelsLike'][0],[2]
+  "feelsLike": 64, "feelsDesc": "Warm",   // Obs['FeelsLike'][0],[2] with the core's "Feeling " prefix dropped
   "tempTrendPerHr": 4.6,            // Obs['outTempTrend'][0]  (+ = rising)
   "temp24hDelta": 4.9,             // vs this time yesterday (+ = warmer); null if unknown
   "obsLow": 49.8,  "obsLowTime": "06:15",   // Obs['outTempMin'][0],[2]
@@ -30,7 +30,10 @@ the HTML shows an em-dash for null. Emitter converts from the app's
   // 7-day outlook (Open-Meteo daily, hourly refresh; [] hides the band).
   // hi/lo are whole degrees in the console's own temp unit; code is the WMO
   // weather code; pp is max precipitation probability for the day.
+  // The TODAY row's hi/lo are overridden with fcLow/fcHigh (WeatherFlow) when
+  // known, so the hero and the band never disagree about today.
   "fcDaily": [{"day": "SAT", "date": "2026-08-29", "today": true, "hi": 64, "lo": 54, "code": 95, "pp": 95}],
+  "fcStale": false,   // true when no successful forecast fetch in 24 h; the console hides the band
 
   // Wind  (dir in degrees; cardinal string; needle rotates to dir)
   "windSpd": 0.9, "windUnit": "mph", "windAvg": 0.1, "windGust": 2.9, "windMax": 4.3,

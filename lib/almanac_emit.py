@@ -515,6 +515,34 @@ class AlmanacEmitter:
         per_mm = {'in': 1 / 25.4, 'cm': 0.1, 'mm': 1.0}.get(unit, 1.0)
         return round(raw_mm * per_mm, 4)
 
+    @staticmethod
+    def _feels_desc(text):
+        """ The core's feels-like descriptors all begin "Feeling ..."; the hero
+        line already says "Feels like 62°", so the prefix doubles up on glass
+        ("Feels like 62° · Feeling warm"). Drop it and keep the sentence case. """
+        if not text:
+            return text
+        stripped = re.sub(r'^\s*Feeling\s+', '', text)
+        return stripped[:1].upper() + stripped[1:] if stripped else text
+
+    @staticmethod
+    def _unify_today(fc_rows, fc_low, fc_high):
+        """ The hero's LOW/HIGH come from WeatherFlow while the outlook band's
+        rows come from Open-Meteo, and the two providers disagree by a degree
+        or two - which reads as a contradiction when both sit on one screen
+        labelled "today". One provider owns today: the band's TODAY row takes
+        the WeatherFlow figures whenever they are known. Other days untouched. """
+        for r in fc_rows:
+            if r.get('today'):
+                if fc_low is not None:
+                    r['lo'] = int(round(fc_low))
+                if fc_high is not None:
+                    r['hi'] = int(round(fc_high))
+                lo, hi = r.get('lo'), r.get('hi')
+                if lo is not None and hi is not None and lo > hi:
+                    r['lo'], r['hi'] = hi, lo
+        return fc_rows
+
     def _fc_daily_current(self, today_iso):
         """ The stored outlook with any already-past days dropped, so a stale
         forecast (wifi out for a day+) can never mislabel yesterday as TODAY.
@@ -995,7 +1023,11 @@ class AlmanacEmitter:
 
         temp_val  = _num(_idx(Obs.get('outTemp'), 0))
         temp_unit = _temp_unit(_idx(Obs.get('outTemp'), 1))
-        fc_rows   = self._fc_daily_current(now_local.strftime('%Y-%m-%d'))
+        fc_low    = _num(_idx(Met.get('lowTemp'), 0))
+        fc_high   = _num(_idx(Met.get('highTemp'), 0))
+        fc_rows   = self._unify_today(
+                        self._fc_daily_current(now_local.strftime('%Y-%m-%d')),
+                        fc_low, fc_high)
 
         return {
             'ts':      int(time.time()),
@@ -1011,15 +1043,15 @@ class AlmanacEmitter:
             'temp':            temp_val,
             'tempUnit':        temp_unit,
             'feelsLike':       _num(_idx(Obs.get('FeelsLike'), 0)),
-            'feelsDesc':       _text(_idx(Obs.get('FeelsLike'), 2)),
+            'feelsDesc':       self._feels_desc(_text(_idx(Obs.get('FeelsLike'), 2))),
             'tempTrendPerHr':  _num(_idx(Obs.get('outTempTrend'), 0)),
             'temp24hDelta':    _num(_idx(Obs.get('outTempDiff'), 0)),
             'obsLow':          _num(_idx(Obs.get('outTempMin'), 0)),
             'obsLowTime':      _text(_idx(Obs.get('outTempMin'), 2)),
             'obsHigh':         _num(_idx(Obs.get('outTempMax'), 0)),
             'obsHighTime':     _text(_idx(Obs.get('outTempMax'), 2)),
-            'fcLow':           _num(_idx(Met.get('lowTemp'), 0)),
-            'fcHigh':          _num(_idx(Met.get('highTemp'), 0)),
+            'fcLow':           fc_low,
+            'fcHigh':          fc_high,
             'humidity':        _num(_idx(Obs.get('Humidity'), 0)),
             'dewPoint':        _num(_idx(Obs.get('DewPoint'), 0)),
 
