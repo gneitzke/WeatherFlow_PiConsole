@@ -389,20 +389,17 @@
   .streak-near { stroke-width: 2.2; }
   #raingauge.rain-anim .streak-far  { animation: fall-far  2.6s linear infinite; }
   #raingauge.rain-anim .streak-near { animation: fall-near 1.4s linear infinite; }
-  #raingauge.raining .streak-far  { opacity: 0.30; }
-  #raingauge.raining .streak-near { opacity: 0.62; }
   @keyframes fall-far  { to { transform: translate(-0.4px, 30px); } } /* vector matches the lean */
   @keyframes fall-near { to { transform: translate(-0.7px, 40px); } }
-  /* density is data, stepped on the gauge's own band graduations: one column
-     per depth in a drizzle, two from mid-Light, three from Heavy+. Columns
-     fade in and out (opacity) rather than blinking (visibility). */
-  #raingauge.raining .streak-far.r2,  #raingauge.raining .streak-far.r3,
-  #raingauge.raining .streak-near.r2, #raingauge.raining .streak-near.r3 { opacity: 0; }
-  #raingauge.raining.rain2 .streak-far.r2  { opacity: 0.30; }
-  #raingauge.raining.rain2 .streak-near.r2 { opacity: 0.62; }
-  #raingauge.raining.rain3 .streak-far.r2,  #raingauge.raining.rain3 .streak-far.r3  { opacity: 0.30; }
-  #raingauge.raining.rain3 .streak-near.r2, #raingauge.raining.rain3 .streak-near.r3,
-  #raingauge.raining.rain3 .streak-near    { opacity: 0.72; }
+  /* volume is a COUNT. Each of the six columns switches on at its own step of
+     the SHOWN intensity — which slews toward the measured one, quickly on the
+     way up and slowly on the way down (renderGauges) — so a stopping shower
+     counts its drops down column by column, and a sensor flapping wet/dry
+     between minutes cannot hard-cut the tube. Each step itself eases (the
+     opacity transition above); the whole-gauge fade is only the last drop. */
+  #raingauge.raining .streak-far.on  { opacity: 0.30; }
+  #raingauge.raining .streak-near.on { opacity: 0.62; }
+  #raingauge.raining.heavy .streak-near.on { opacity: 0.72; }
   /* the waterline itself waves — a gentle sine surface riding the pointer
      group (its MEAN position is the data; the ±1.6px undulation is texture).
      Translated by exactly one wavelength per loop, so the drift is seamless. */
@@ -1156,6 +1153,10 @@
 
   var rainPtr, rainFill, rainClipRect, rainStreaks = null, surfWave = null, surfCap = null, surfCapG = null, _waveD = null, _waveAmp = null, rainGeom = { top: 22, bot: 136, x1: 15 };
   var RAIN_FADE_MS = 2600, _rainOffT = null;   /* a hair longer than the 2.4s opacity ease */
+  /* shown-intensity slew per 2 s poll tick, and the column step thresholds
+     (fraction of the tube; near r1 is the first drop in, the last drop out) */
+  var RAIN_ATTACK = 0.15, RAIN_RELEASE = 0.04, _rrShown = null;
+  var RAIN_STEPS = { near: [0, 0.25, 0.52], far: [0.08, 0.38, 0.65] };
   (function () {
     var svg = $("raingauge");
     var top = rainGeom.top, bot = rainGeom.bot, x1 = rainGeom.x1, x2 = 57, cx = (x1 + x2) / 2;
@@ -1531,7 +1532,18 @@
     var dryGauge = (!isNum(data.rainRate) || data.rainRate === 0) &&
                    (!isNum(data.rainToday) || data.rainToday === 0);
     $("raingauge").classList.toggle("is-dry", dryGauge);
-    var gauge = $("raingauge"), wet = isNum(rainMm) && rainMm > 0;
+    var gauge = $("raingauge");
+    var rr = clamp(rainFrac(rainMm), 0, 1);              /* MEASURED: level, pointer, wave */
+    /* SHOWN: the streak volume slews toward the measurement, one poll tick at
+       a time — up fast (a downpour fills the tube in ~8 s), down slow (a
+       moderate shower takes ~30 s to count its drops out). Direction-aware, so
+       the Tempest's wet/dry flip between minutes reads as a swell and a
+       settle, never a cut. Data stays data: only the texture lags. */
+    if (_rrShown === null) _rrShown = rr;
+    else if (rr > _rrShown) _rrShown = Math.min(rr, _rrShown + RAIN_ATTACK);
+    else _rrShown = Math.max(rr, _rrShown - RAIN_RELEASE);
+    var shown = _rrShown;
+    var wet = (isNum(rainMm) && rainMm > 0) || shown > 0;
     gauge.classList.toggle("raining", wet);              /* opacities ease via CSS */
     if (wet) {
       gauge.classList.add("rain-anim");
@@ -1541,7 +1553,6 @@
          once nothing is visible, so the Pi isn't compositing invisible rain */
       _rainOffT = setTimeout(function () { gauge.classList.remove("rain-anim"); _rainOffT = null; }, RAIN_FADE_MS);
     }
-    var rr = clamp(rainFrac(rainMm), 0, 1);
     var rise = rr * (rainGeom.bot - rainGeom.top);
     rainFill.style.transform = "scaleY(" + rr.toFixed(3) + ")";   /* water level eases (CSS transition) */
     rainFill.style.opacity = isNum(rainMm) ? "" : "0";
@@ -1553,8 +1564,8 @@
     }
     /* rain falls faster as the rate climbs; the far layer lags for parallax.
        Only rewrite durations on change — resetting mid-flight snaps the phase. */
-    var nearDur = (1.5 - 1.0 * rr).toFixed(2) + "s";   /* 40px period: drizzle 1.5s -> deluge 0.5s */
-    var farDur  = (2.85 - 1.9 * rr).toFixed(2) + "s";  /* 30px period: ~2.5x slower in px/s */
+    var nearDur = (1.5 - 1.0 * shown).toFixed(2) + "s";   /* 40px period: drizzle 1.5s -> deluge 0.5s */
+    var farDur  = (2.85 - 1.9 * shown).toFixed(2) + "s";  /* 30px period: ~2.5x slower in px/s */
     rainStreaks.near.forEach(function (ln) {
       if (ln.style.animationDuration !== nearDur) ln.style.animationDuration = nearDur;
     });
@@ -1564,7 +1575,7 @@
     /* streak LENGTH follows the rate too: short ticks in a drizzle, long
        strokes in a downpour. The dash period (40 near / 30 far) is what the
        keyframe translates by, so it stays fixed and only the dash grows. */
-    var dn = (6 + 12 * rr).toFixed(1), df = (4 + 6 * rr).toFixed(1);
+    var dn = (6 + 12 * shown).toFixed(1), df = (4 + 6 * shown).toFixed(1);
     var dan = dn + " " + (40 - dn).toFixed(1), daf = df + " " + (30 - df).toFixed(1);
     /* set as a style (not the attribute) so the CSS transition eases the
        dash growth; both ends sum to the period, so every in-between does too */
@@ -1574,11 +1585,12 @@
     rainStreaks.far.forEach(function (ln) {
       if (ln._da !== daf) { ln.style.strokeDasharray = daf; ln._da = daf; }
     });
-    /* density steps up the tube: one column per depth in a drizzle, two from
-       mid-Light, three from Heavy — the tube visibly rains harder as the
-       measured intensity climbs */
-    $("raingauge").classList.toggle("rain2", rr >= 0.3);
-    $("raingauge").classList.toggle("rain3", rr >= 0.6);
+    /* the count: six columns, each with its own step of the shown intensity.
+       Near columns lead their far partners so the first drop is a bold one
+       and the last to leave is too. Thresholds are the step function. */
+    rainStreaks.near.forEach(function (ln, i) { ln.classList.toggle("on", shown > RAIN_STEPS.near[i]); });
+    rainStreaks.far.forEach(function (ln, i)  { ln.classList.toggle("on", shown > RAIN_STEPS.far[i]); });
+    gauge.classList.toggle("heavy", shown >= 0.6);
     if (surfWave) {
       var surfDur = (4.2 - 2.4 * rr).toFixed(2) + "s";   /* gentle drift, quicker in a downpour */
       if (surfWave.style.animationDuration !== surfDur) surfWave.style.animationDuration = surfDur;
