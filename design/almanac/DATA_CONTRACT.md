@@ -32,7 +32,11 @@ the HTML shows an em-dash for null. Emitter converts from the app's
   // weather code; pp is max precipitation probability for the day.
   // The TODAY row's hi/lo are overridden with fcLow/fcHigh (WeatherFlow) when
   // known, so the hero and the band never disagree about today.
-  "fcDaily": [{"day": "SAT", "date": "2026-08-29", "today": true, "hi": 64, "lo": 54, "code": 95, "pp": 95}],
+  // qpf is the day's expected precipitation in rainUnit (Open-Meteo is asked
+  // for inch when the station is configured in inches, mm otherwise); null
+  // when unknown. The band prints it after the chance and hides it below
+  // what the unit can show (0.01 in / 0.1 mm). gust is km/h, a fixed unit.
+  "fcDaily": [{"day": "SAT", "date": "2026-08-29", "today": true, "hi": 64, "lo": 54, "code": 95, "pp": 95, "qpf": 0.34, "gust": 38}],
   "fcStale": false,   // true when no successful forecast fetch in 24 h; the console hides the band
 
   // Wind  (dir in degrees; cardinal string; needle rotates to dir)

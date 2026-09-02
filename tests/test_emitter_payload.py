@@ -201,12 +201,18 @@ def test_fc_daily_shapes_open_meteo_arrays():
         'temperature_2m_min': [53.5, 52.8, 55.0],
         'weather_code': [95, 61, 2],
         'precipitation_probability_max': [95, 60, None],
+        'precipitation_sum': [0.336, 'junk', 0.0],
     }
     rows = AlmanacEmitter._fc_daily_from(daily)
     # the None-hi day is dropped: a partial bar lies on the shared scale
     assert len(rows) == 2
-    assert rows[0] == {'day': 'SAT', 'date': '2026-08-29', 'hi': 64, 'lo': 54, 'code': 95, 'pp': 95, 'gust': None}
+    assert rows[0] == {'day': 'SAT', 'date': '2026-08-29', 'hi': 64, 'lo': 54, 'code': 95, 'pp': 95,
+                       'qpf': 0.34, 'gust': None}
     assert rows[1]['day'] == 'SUN' and rows[1]['hi'] == 71 and rows[1]['pp'] == 60
+    assert rows[1]['qpf'] is None                      # junk amount -> unknown, never a crash
+    # an older payload without precipitation_sum still shapes cleanly
+    daily.pop('precipitation_sum')
+    assert AlmanacEmitter._fc_daily_from(daily)[0]['qpf'] is None
 
 
 def test_fc_daily_empty_and_garbage_never_raise():

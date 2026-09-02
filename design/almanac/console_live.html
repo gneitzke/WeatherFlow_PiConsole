@@ -369,7 +369,7 @@
      once — overlapping shapes can never show a darker seam */
   .water-body  { opacity: 0.42; }
   .gauge-col   { fill: var(--water);                     /* rain tube fills as rate climbs */
-                 transform-box: fill-box; transform-origin: 50% 100%; transition: transform 0.7s ease; }
+                 transform-box: fill-box; transform-origin: 50% 100%; transition: transform 1.4s ease; }
   /* while rain is actively falling the water breathes — a slow opacity swell
      that says "live" at a glance. Opacity only (GPU-composited on the Pi);
      the pointer never fakes motion: its position is data. */
@@ -378,37 +378,52 @@
      Continuous columns: one dashed line per column, translated by exactly one
      dash period per loop, so the fall is seamless — living hatch-work, not
      particle drops. Transform/opacity only — the Pi composites it. */
-  .streak-far, .streak-near { stroke: var(--water); stroke-linecap: round; opacity: 0; }
+  /* Rain arrives and leaves like weather, not like a switch: two classes do
+     the work. `.raining` sets the opacities (every one of them eased over
+     RAIN_FADE_MS), `.rain-anim` keeps the keyframes running — it is added at
+     the first wet tick and removed only after the fade-out completes, so the
+     last streaks fall all the way out instead of freezing mid-tube. */
+  .streak-far, .streak-near { stroke: var(--water); stroke-linecap: round; opacity: 0;
+                              transition: opacity 2.4s ease, stroke-dasharray 1.6s ease; }
   .streak-far  { stroke-width: 1.7; }
   .streak-near { stroke-width: 2.2; }
-  #raingauge.raining .streak-far  { opacity: 0.30; animation: fall-far  2.6s linear infinite; }
-  #raingauge.raining .streak-near { opacity: 0.62; animation: fall-near 1.4s linear infinite; }
+  #raingauge.rain-anim .streak-far  { animation: fall-far  2.6s linear infinite; }
+  #raingauge.rain-anim .streak-near { animation: fall-near 1.4s linear infinite; }
+  #raingauge.raining .streak-far  { opacity: 0.30; }
+  #raingauge.raining .streak-near { opacity: 0.62; }
   @keyframes fall-far  { to { transform: translate(-0.4px, 30px); } } /* vector matches the lean */
   @keyframes fall-near { to { transform: translate(-0.7px, 40px); } }
-  /* density is data, stepped on the gauge's own band graduations:
-     one column per depth in light rain, two at Moderate, three at Heavy+ */
-  .r2, .r3 { visibility: hidden; }
-  #raingauge.rain2 .r2 { visibility: visible; }
-  #raingauge.rain3 .r2, #raingauge.rain3 .r3 { visibility: visible; }
-  #raingauge.rain3 .streak-near { opacity: 0.72; }
+  /* density is data, stepped on the gauge's own band graduations: one column
+     per depth in a drizzle, two from mid-Light, three from Heavy+. Columns
+     fade in and out (opacity) rather than blinking (visibility). */
+  #raingauge.raining .streak-far.r2,  #raingauge.raining .streak-far.r3,
+  #raingauge.raining .streak-near.r2, #raingauge.raining .streak-near.r3 { opacity: 0; }
+  #raingauge.raining.rain2 .streak-far.r2  { opacity: 0.30; }
+  #raingauge.raining.rain2 .streak-near.r2 { opacity: 0.62; }
+  #raingauge.raining.rain3 .streak-far.r2,  #raingauge.raining.rain3 .streak-far.r3  { opacity: 0.30; }
+  #raingauge.raining.rain3 .streak-near.r2, #raingauge.raining.rain3 .streak-near.r3,
+  #raingauge.raining.rain3 .streak-near    { opacity: 0.72; }
   /* the waterline itself waves — a gentle sine surface riding the pointer
      group (its MEAN position is the data; the ±1.6px undulation is texture).
      Translated by exactly one wavelength per loop, so the drift is seamless. */
-  .gauge-surf { stroke: var(--water); stroke-width: 1.8; stroke-linecap: round; fill: none; opacity: 0; }
-  #raingauge.raining .gauge-surf { opacity: 0.8; animation: surf-drift linear infinite; }
+  .gauge-surf { stroke: var(--water); stroke-width: 1.8; stroke-linecap: round; fill: none; opacity: 0;
+                transition: opacity 2.4s ease; }
+  #raingauge.rain-anim .gauge-surf { animation: surf-drift linear infinite; }
+  #raingauge.raining   .gauge-surf { opacity: 0.8; }
   /* the filled area under the wave — the water's own surface, not a line on top.
      Lives inside .water-body so its fill fuses seamlessly with the column. */
-  .surf-fill  { fill: var(--water); opacity: 0; }
-  #raingauge.raining .surf-fill { opacity: 1; animation: surf-drift linear infinite; }
+  .surf-fill  { fill: var(--water); opacity: 0; transition: opacity 2.4s ease; }
+  #raingauge.rain-anim .surf-fill { animation: surf-drift linear infinite; }
+  #raingauge.raining   .surf-fill { opacity: 1; }
   @keyframes surf-drift { to { transform: translateX(20px); } }
 
   @media (prefers-reduced-motion: reduce) {
-    #raingauge.raining .streak-far,
-    #raingauge.raining .streak-near { animation: none; opacity: 0; }
-    #raingauge.raining .gauge-surf  { animation: none; opacity: 0.6; }
-    #raingauge.raining .surf-fill   { animation: none; opacity: 1; }
+    #raingauge .streak-far,
+    #raingauge .streak-near { animation: none !important; opacity: 0 !important; }
+    #raingauge .gauge-surf  { animation: none !important; }
+    #raingauge .surf-fill   { animation: none !important; }
   }
-  .gauge-ptr-g { transition: transform 0.7s ease; }      /* pointer rides the water level */
+  .gauge-ptr-g { transition: transform 1.4s ease; }      /* pointer rides the water level */
   @media (prefers-reduced-motion: reduce) { .gauge-col, .gauge-ptr-g { transition: none; } }
   #raingauge .tick       { stroke-width: 2.6; }
   /* band graduations sit over the water column so the level can be read
@@ -1140,6 +1155,7 @@
   }
 
   var rainPtr, rainFill, rainClipRect, rainStreaks = null, surfWave = null, surfCap = null, surfCapG = null, _waveD = null, _waveAmp = null, rainGeom = { top: 22, bot: 136, x1: 15 };
+  var RAIN_FADE_MS = 2600, _rainOffT = null;   /* a hair longer than the 2.4s opacity ease */
   (function () {
     var svg = $("raingauge");
     var top = rainGeom.top, bot = rainGeom.bot, x1 = rainGeom.x1, x2 = 57, cx = (x1 + x2) / 2;
@@ -1515,7 +1531,16 @@
     var dryGauge = (!isNum(data.rainRate) || data.rainRate === 0) &&
                    (!isNum(data.rainToday) || data.rainToday === 0);
     $("raingauge").classList.toggle("is-dry", dryGauge);
-    $("raingauge").classList.toggle("raining", isNum(rainMm) && rainMm > 0);
+    var gauge = $("raingauge"), wet = isNum(rainMm) && rainMm > 0;
+    gauge.classList.toggle("raining", wet);              /* opacities ease via CSS */
+    if (wet) {
+      gauge.classList.add("rain-anim");
+      if (_rainOffT) { clearTimeout(_rainOffT); _rainOffT = null; }
+    } else if (gauge.classList.contains("rain-anim") && !_rainOffT) {
+      /* keep the streaks falling while they fade; stop the keyframes only
+         once nothing is visible, so the Pi isn't compositing invisible rain */
+      _rainOffT = setTimeout(function () { gauge.classList.remove("rain-anim"); _rainOffT = null; }, RAIN_FADE_MS);
+    }
     var rr = clamp(rainFrac(rainMm), 0, 1);
     var rise = rr * (rainGeom.bot - rainGeom.top);
     rainFill.style.transform = "scaleY(" + rr.toFixed(3) + ")";   /* water level eases (CSS transition) */
@@ -1541,11 +1566,13 @@
        keyframe translates by, so it stays fixed and only the dash grows. */
     var dn = (6 + 12 * rr).toFixed(1), df = (4 + 6 * rr).toFixed(1);
     var dan = dn + " " + (40 - dn).toFixed(1), daf = df + " " + (30 - df).toFixed(1);
+    /* set as a style (not the attribute) so the CSS transition eases the
+       dash growth; both ends sum to the period, so every in-between does too */
     rainStreaks.near.forEach(function (ln) {
-      if (ln.getAttribute("stroke-dasharray") !== dan) ln.setAttribute("stroke-dasharray", dan);
+      if (ln._da !== dan) { ln.style.strokeDasharray = dan; ln._da = dan; }
     });
     rainStreaks.far.forEach(function (ln) {
-      if (ln.getAttribute("stroke-dasharray") !== daf) ln.setAttribute("stroke-dasharray", daf);
+      if (ln._da !== daf) { ln.style.strokeDasharray = daf; ln._da = daf; }
     });
     /* density steps up the tube: one column per depth in a drizzle, two from
        mid-Light, three from Heavy — the tube visibly rains harder as the

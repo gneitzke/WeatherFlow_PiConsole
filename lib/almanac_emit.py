@@ -466,7 +466,7 @@ class AlmanacEmitter:
                 continue
             code = codes[i] if i < len(codes) else None
             pp   = pps[i]   if i < len(pps)   else None
-            qpf  = qpfs[i]  if i < len(qpfs)  else None
+            qpf  = _num(qpfs[i]) if i < len(qpfs) else None   # _num: never raises on junk
             gust = gusts[i] if i < len(gusts) else None
             out.append({'day':  day,
                         'date': t[:10],
@@ -476,7 +476,7 @@ class AlmanacEmitter:
                         'pp':   int(round(pp)) if pp is not None else None,
                         # two decimals covers both units; the board hides
                         # anything below what the unit can print
-                        'qpf':  round(float(qpf), 2) if qpf is not None else None,
+                        'qpf':  round(qpf, 2) if qpf is not None else None,
                         'gust': int(round(gust)) if gust is not None else None})   # km/h, fixed unit
         return out
 
