@@ -16,6 +16,8 @@ this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
 # Import required library modules
+import time
+
 from lib.request_api import weatherflow_api
 from lib.system      import system
 from lib             import derived_variables  as derive
@@ -78,6 +80,28 @@ class obs_parser():
         self.device_obs = device_obs.copy()
         self.derive_obs = derive_obs.copy()
 
+    # Seconds between renewed attempts at the REST seeds while a value is missing
+    SEED_RETRY_SEC = 300
+
+    def _seed_due(self, device_id):
+        """ The REST 'today' / 'yesterday' / 'month' seeds used to be attempted
+        only on the first websocket message (flagAPI). When that first attempt
+        failed - boot-time wifi still settling is the common case - the daily
+        wind average, gust maximum and yesterday's rain stayed None until the
+        next restart. Keep the attempts alive while values are still missing
+        (the callers' own None checks decide which), at most once every
+        SEED_RETRY_SEC per device. """
+        if self.api_data[device_id]['flagAPI']:
+            return True
+        last = getattr(self, '_seed_last', None)
+        if last is None:
+            last = self._seed_last = {}
+        now = time.time()
+        if now - last.get(device_id, 0) >= self.SEED_RETRY_SEC:
+            last[device_id] = now
+            return True
+        return False
+
     def parse_obs_st(self, message, config):
 
         """ Parse obs_st Websocket messages from TEMPEST module
@@ -135,7 +159,7 @@ class obs_parser():
         # Request required TEMPEST data from the WeatherFlow API
         if int(config['System']['rest_api']) and config['Station']['TempestID']:
             self.api_data[device_id]['24Hrs'] = weatherflow_api.last_24h(api_device_id, latest_ob[0], config)
-            if self.api_data[device_id]['flagAPI']:
+            if self._seed_due(device_id):
                 if (self.derive_obs['SLPMin'][0] is None
                     or self.derive_obs['SLPMax'][0] is None
                     or self.derive_obs['outTempMin'][0] is None
@@ -216,7 +240,7 @@ class obs_parser():
 
         # Request required SKY data from the WeatherFlow API
         if int(config['System']['rest_api']) and config['Station']['SkyID']:
-            if self.api_data[device_id]['flagAPI']:
+            if self._seed_due(device_id):
                 if (self.derive_obs['windAvg'][0] is None
                     or self.derive_obs['gustMax'][0] is None
                     or self.derive_obs['peakSun'][0] is None):
@@ -286,7 +310,7 @@ class obs_parser():
         # Request required outdoor AIR data from the WeatherFlow API
         if int(config['System']['rest_api']) and config['Station']['OutAirID']:
             self.api_data[device_id]['24Hrs'] = weatherflow_api.last_24h(api_device_id, latest_ob[0], config)
-            if self.api_data[device_id]['flagAPI']:
+            if self._seed_due(device_id):
                 if (self.derive_obs['SLPMin'][0] is None
                     or self.derive_obs['SLPMax'][0] is None
                     or self.derive_obs['outTempMin'][0] is None

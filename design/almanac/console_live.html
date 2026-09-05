@@ -221,10 +221,22 @@
   .panel:nth-child(4) { padding-top: 12px; }
   .panel:nth-child(1), .panel:nth-child(3) { padding-right: 22px; }
 
-  /* dynamic tile slot: rainfall ⇄ lightning cross-fade, no layout shift */
+  /* dynamic tile slot (the 3rd panel, Sun & Sky ⇄ Lightning): cross-fade, no
+     layout shift. The tile insets reproduce the 3rd panel's own padding
+     (top 12 · right 22 · bottom 8 · left 2) so the sky content sits exactly
+     where it did as a plain panel. */
   #panel-dyn { position: relative; padding: 0; }
-  #panel-dyn .tile { position: absolute; top: 12px; right: 6px; bottom: 8px; left: 22px;
+  #panel-dyn .tile { position: absolute; top: 12px; right: 22px; bottom: 8px; left: 2px;
     display: flex; flex-direction: column; opacity: 1; transition: opacity 0.7s ease; }
+  #tile-rain { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+  /* the lightning tile in the sky slot: same compaction the wind tile uses,
+     so the three ledger rows clear the panel foot; nothing wraps */
+  #tile-bolt .p-value .n { font-size: 42px; }
+  #tile-bolt .p-value .u, #tile-bolt .p-sub { white-space: nowrap; }
+  #tile-bolt .p-col.snug .ledger { margin-top: 8px; }
+  #tile-bolt .lrow { padding: 0; }
+  #tile-bolt .p-body { gap: 10px; }
+  #minirings { width: 104px; height: 104px; }
   #panel-dyn .tile.hidden { opacity: 0; pointer-events: none; }
   .p-status.brass { color: var(--brass); }
   @media (prefers-reduced-motion: reduce) {
@@ -780,7 +792,11 @@
       </div>
 
       <!-- SUN & SKY  ⇄  MOON & SKY (shows the sky that's actually overhead) -->
-      <div class="panel">
+      <!-- SUN & SKY ⇄ LIGHTNING (dynamic tile). In a storm the two things worth
+           watching are the rain and the lightning, so they must share the
+           screen; the sky can wait. Lightning therefore takes THIS slot. -->
+      <div class="panel" id="panel-dyn">
+        <div class="tile" id="tile-sky">
         <div class="p-head"><span class="p-title" id="sky-title">Sun &amp; Sky</span><span class="p-status" id="sky-status">Solar</span></div>
         <div class="p-col">
           <div class="sky-day" id="sky-day">
@@ -830,25 +846,6 @@
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- RAINFALL ⇄ LIGHTNING (dynamic tile) -->
-      <div class="panel" id="panel-dyn">
-
-        <div class="tile" id="tile-rain">
-          <div class="p-head"><span class="p-title">Rainfall</span><span class="p-status" data-k="rainStatus">Currently Dry</span></div>
-          <div class="p-body">
-            <div class="p-col">
-              <div class="p-value"><span class="n" data-k="rainToday">0.00</span><span class="u"><span data-k="rainUnit">in</span> today</span></div>
-              <div class="p-sub">Rate <span data-k="rainRate">0</span> <span data-k="rainUnit">in</span>/hr</div>
-              <div class="ledger">
-                <div class="lrow"><span class="k">Yesterday</span><span class="dots"></span><span class="v"><span class="amt" data-k="rainYest">0.00</span> <small data-k="rainUnit">in</small></span></div>
-                <div class="lrow"><span class="k">Month</span><span class="dots"></span><span class="v"><span class="amt" data-k="rainMonth">0.15</span> <small data-k="rainUnit">in</small></span></div>
-                <div class="lrow"><span class="k">Year</span><span class="dots"></span><span class="v"><span class="amt" data-k="rainYear">40.00</span> <small data-k="rainUnit">in</small></span></div>
-              </div>
-            </div>
-            <svg width="82" height="176" viewBox="0 0 72 154" id="raingauge" style="flex:none"></svg>
-          </div>
         </div>
 
         <div class="tile hidden" id="tile-bolt">
@@ -864,6 +861,26 @@
               </div>
             </div>
             <svg width="118" height="118" viewBox="0 0 120 120" id="minirings" style="flex:none; align-self:center"></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- RAINFALL (fixed: never hidden, whatever else is happening) -->
+      <div class="panel" id="panel-rain">
+
+        <div id="tile-rain">
+          <div class="p-head"><span class="p-title">Rainfall</span><span class="p-status" data-k="rainStatus">Currently Dry</span></div>
+          <div class="p-body">
+            <div class="p-col">
+              <div class="p-value"><span class="n" data-k="rainToday">0.00</span><span class="u"><span data-k="rainUnit">in</span> today</span></div>
+              <div class="p-sub">Rate <span data-k="rainRate">0</span> <span data-k="rainUnit">in</span>/hr</div>
+              <div class="ledger">
+                <div class="lrow"><span class="k">Yesterday</span><span class="dots"></span><span class="v"><span class="amt" data-k="rainYest">0.00</span> <small data-k="rainUnit">in</small></span></div>
+                <div class="lrow"><span class="k">Month</span><span class="dots"></span><span class="v"><span class="amt" data-k="rainMonth">0.15</span> <small data-k="rainUnit">in</small></span></div>
+                <div class="lrow"><span class="k">Year</span><span class="dots"></span><span class="v"><span class="amt" data-k="rainYear">40.00</span> <small data-k="rainUnit">in</small></span></div>
+              </div>
+            </div>
+            <svg width="82" height="176" viewBox="0 0 72 154" id="raingauge" style="flex:none"></svg>
           </div>
         </div>
 
@@ -1946,11 +1963,13 @@
   ════════════════════════════════════════════════════════════ */
   var Light = (function () {
     var flag = $("mastflag"), flagtext = $("flagtext");
-    var tileRain = $("tile-rain"), tileBolt = $("tile-bolt");
+    var tileSky = $("tile-sky"), tileBolt = $("tile-bolt");
     var simRunning = false, simTimer = null;
 
+    /* lightning displaces the SKY tile, never the rain: in a storm the rain
+       gauge and the strikes are the two things worth watching together */
     function setActive(on) {
-      tileRain.classList.toggle("hidden", on);
+      tileSky.classList.toggle("hidden", on);
       tileBolt.classList.toggle("hidden", !on);
       flag.classList.toggle("on", on);
     }
