@@ -1363,6 +1363,9 @@ class AlmanacEmitter:
             'currentVersion':  ver_snap.current,
             'date':    now_local.strftime('%a, %d %b %Y'),
             'time':    now_local.strftime('%H:%M'),
+            # station-local midnight as an epoch: the hero curve maps hourly epochs
+            # onto the day's axis with this, exact to the second (HH:MM cannot be)
+            'dayStartTs': int(now_local.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()),
 
             # Temperature
             'temp':            temp_val,

@@ -23,6 +23,7 @@ the HTML shows an em-dash for null. Emitter converts from the app's
   "station": "Seattle",             // [Station] Name
   "date": "Fri, 31 Jul 2026",       // System['date']
   "time": "12:52",                  // System['time']  (HH:MM)
+  "dayStartTs": 1749970800,         // station-local midnight today, epoch seconds (the hero curve's day axis)
 
   // Temperature
   "temp": 64.0, "tempUnit": "°F",   // Obs['outTemp'][0],[1]

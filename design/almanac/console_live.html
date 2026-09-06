@@ -1858,14 +1858,14 @@
     /* forecast trajectory: the emitter's REAL hourly temperatures, clipped to
        the rest of today. fcHourly is [[epoch_s, temp], ...]; the x-axis is
        hours of the station-local day, so each point needs its local hour.
-       ANCHOR: the payload's own pair of clocks — `ts` is the epoch of the emit
-       tick and `time` is that same instant on the station's wall clock, so
-       ts - nowH*3600 is local midnight. (obsTs is deliberately not used: it is
-       the sensor's epoch and can trail the wall clock by minutes.) A list left
-       over from an old fetch maps outside 0..24 and drops out by itself. */
+       ANCHOR: the emitter's dayStartTs (station-local midnight, exact to the
+       second). Fallback for an older payload: ts - nowH*3600, which only knows
+       the minute and so prints exact hours as :59. (obsTs is deliberately not
+       used: it is the sensor's epoch and can trail the wall clock by minutes.)
+       A list left over from an old fetch maps outside 0..24 and drops out. */
     var fcPts = [];
     if (isNum(data.ts) && data.fcHourly && data.fcHourly.length) {
-      var midnight = data.ts - nowH * 3600;
+      var midnight = isNum(data.dayStartTs) ? data.dayStartTs : data.ts - nowH * 3600;
       for (var i = 0; i < data.fcHourly.length; i++) {
         var p = data.fcHourly[i];
         if (!p || !isNum(p[0]) || !isNum(p[1])) continue;

@@ -236,3 +236,13 @@ def test_the_curve_is_json_serializable_as_emitted(make_emitter, monkeypatch):
     emitter._do_forecast()
     round_tripped = json.loads(json.dumps(emitter._build_payload(), allow_nan=False))
     assert round_tripped['fcHourly'] == emitter._build_payload()['fcHourly']
+
+
+def test_payload_carries_station_local_midnight(make_emitter):
+    import pytz, time
+    from datetime import datetime
+    payload = make_emitter(scn.heavy_rain())._build_payload()
+    tz = pytz.timezone('America/Los_Angeles')                        # the fixture station
+    local = datetime.fromtimestamp(payload['dayStartTs'], tz)
+    assert (local.hour, local.minute, local.second) == (0, 0, 0)     # exactly midnight, station clock
+    assert local.date() == datetime.now(tz).date()                   # today's
