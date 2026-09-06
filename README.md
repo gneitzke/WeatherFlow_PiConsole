@@ -77,6 +77,9 @@ What it changes:
 - Animated updates: values count up, the vane swings — and while rain falls, etched rain falls through the gauge into a waving water surface, with fall speed, density, swell, and drift all tracking the measured rate.
 - Snow-aware: in freezing weather with snow in the forecast, a dry rain sensor reads "Snow Likely" rather than "Currently Dry" (the Tempest's haptic sensor cannot register snowfall).
 - Day/night aware. After sunset the Sun & Sky panel becomes Moon & Sky (phase, illumination, moonrise/set).
+- Storm-aware layout: while lightning is being detected, the Lightning tile takes the Sun & Sky slot so rain and strikes stay on screen together.
+- The forecast-today curve continues past the current reading along real hourly forecast temperatures, with the day's high and low labelled at the hours they occur; with no hourly data it draws nothing forward rather than guess.
+- Honest about silence: the masthead reads STALE when nothing new is reaching the screen and SILENT when the engine is fine but the station itself has stopped reporting - a fresh file is never mistaken for a live sensor. `/health` reports the same distinction for monitoring.
 
 Both extra data sources degrade quietly. Weather alerts come from the US National
 Weather Service, so outside the US the strip simply stays hidden. Air quality is
