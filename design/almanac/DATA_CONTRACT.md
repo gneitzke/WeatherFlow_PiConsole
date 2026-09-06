@@ -48,6 +48,16 @@ the HTML shows an em-dash for null. Emitter converts from the app's
   // when unknown. The band prints it after the chance and hides it below
   // what the unit can show (0.01 in / 0.1 mm). gust is km/h, a fixed unit.
   "fcDaily": [{"day": "SAT", "date": "2026-08-29", "today": true, "hi": 64, "lo": 54, "code": 95, "pp": 95, "qpf": 0.34, "gust": 38}],
+  // Hourly forecast temperature (Open-Meteo, the SAME fetch as fcDaily), from
+  // the current station-local hour through the end of tomorrow — 48 points at
+  // most. Each point is [epoch SECONDS, temp]; the temp is in tempUnit (the
+  // request asks for the console's own unit) to 1 decimal. [] when unknown.
+  // This is what the hero's day-curve draws its dotted future segment through,
+  // and the ONLY thing it may draw there: with [] the curve stops at now and
+  // the forecast low/high stay text, because nothing in the payload says WHEN
+  // they happen. The console maps each epoch onto the local day using ts and
+  // time, so points from a stale fetch fall outside today and drop out.
+  "fcHourly": [[1756400000, 71.2], [1756403600, 73.4]],
   "fcStale": false,   // true when no successful forecast fetch in 24 h; the console hides the band
   "fcAgeSec": 1800,   // seconds since the last SUCCESSFUL forecast fetch (null = never)
 

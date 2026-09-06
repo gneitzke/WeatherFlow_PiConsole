@@ -327,8 +327,8 @@ _AqiResult = namedtuple('_AqiResult',
                         'aqi category pm25 ts forecast peak peak_time fc_cat trend trend_text')
 _AQI_NONE = _AqiResult(None, None, None, None, (), None, None, None, None, None)
 
-_FcResult = namedtuple('_FcResult', 'daily ts')
-_FC_NONE  = _FcResult((), None)
+_FcResult = namedtuple('_FcResult', 'daily hourly ts')
+_FC_NONE  = _FcResult((), (), None)
 
 _AlertsResult = namedtuple('_AlertsResult', 'features alerts ts')
 _ALERTS_NONE  = _AlertsResult(None, (), None)
@@ -406,6 +406,7 @@ class AlmanacEmitter:
     _aqi_trend      = _snapshot_field('_aqi_result', 'trend')       # 'rising' | 'falling' | 'steady'
     _aqi_trend_text = _snapshot_field('_aqi_result', 'trend_text')  # "Moderate by 5 PM" | "Improving"
     _fc_daily       = _snapshot_field('_fc_result', 'daily')        # [{day,hi,lo,code,pp}, ...]
+    _fc_hourly      = _snapshot_field('_fc_result', 'hourly')       # [[epoch, temp], ...] hero curve
     _fc_ts          = _snapshot_field('_fc_result', 'ts')
     _alert_features = _snapshot_field('_alerts_result', 'features') # last-good NWS properties
     _alerts         = _snapshot_field('_alerts_result', 'alerts')   # processed + collapsed + sorted
@@ -547,8 +548,10 @@ class AlmanacEmitter:
         """ Fetch the 7-day daily outlook from Open-Meteo for the station's
         lat/lon: hi/lo, WMO weather code, max precipitation probability. The
         temperature unit follows the console's own Units/Temp setting so the
-        strip always matches the observed readings. Off-thread, never raises;
-        on failure the previous outlook is kept. """
+        strip always matches the observed readings. The SAME call also carries
+        hourly temperature (forecast_hours, no extra round trip) for the hero
+        curve's forward trajectory. Off-thread, never raises; on failure the
+        previous outlook is kept. """
         try:
             import urllib.request
             config = getattr(self.app, 'config', {}) or {}
@@ -564,6 +567,11 @@ class AlmanacEmitter:
             url = ('https://api.open-meteo.com/v1/forecast'
                    f'?latitude={lat}&longitude={lon}'
                    '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max'
+                   # Hourly temperature for the hero curve. forecast_hours bounds
+                   # the HOURLY block only (daily still spans forecast_days), and
+                   # 48 h is the most the curve can want: at station-local
+                   # midnight, "through the end of tomorrow" is exactly 48 hours.
+                   '&hourly=temperature_2m&forecast_hours=48'
                    '&wind_speed_unit=kmh'
                    f'&precipitation_unit={precip_unit}'
                    f'&temperature_unit={unit}&forecast_days=7&timezone=auto')
@@ -571,8 +579,10 @@ class AlmanacEmitter:
             with urllib.request.urlopen(req, timeout=25) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
             days = self._fc_daily_from(data.get('daily') or {})
+            hours = self._fc_hourly_from(data.get('hourly') or {}, time.time(),
+                                         self._station_tz(config))
             if days:
-                self._fc_result = _FcResult(days, time.time())
+                self._fc_result = _FcResult(days, hours, time.time())
         except Exception as error:                                        # noqa: BLE001
             Logger.warning(f'almanac_emit: forecast fetch failed - {error}')
         finally:
@@ -625,6 +635,51 @@ class AlmanacEmitter:
                         'qpf':  round(qpf, 2) if qpf is not None else None,
                         'gust': int(round(gust)) if gust is not None else None})   # km/h, fixed unit
         return out
+
+    @staticmethod
+    def _fc_hourly_from(hourly, now, tz):
+        """ Shape Open-Meteo's hourly temperature into the hero curve's forward
+        trajectory: [[epoch_seconds, temp], ...] from the CURRENT station-local
+        hour through the end of TOMORROW (48 points at most). Temperatures are
+        already in the console's unit (see temperature_unit on the request), so
+        no conversion here - only a round to 1 decimal, matching the observed
+        readings the curve is drawn against.
+
+        Under timezone=auto the times come back local-naive, so the station tz
+        is what turns them into epochs; without a tz there is no honest epoch to
+        publish and the list stays empty (the console then draws no forecast
+        segment at all rather than one an hour out of place). Pure; never raises. """
+        times = hourly.get('time') or []
+        temps = hourly.get('temperature_2m') or []
+        if tz is None:
+            return []
+        try:
+            ref = datetime.fromtimestamp(now, tz).replace(tzinfo=None)    # station wall clock
+        except (OverflowError, OSError, ValueError):
+            return []
+        # Window on the wall clock, not on epochs: DST cannot make "the end of
+        # tomorrow" a fixed number of hours away.
+        first = ref.replace(minute=0, second=0, microsecond=0)
+        last  = ref.date() + timedelta(days=1)
+        out = []
+        for t, v in zip(times, temps):
+            v = _num(v)                               # _num: never raises on junk
+            if v is None:
+                continue
+            try:
+                dt = datetime.fromisoformat(t)
+            except (ValueError, TypeError):
+                continue
+            if dt.tzinfo is not None:                 # not what timezone=auto sends; don't mix clocks
+                dt = dt.astimezone(tz).replace(tzinfo=None)
+            if dt < first or dt.date() > last:
+                continue
+            try:
+                epoch = tz.localize(dt).timestamp()
+            except Exception:                                             # noqa: BLE001
+                continue                              # ambiguous/nonexistent local hour (DST edge)
+            out.append([int(round(epoch)), round(v, 1)])
+        return out[:48]
 
     WINDY_GUST_KMH = 45   # ~28 mph gusts: the day is a wind story
 
@@ -1333,6 +1388,11 @@ class AlmanacEmitter:
             'fcPrecipPct':     _num(_idx(Met.get('PrecipPercnt'), 0)),
             'fcDailyPct':      _num(_idx(Met.get('PrecipDay'), 0)),
             'fcDaily':         fc_rows,   # outlook, past days dropped at emit time
+            # Hourly trajectory for the hero curve. Same snapshot as fcDaily, so
+            # the curve and the band can never come from different fetches. The
+            # console drops points that are no longer in the future, which is
+            # also what makes a stale list (wifi out) draw nothing at all.
+            'fcHourly':        list(fc_snap.hourly or ()),
             'fcStale':         (fc_snap.ts is None) or (now - fc_snap.ts) > FC_STALE_SEC,
             'fcAgeSec':        _age_sec(fc_snap.ts, now),   # since the last SUCCESSFUL fetch
 

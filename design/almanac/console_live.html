@@ -1852,15 +1852,38 @@
     var W = 350, base = 88, yTop = 20, yBot = 84;
     function X(hours) { return clamp(hours / 24, 0, 1) * W; }
 
-    /* collect temps for the vertical scale */
-    var temps = [data.obsLow, data.obsHigh, data.temp, data.fcHigh, data.fcLow].filter(isNum);
+    var nowH = hm(data.time);
+    if (nowH == null) nowH = 12;
+
+    /* forecast trajectory: the emitter's REAL hourly temperatures, clipped to
+       the rest of today. fcHourly is [[epoch_s, temp], ...]; the x-axis is
+       hours of the station-local day, so each point needs its local hour.
+       ANCHOR: the payload's own pair of clocks — `ts` is the epoch of the emit
+       tick and `time` is that same instant on the station's wall clock, so
+       ts - nowH*3600 is local midnight. (obsTs is deliberately not used: it is
+       the sensor's epoch and can trail the wall clock by minutes.) A list left
+       over from an old fetch maps outside 0..24 and drops out by itself. */
+    var fcPts = [];
+    if (isNum(data.ts) && data.fcHourly && data.fcHourly.length) {
+      var midnight = data.ts - nowH * 3600;
+      for (var i = 0; i < data.fcHourly.length; i++) {
+        var p = data.fcHourly[i];
+        if (!p || !isNum(p[0]) || !isNum(p[1])) continue;
+        var ph = (p[0] - midnight) / 3600;
+        if (ph <= nowH + 1 / 60 || ph > 24) continue;      /* still ahead, still today */
+        fcPts.push({ h: ph, T: p[1] });
+      }
+      fcPts.sort(function (a, b) { return a.h - b.h; });
+    }
+
+    /* vertical scale spans exactly what gets drawn — nothing is placed by a
+       number the curve doesn't carry */
+    var temps = [data.obsLow, data.obsHigh, data.temp].filter(isNum)
+                  .concat(fcPts.map(function (o) { return o.T; }));
     if (temps.length < 2) return;
     var tmin = Math.min.apply(null, temps), tmax = Math.max.apply(null, temps);
     if (tmax - tmin < 1) { tmax = tmin + 1; }
     function Y(T) { return yBot - (T - tmin) / (tmax - tmin) * (yBot - yTop); }
-
-    var nowH = hm(data.time);
-    if (nowH == null) nowH = 12;
 
     /* observed points: obsLow, obsHigh, now — sorted by time */
     var obs = [];
@@ -1885,18 +1908,49 @@
     el("path", { fill: "url(#tempfill)",
       d: obsPath + " L " + nowX.toFixed(1) + " " + base + " L 0 " + base + " Z" }, g);
 
-    /* forecast (dotted): now -> diurnal peak (fcHigh @ ~15:00) -> end of day (fcLow) */
-    var fc = [[nowX, nowY]];
-    var peakH = 15, peakX = X(peakH);
-    if (isNum(data.fcHigh) && peakX > nowX) fc.push([peakX, Y(data.fcHigh)]);
-    if (isNum(data.fcLow)) fc.push([W, Y(data.fcLow)]);
-    if (fc.length > 1) el("path", { class: "spark-fx", d: smooth(fc) }, g);
+    /* forecast (dotted): now -> through the real hourly points. No hourly data
+       (older emitter, failed fetch) means NO future segment: the printed LOW /
+       HIGH above the chart still say what the day holds, and the chart invents
+       neither a value nor an hour for them. */
+    if (fcPts.length) {
+      var fc = [[nowX, nowY]];
+      fcPts.forEach(function (o) { fc.push([X(o.h), Y(o.T)]); });
+      el("path", { class: "spark-fx", d: smooth(fc) }, g);
+    }
 
     /* observed solid on top */
     el("path", { class: "spark-obs", d: obsPath }, g);
 
     /* drop line at now */
     el("line", { class: "spark-drop", x1: nowX.toFixed(1), y1: (nowY + 5).toFixed(1), x2: nowX.toFixed(1), y2: base }, g);
+
+    /* every label drawn so far, so a later one can stand down rather than
+       overprint an observed fact */
+    var placed = [];
+    function lbl(x, y, anchor, text) {
+      var t = el("text", { class: "spark-lbl", x: x.toFixed(1), y: y.toFixed(1), "text-anchor": anchor }, g);
+      t.textContent = text;
+      placed.push(t);
+      return t;
+    }
+    function boxOf(t) {                      /* [x0, x1] of a drawn label */
+      var w = 0;
+      try { w = t.getComputedTextLength(); } catch (e) { w = 0; }
+      if (!w) w = (t.textContent || "").length * 6.2;   /* hidden screen: estimate */
+      var x = +t.getAttribute("x"), a = t.getAttribute("text-anchor");
+      return a === "end" ? [x - w, x] : a === "start" ? [x, x + w] : [x - w / 2, x + w / 2];
+    }
+    function collides(t) {                   /* same row, overlapping run of text */
+      var b = boxOf(t), y = +t.getAttribute("y");
+      for (var i = 0; i < placed.length - 1; i++) {
+        var o = placed[i];
+        if (Math.abs(+o.getAttribute("y") - y) > 10) continue;
+        var ob = boxOf(o);
+        if (b[0] < ob[1] + 6 && ob[0] < b[1] + 6) return true;
+      }
+      return false;
+    }
+    function drop(t) { placed.pop(); g.removeChild(t); }
 
     /* obs low / high marker dots + labels */
     obs.forEach(function (o) {
@@ -1909,19 +1963,41 @@
         var lx = ox, la = "middle";
         if (ox < 62) { lx = 1; la = "start"; }
         else if (ox > 288) { lx = 349; la = "end"; }
-        el("text", { class: "spark-lbl", x: lx.toFixed(1), y: 100, "text-anchor": la }, g)
-          .textContent = o.T.toFixed(1) + "° · " + (data.obsLowTime || "");
+        lbl(lx, 100, la, o.T.toFixed(1) + "° · " + (data.obsLowTime || ""));
       } else {
-        el("text", { class: "spark-lbl", x: (ox - 5).toFixed(1), y: (oy - 6).toFixed(1), "text-anchor": "end" }, g)
-          .textContent = o.T.toFixed(1) + "° · " + (data.obsHighTime || "");
+        lbl(ox - 5, oy - 6, "end", o.T.toFixed(1) + "° · " + (data.obsHighTime || ""));
       }
     });
 
-    /* forecast high label at peak */
-    if (isNum(data.fcHigh) && peakX > nowX) {
-      el("text", { class: "spark-lbl", x: peakX.toFixed(1), y: (Y(data.fcHigh) - 6).toFixed(1), "text-anchor": "middle" }, g)
-        .textContent = Math.round(data.fcHigh) + "°";
+    /* forecast extremes, each labelled at the hour it ACTUALLY happens. An
+       afternoon that only cools gets no high label; a peak at 17:00 is labelled
+       at 17:00. An extreme that is merely the current reading (no rise or fall
+       leads to it) is left to the now-dot. */
+    var fcHi = null, fcLo = null;
+    fcPts.forEach(function (o) {
+      if (!fcHi || o.T > fcHi.T) fcHi = o;
+      if (!fcLo || o.T < fcLo.T) fcLo = o;
+    });
+    /* an hour of the local day in the console's own clock format — the emitter
+       sends epochs, and `time` is the only sample of how this console writes
+       a time (Display/TimeFormat can be 12 hr) */
+    function fcClock(h) {
+      var hh = Math.floor(h + 1e-6) % 24, mm = Math.round((h - Math.floor(h + 1e-6)) * 60) % 60;
+      if (!/[ap]m/i.test(data.time || ""))
+        return (hh < 10 ? "0" : "") + hh + ":" + (mm < 10 ? "0" : "") + mm;
+      var h12 = hh % 12 || 12;
+      return h12 + (mm ? ":" + (mm < 10 ? "0" : "") + mm : "") + (hh < 12 ? " AM" : " PM");
     }
+    function fcLabel(o, above) {
+      var ox = X(o.h), x = ox, a = "middle";
+      if (ox > 320) { x = 349; a = "end"; }
+      else if (ox < 30) { x = 1; a = "start"; }
+      var t = lbl(x, above ? Y(o.T) - 6 : 100, a, Math.round(o.T) + "° · " + fcClock(o.h));
+      if (collides(t)) drop(t);              /* the observed fact keeps the space */
+    }
+    var nowT = nowObj.T;
+    if (fcHi && fcHi.T - nowT >= 0.5 && X(fcHi.h) - nowX >= 12) fcLabel(fcHi, true);
+    if (fcLo && nowT - fcLo.T >= 0.5 && X(fcLo.h) - nowX >= 12) fcLabel(fcLo, false);
 
     /* now marker: halo + vermilion dot */
     el("circle", { class: "spark-halo", cx: nowX.toFixed(1), cy: nowY.toFixed(1), r: 8.5 }, g);
