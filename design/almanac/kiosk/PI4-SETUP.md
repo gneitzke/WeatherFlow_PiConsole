@@ -71,6 +71,30 @@ X11 blanking is handled by the launcher (`xset`). Wayland has no `xset`:
   ```
   then log out/in (or reboot).
 
+## WiFi: keep the box on the LAN
+
+The Pi 4's onboard BCM43455 has twice dropped off the LAN while the router
+still listed it as online: the association held, but ARP and ping were dead
+until a power-cycle. Two things guard against it:
+
+1. **Power save off.** The kiosk's NetworkManager profile sets
+   `802-11-wireless.powersave disable`, and `/etc/NetworkManager/conf.d/wifi-powersave.conf`
+   pins `wifi.powersave = 2` for every profile. `dmesg | grep power_mgmt` should end
+   with `power save disabled`.
+2. **A keepalive timer** (`wifi-keepalive.sh` / `.service` / `.timer` in this directory)
+   pings the default gateway every minute and, after three consecutive failures,
+   re-associates through NetworkManager (cycling the radio if that fails). Install:
+
+   ```
+   sudo install -m 0755 wifi-keepalive.sh /usr/local/sbin/
+   sudo install -m 0644 wifi-keepalive.service wifi-keepalive.timer /etc/systemd/system/
+   sudo systemctl daemon-reload && sudo systemctl enable --now wifi-keepalive.timer
+   ```
+
+   Every recovery is logged: `journalctl -t wifi-keepalive`. Make the journal
+   persistent (`Storage=persistent` in `/etc/systemd/journald.conf.d/`) so the
+   NetworkManager log from a drop survives the reboot that follows it.
+
 ## Why a Pi 4/5 over the old Pi 3
 
 - Wired Ethernet. Avoids the dead-onboard-radio / flaky-dongle trouble the Pi 3

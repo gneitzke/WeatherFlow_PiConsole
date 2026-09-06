@@ -1,0 +1,7 @@
+[Unit]
+Description=Re-associate wifi when the LAN gateway stops answering
+After=network.target NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wifi-keepalive.sh
