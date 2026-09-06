@@ -22,7 +22,7 @@ from lib             import derived_variables as derive
 
 # Import required Python modules
 from kivy.logger  import Logger
-from datetime     import datetime, timedelta
+from datetime     import datetime, timedelta, timezone
 import bisect
 import ephem
 import math
@@ -763,6 +763,63 @@ def strike_delta_t(strike_time, config):
     return delta_t
 
 
+def _statistics_row(api_data, device, endpoint, date, value_index):
+
+    """ Return the dated statistics row only when it has the required value. """
+    try:
+        response = api_data[device].get('statistics')
+        if not weatherflow_api.verify_response(response, endpoint):
+            return None
+        rows = response.json().get(endpoint)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+
+    if not isinstance(rows, (list, tuple)):
+        return None
+    for row in reversed(rows):
+        if (isinstance(row, (list, tuple)) and len(row) > value_index
+                and row[0] == date and _finite_number(row[value_index])):
+            return row
+    return None
+
+
+def _finite_number(value):
+
+    """ True for a real, finite, non-boolean number - the only thing the
+    derived calculations can do arithmetic on. """
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value))
+
+
+def _strike_frequency_window(data, index, end_time, window, tolerance):
+
+    """ Average minute strike counts across the available bounded window. """
+    start_time = end_time - window
+    samples = []
+    for row in data:
+        if not isinstance(row, (list, tuple)) or len(row) <= index:
+            continue
+        timestamp, count = row[0], row[index]
+        if (_finite_number(timestamp) and _finite_number(count)
+                and start_time < timestamp <= end_time):
+            samples.append((timestamp, count))
+
+    if not samples:
+        return None
+    samples.sort()
+    # the window must be covered at both ends: a lone sample at the start of a
+    # ten-minute window says nothing about the nine quiet minutes after it
+    if samples[0][0] - start_time > tolerance or end_time - samples[-1][0] > tolerance:
+        return None
+
+    # Bucket-A counts describe the minute ending at their timestamp.
+    coverage_start = max(start_time, samples[0][0] - 60)
+    coverage = samples[-1][0] - coverage_start
+    if coverage <= 0:
+        return None
+    return sum(count for _, count in samples) / (coverage / 60)
+
+
 def strike_frequency(ob_time, device, api_data, config):
 
     """ Calculate lightning strike frequency over the previous 10 minutes and
@@ -793,64 +850,23 @@ def strike_frequency(ob_time, device, api_data, config):
 
     # If REST API services are enabled, extract lightning strike count over the
     # last three hours
-    if (int(config['System']['rest_api'])
-            and '24Hrs' in api_data[device]
-            and weatherflow_api.verify_response(api_data[device]['24Hrs'], 'obs')):
-        data_24hrs = api_data[device]['24Hrs'].json()['obs']
-        api_time   = [ob[0] for ob in data_24hrs if ob[index_bucket_a] is not None]
-        try:
-            d_time   = [abs(T - (ob_time[0] - 3 * 3600)) for T in api_time]
-            if min(d_time) < 5 * 60:
-                count_3h = [ob[index_bucket_a] for ob in data_24hrs[d_time.index(min(d_time)):] if ob[index_bucket_a] is not None]
-            else:
-                Logger.warning(f'strike_freq: {system().log_time()} - no data in 3 hour window')
-                count_3h = None
-        except Exception as error:
-            Logger.warning(f'strike_freq: {system().log_time()} - {error}')
-            count_3h = None
-    else:
-        count_3h = None
+    frequency_3h = frequency_10m = [None, '/min']
+    try:
+        response = api_data[device].get('24Hrs')
+        data_24hrs = response.json().get('obs', [])
+        valid_response = (int(config['System']['rest_api'])
+                          and weatherflow_api.verify_response(response, 'obs')
+                          and isinstance(data_24hrs, (list, tuple)))
+    except (AttributeError, KeyError, TypeError, ValueError):
+        valid_response = False
 
-    # Calculate average strike frequency over the last three hours
-    if count_3h is not None:
-        active_strikes = [count for count in count_3h if count > 0]
-        if len(active_strikes) > 0:
-            frequency_3h = [sum(active_strikes) / len(active_strikes), '/min']
-        else:
-            frequency_3h = [0.0, '/min']
-    else:
-        frequency_3h = [None, '/min']
-
-    # If REST API services are enabled, extract lightning strike count over the
-    # last 10 minutes
-    if (int(config['System']['rest_api'])
-            and '24Hrs' in api_data[device]
-            and weatherflow_api.verify_response(api_data[device]['24Hrs'], 'obs')):
-        data_24hrs = api_data[device]['24Hrs'].json()['obs']
-        data_24hrs = api_data[device]['24Hrs'].json()['obs']
-        api_time   = [ob[0] for ob in data_24hrs if ob[index_bucket_a] is not None]
-        try:
-            d_time   = [abs(T - (ob_time[0] - 600)) for T in api_time]
-            if min(d_time) < 2 * 60:
-                count_10m = [ob[index_bucket_a] for ob in data_24hrs[d_time.index(min(d_time)):] if ob[index_bucket_a] is not None]
-            else:
-                Logger.warning(f'strike_freq: {system().log_time()} - no data in 10 minute window')
-                count_10m = None
-        except Exception as error:
-            Logger.warning(f'strike_freq: {system().log_time()} - {error}')
-            count_10m = None
-    else:
-        count_10m = None
-
-    # Calculate average strike frequency over the last 10 minutes
-    if count_10m is not None:
-        active_strikes = [count for count in count_10m if count > 0]
-        if len(active_strikes) > 0:
-            frequency_10m = [sum(active_strikes) / len(active_strikes), '/min']
-        else:
-            frequency_10m = [0.0, '/min']
-    else:
-        frequency_10m = [None, '/min']
+    if valid_response:
+        rate_3h = _strike_frequency_window(data_24hrs, index_bucket_a,
+                                           ob_time[0], 3 * 3600, 5 * 60)
+        rate_10m = _strike_frequency_window(data_24hrs, index_bucket_a,
+                                            ob_time[0], 600, 2 * 60)
+        frequency_3h = [rate_3h, '/min']
+        frequency_10m = [rate_10m, '/min']
 
     # Return frequency for last 10 minutes and last three hours
     return frequency_10m + frequency_3h
@@ -918,16 +934,13 @@ def strike_count(count, strike_count, device, api_data, config):
             else:
                 today_strikes = error_output
         elif int(config['System']['stats_endpoint']):
-            if 'statistics' in api_data[device] and weatherflow_api.verify_response(api_data[device]['statistics'], 'stats_day'):
-                statistics = api_data[device]['statistics'].json()
-                if statistics["stats_day"][-1][0] == day_date:
-                    strikes = statistics["stats_day"][-1][24]
-                    try:
-                        today_strikes = [strikes, 'count', strikes, time.time()]
-                    except Exception as error:
-                        Logger.warning(f'strike_count: {system().log_time()} - {error}')
-                        today_strikes = error_output
-                else:
+            row = _statistics_row(api_data, device, 'stats_day', day_date, 24)
+            if row is not None:
+                strikes = row[24]
+                try:
+                    today_strikes = [strikes, 'count', strikes, time.time()]
+                except Exception as error:
+                    Logger.warning(f'strike_count: {system().log_time()} - {error}')
                     today_strikes = error_output
             else:
                 today_strikes = error_output
@@ -973,16 +986,13 @@ def strike_count(count, strike_count, device, api_data, config):
             else:
                 month_strikes = error_output
         elif int(config['System']['stats_endpoint']):
-            if 'statistics' in api_data[device] and weatherflow_api.verify_response(api_data[device]['statistics'], 'stats_month'):
-                statistics = api_data[device]['statistics'].json()
-                if statistics["stats_month"][-1][0] == month_date:
-                    strikes = statistics["stats_month"][-1][24]
-                    try:
-                        month_strikes = [strikes, 'count', strikes, time.time()]
-                    except Exception as error:
-                        Logger.warning(f'strike_count: {system().log_time()} - {error}')
-                        month_strikes = error_output
-                else:
+            row = _statistics_row(api_data, device, 'stats_month', month_date, 24)
+            if row is not None:
+                strikes = row[24]
+                try:
+                    month_strikes = [strikes, 'count', strikes, time.time()]
+                except Exception as error:
+                    Logger.warning(f'strike_count: {system().log_time()} - {error}')
                     month_strikes = error_output
             else:
                 month_strikes = error_output
@@ -1029,16 +1039,13 @@ def strike_count(count, strike_count, device, api_data, config):
             else:
                 year_strikes = error_output
         elif int(config['System']['stats_endpoint']):
-            if 'statistics' in api_data[device] and weatherflow_api.verify_response(api_data[device]['statistics'], 'stats_year'):
-                statistics = api_data[device]['statistics'].json()
-                if statistics["stats_year"][-1][0] == year_date:
-                    strikes = statistics["stats_year"][-1][24]
-                    try:
-                        year_strikes = [strikes, 'count', strikes, time.time()]
-                    except Exception as error:
-                        Logger.warning(f'strike_count: {system().log_time()} - {error}')
-                        year_strikes = error_output
-                else:
+            row = _statistics_row(api_data, device, 'stats_year', year_date, 24)
+            if row is not None:
+                strikes = row[24]
+                try:
+                    year_strikes = [strikes, 'count', strikes, time.time()]
+                except Exception as error:
+                    Logger.warning(f'strike_count: {system().log_time()} - {error}')
                     year_strikes = error_output
             else:
                 year_strikes = error_output
@@ -1192,16 +1199,13 @@ def rain_accumulation(minute_rain, daily_rain, rain_accum, device, api_data, con
                 else:
                     today_rain = error_output
             elif int(config['System']['stats_endpoint']):
-                if ('statistics' in api_data[device] and weatherflow_api.verify_response(api_data[device]['statistics'], 'stats_day')):
-                    statistics = api_data[device]['statistics'].json()
-                    if statistics["stats_day"][-1][0] == day_date:
-                        rain_data = statistics["stats_day"][-1][index_stats]
-                        try:
-                            today_rain = [rain_data, 'mm', rain_data, time.time()]
-                        except Exception as error:
-                            Logger.warning(f'rain_accum: {system().log_time()} - {error}')
-                            today_rain = error_output
-                    else:
+                row = _statistics_row(api_data, device, 'stats_day', day_date, index_stats)
+                if row is not None:
+                    rain_data = row[index_stats]
+                    try:
+                        today_rain = [rain_data, 'mm', rain_data, time.time()]
+                    except Exception as error:
+                        Logger.warning(f'rain_accum: {system().log_time()} - {error}')
                         today_rain = error_output
                 else:
                     today_rain = error_output
@@ -1239,16 +1243,13 @@ def rain_accumulation(minute_rain, daily_rain, rain_accum, device, api_data, con
             else:
                 yesterday_rain = error_output
         elif int(config['System']['stats_endpoint']):
-            if ('statistics' in api_data[device] and weatherflow_api.verify_response(api_data[device]['statistics'], 'stats_day')):
-                statistics = api_data[device]['statistics'].json()
-                if statistics["stats_day"][-2][0] == yesterday_date:
-                    rain_data = statistics["stats_day"][-2][index_stats]
-                    try:
-                        yesterday_rain = [rain_data, 'mm', rain_data, time.time()]
-                    except Exception as error:
-                        Logger.warning(f'rain_accum: {system().log_time()} - {error}')
-                        yesterday_rain = error_output
-                else:
+            row = _statistics_row(api_data, device, 'stats_day', yesterday_date, index_stats)
+            if row is not None:
+                rain_data = row[index_stats]
+                try:
+                    yesterday_rain = [rain_data, 'mm', rain_data, time.time()]
+                except Exception as error:
+                    Logger.warning(f'rain_accum: {system().log_time()} - {error}')
                     yesterday_rain = error_output
             else:
                 yesterday_rain = error_output
@@ -1293,17 +1294,14 @@ def rain_accumulation(minute_rain, daily_rain, rain_accum, device, api_data, con
                 else:
                     month_rain = error_output
             elif int(config['System']['stats_endpoint']):
-                if ('statistics' in api_data[device] and weatherflow_api.verify_response(api_data[device]['statistics'], 'stats_month')):
-                    statistics = api_data[device]['statistics'].json()
-                    if statistics["stats_month"][-1][0] == month_date:
-                        rain_data = statistics["stats_month"][-1][index_stats]
-                        try:
-                            month_rain = [rain_data, 'mm', rain_data, time.time()]
-                            month_rain[2] -= today_rain[0]
-                        except Exception as error:
-                            Logger.warning(f'rain_accum: {system().log_time()} - {error}')
-                            month_rain = error_output
-                    else:
+                row = _statistics_row(api_data, device, 'stats_month', month_date, index_stats)
+                if row is not None:
+                    rain_data = row[index_stats]
+                    try:
+                        month_rain = [rain_data, 'mm', rain_data, time.time()]
+                        month_rain[2] -= today_rain[0]
+                    except Exception as error:
+                        Logger.warning(f'rain_accum: {system().log_time()} - {error}')
                         month_rain = error_output
                 else:
                     month_rain = error_output
@@ -1358,17 +1356,14 @@ def rain_accumulation(minute_rain, daily_rain, rain_accum, device, api_data, con
                 else:
                     year_rain = error_output
             elif int(config['System']['stats_endpoint']):
-                if ('statistics' in api_data[device] and weatherflow_api.verify_response(api_data[device]['statistics'], 'stats_month')):
-                    statistics = api_data[device]['statistics'].json()
-                    if statistics["stats_year"][-1][0] == year_date:
-                        rain_data = statistics["stats_year"][-1][index_stats]
-                        try:
-                            year_rain = [rain_data, 'mm', rain_data, time.time()]
-                            year_rain[2] -= today_rain[0]
-                        except Exception as error:
-                            Logger.warning(f'rain_accum: {system().log_time()} - {error}')
-                            year_rain = error_output
-                    else:
+                row = _statistics_row(api_data, device, 'stats_year', year_date, index_stats)
+                if row is not None:
+                    rain_data = row[index_stats]
+                    try:
+                        year_rain = [rain_data, 'mm', rain_data, time.time()]
+                        year_rain[2] -= today_rain[0]
+                    except Exception as error:
+                        Logger.warning(f'rain_accum: {system().log_time()} - {error}')
                         year_rain = error_output
                 else:
                     year_rain = error_output
@@ -1392,7 +1387,9 @@ def rain_accumulation(minute_rain, daily_rain, rain_accum, device, api_data, con
     # yearly rain accumulation
     elif time_now.date() > datetime.fromtimestamp(rain_accum['year'][3], Tz).date():
         daily_accum = today_rain[0] if not today_rain[0] is None else 0
-        year_rain  = [rain_accum['year'][2] + rain_accum['year'][2] + daily_accum, 'mm', rain_accum['year'][2] + rain_accum['today'][2], time.time()]
+        yesterday_accum = rain_accum['today'][2] if rain_accum['today'][2] is not None else 0
+        retained_total = rain_accum['year'][2] + yesterday_accum
+        year_rain  = [retained_total + daily_accum, 'mm', retained_total, time.time()]
 
     # Else, calculate current yearly rain accumulation
     else:
@@ -1683,14 +1680,23 @@ def peak_sun_hours(radiation, peak_sun, device, api_data, config):
     time_now = datetime.now(pytz.utc).astimezone(Tz)
 
     # Calculate time of sunrise and sunset or use existing values
-    if peak_sun[0] is None or time_now > datetime.fromtimestamp(peak_sun[5], Tz):
+    if (peak_sun[0] is None or len(peak_sun) < 6 or peak_sun[5] is None
+            or time_now > datetime.fromtimestamp(peak_sun[5], Tz)):
         observer          = ephem.Observer()
         observer.pressure = 0
         observer.lat      = str(config['Station']['Latitude'])
         observer.lon      = str(config['Station']['Longitude'])
         observer.horizon  = '-0:34'
-        sunrise           = observer.next_rising(ephem.Sun()).datetime().timestamp()
-        sunset            = observer.next_setting(ephem.Sun()).datetime().timestamp()
+        station_midnight  = time_now.replace(hour=0, minute=0, second=0,
+                                             microsecond=0)
+        observer.date     = station_midnight.astimezone(timezone.utc)
+        try:
+            sunrise = observer.next_rising(ephem.Sun()).datetime().replace(
+                tzinfo=timezone.utc).timestamp()
+            sunset = observer.next_setting(ephem.Sun()).datetime().replace(
+                tzinfo=timezone.utc).timestamp()
+        except (ephem.AlwaysUpError, ephem.NeverUpError):
+            sunrise = sunset = None
     else:
         sunrise           = peak_sun[4]
         sunset            = peak_sun[5]
@@ -1734,9 +1740,14 @@ def peak_sun_hours(radiation, peak_sun, device, api_data, config):
         peak_sun = [watt_hrs / 1000, 'hrs', watt_hrs, sunrise, sunset, time.time()]
 
     # Calculate proportion of daylight hours that have passed
-    if datetime.fromtimestamp(sunrise, Tz) <= time_now <= datetime.fromtimestamp(sunset, Tz):
+    if (sunrise is not None and sunset is not None and sunset > sunrise
+            and datetime.fromtimestamp(sunrise, Tz) <= time_now
+            <= datetime.fromtimestamp(sunset, Tz)):
         daylight_factor = (time.time() - sunrise) / (sunset - sunrise)
     else:
+        daylight_factor = 1
+
+    if daylight_factor <= 0:
         daylight_factor = 1
 
     # Define daily solar potential

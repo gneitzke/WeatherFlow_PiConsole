@@ -28,11 +28,14 @@ FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 from kivy.logger import Logger
 from kivy.clock  import Clock
 
-from datetime import datetime, timezone
+from collections import namedtuple
+from datetime import datetime, timedelta, timezone
 import json
 import math
 import os
 import re
+import threading
+from threading import RLock as _RLock   # kept apart from `threading`, which tests stub
 import time
 import pytz
 
@@ -49,6 +52,7 @@ VERSION_CHECK_INTERVAL = 900   # seconds (15 min) — how often we poll GitHub f
 AQI_CHECK_INTERVAL     = 600   # seconds (10 min) — refresh air quality; short enough to recover fast
 ALERTS_CHECK_INTERVAL  = 900   # seconds (15 min) — NWS alerts change slowly; be gentle on api.weather.gov
 FORECAST_CHECK_INTERVAL = 3600 # seconds (1 h) — the daily outlook barely moves intra-hour
+FORECAST_RETRY_SEC      = 120  # seconds — boot retry cadence until the FIRST forecast succeeds
 FC_STALE_SEC           = 86400 # seconds (24 h) without a successful forecast fetch -> fcStale (band hides)
 RAIN_WINDOW_SEC        = 600   # seconds (10 min) — light rain is bridged across the sensor's dry minutes
 ALERTS_TIMEOUT         = 20    # seconds — socket timeout for the alerts fetch
@@ -179,7 +183,11 @@ def _num(value, default=None):
     if isinstance(value, bool):
         return default
     if isinstance(value, (int, float)):
-        return default if isinstance(value, float) and math.isnan(value) else float(value)
+        try:
+            number = float(value)
+        except (OverflowError, ValueError):
+            return default
+        return number if math.isfinite(number) else default
     if isinstance(value, str):
         text = _clean_str(value)
         if text is None:
@@ -189,14 +197,29 @@ def _num(value, default=None):
         # Strike counts can render as e.g. "1.2 k" for >= 1000
         if text.lower().endswith('k'):
             try:
-                return float(text[:-1].strip()) * 1000
-            except ValueError:
+                number = float(text[:-1].strip()) * 1000
+                return number if math.isfinite(number) else default
+            except (OverflowError, ValueError):
                 return default
         try:
-            return float(text)
-        except ValueError:
+            number = float(text)
+            return number if math.isfinite(number) else default
+        except (OverflowError, ValueError):
             return default
     return default
+
+
+def _json_safe(value):
+    """ Replace non-finite measurements before strict JSON serialization. """
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    return value
 
 
 def _range_mid(value, default=None):
@@ -267,6 +290,43 @@ def _since_ago_text(strike_delta_t):
 
 
 # ==============================================================================
+# PROVIDER SNAPSHOTS
+# ==============================================================================
+# Every provider (air quality, forecast, alerts) is fetched on a daemon thread
+# while the emit tick reads the result from the main thread. Publishing field by
+# field lets the tick observe a mix of old and new values (a new AQI beside the
+# previous peak/trend). Each worker therefore builds one COMPLETE immutable
+# result locally and publishes it with a single attribute assignment, and the
+# tick reads that one reference once.
+_AqiResult = namedtuple('_AqiResult',
+                        'aqi category pm25 ts forecast peak peak_time fc_cat trend trend_text')
+_AQI_NONE = _AqiResult(None, None, None, None, (), None, None, None, None, None)
+
+_FcResult = namedtuple('_FcResult', 'daily ts')
+_FC_NONE  = _FcResult((), None)
+
+_AlertsResult = namedtuple('_AlertsResult', 'features alerts ts')
+_ALERTS_NONE  = _AlertsResult(None, (), None)
+
+_VerResult = namedtuple('_VerResult', 'available latest current')
+_VER_NONE  = _VerResult(False, None, None)
+
+
+def _snapshot_field(snapshot_attr, field):
+    """ Expose one field of a provider snapshot as a plain attribute, for the
+    callers (and tests) that seed or read a single value. Reads see the current
+    snapshot; a write replaces the whole snapshot, so even a one-field
+    assignment is published atomically. """
+    def _read(self):
+        return getattr(getattr(self, snapshot_attr), field)
+
+    def _write(self, value):
+        setattr(self, snapshot_attr, getattr(self, snapshot_attr)._replace(**{field: value}))
+
+    return property(_read, _write)
+
+
+# ==============================================================================
 # EMITTER
 # ==============================================================================
 class AlmanacEmitter:
@@ -283,12 +343,15 @@ class AlmanacEmitter:
         self.output_path = output_path
         self.interval    = interval
         self._event      = None
-        self._ver_event  = None
+        # scheduling registry: EVERY handle we hand to Clock (intervals and
+        # one-shots alike) so stop() can cancel all of them, plus the guards
+        # that keep one failing provider from stacking work.
+        self._events     = []        # live Clock handles
+        self._running    = False     # fences callbacks belonging to a stopped instance
+        self._life_lock  = _RLock()            # start/stop vs. worker-thread scheduling
+        self._inflight   = set()     # provider keys with a fetch thread running
+        self._retries    = {}        # provider key -> its ONE pending retry handle
         self._warned     = False
-        # update-check state (populated off-thread; read on the emit tick)
-        self._update_available = False
-        self._latest_version   = None
-        self._current_version  = None
         # barograph 24h SLP series cache (refreshed every BARO_SERIES_TTL s so we
         # don't re-parse the 1440-point REST payload on every 2 s emit tick)
         self._baro_series_cache = []
@@ -297,74 +360,140 @@ class AlmanacEmitter:
         # as an occasional 0.01 in minute with zeros between, so the raw
         # per-minute rate flickers 0 <-> trace and the gauge went dry mid-drizzle
         self._rain_win = _RainWindow(RAIN_WINDOW_SEC)
-        # air-quality state (fetched off-thread from Open-Meteo by station lat/lon)
-        self._aqi          = None
-        self._aqi_category = None
-        self._aqi_pm25     = None
-        self._aqi_event    = None
-        self._aqi_ts       = None    # epoch of last SUCCESSFUL aqi fetch (staleness guard)
-        self._aqi_forecast = []      # [[epoch, us_aqi], ...] next hours, for the trend
-        self._aqi_peak      = None   # max us_aqi over the next 6 h
-        self._aqi_peak_time = None   # station-local hour label of that peak ("5 PM")
-        self._aqi_fc_cat    = None   # AQI category at the peak
-        self._aqi_trend     = None   # 'rising' | 'falling' | 'steady'
-        self._aqi_trend_text = None  # "Moderate by 5 PM" | "Improving" | None
-        # 7-day outlook state (fetched off-thread from Open-Meteo by lat/lon)
-        self._fc_daily   = []        # [{day,hi,lo,code,pp}, ...] display-ready
-        self._fc_ts      = None      # epoch of last SUCCESSFUL forecast fetch
-        self._fc_event   = None
-        # weather-alerts state (fetched off-thread from api.weather.gov by lat/lon)
-        self._alerts       = []      # last-good, processed + collapsed + sorted
-        self._alerts_ts    = None    # epoch of last SUCCESSFUL alerts fetch (staleness guard)
-        self._alerts_event = None    # Clock handle
+
+    # Provider results, each published as ONE snapshot by its worker thread.
+    # Class-level so the "no data yet" state needs no instance setup.
+    _aqi_result    = _AQI_NONE      # air quality, Open-Meteo or WAQI by lat/lon
+    _fc_result     = _FC_NONE       # 7-day outlook, Open-Meteo by lat/lon
+    _alerts_result = _ALERTS_NONE   # NWS alerts, api.weather.gov by lat/lon
+    _ver_result    = _VER_NONE      # GitHub release check
+
+    # Snapshot fields, readable/writable one at a time (see _snapshot_field).
+    _aqi            = _snapshot_field('_aqi_result', 'aqi')
+    _aqi_category   = _snapshot_field('_aqi_result', 'category')
+    _aqi_pm25       = _snapshot_field('_aqi_result', 'pm25')
+    _aqi_ts         = _snapshot_field('_aqi_result', 'ts')          # last SUCCESSFUL fetch (staleness)
+    _aqi_forecast   = _snapshot_field('_aqi_result', 'forecast')    # [[epoch, us_aqi], ...] next hours
+    _aqi_peak       = _snapshot_field('_aqi_result', 'peak')        # max us_aqi over the next 6 h
+    _aqi_peak_time  = _snapshot_field('_aqi_result', 'peak_time')   # station-local hour of the peak
+    _aqi_fc_cat     = _snapshot_field('_aqi_result', 'fc_cat')      # AQI category at the peak
+    _aqi_trend      = _snapshot_field('_aqi_result', 'trend')       # 'rising' | 'falling' | 'steady'
+    _aqi_trend_text = _snapshot_field('_aqi_result', 'trend_text')  # "Moderate by 5 PM" | "Improving"
+    _fc_daily       = _snapshot_field('_fc_result', 'daily')        # [{day,hi,lo,code,pp}, ...]
+    _fc_ts          = _snapshot_field('_fc_result', 'ts')
+    _alert_features = _snapshot_field('_alerts_result', 'features') # last-good NWS properties
+    _alerts         = _snapshot_field('_alerts_result', 'alerts')   # processed + collapsed + sorted
+    _alerts_ts      = _snapshot_field('_alerts_result', 'ts')
+    _update_available = _snapshot_field('_ver_result', 'available')
+    _latest_version   = _snapshot_field('_ver_result', 'latest')
+    _current_version  = _snapshot_field('_ver_result', 'current')
 
     def start(self):
-        """ Schedule the periodic emit. Idempotent - calling twice (e.g. if
-        add_panels() is re-invoked by a PanelCount change) cancels the
-        previous schedule first rather than stacking a second timer. """
-        if self._event is not None:
-            self._event.cancel()
-        try:
-            os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
-        except OSError as error:
-            Logger.warning(f'almanac_emit: could not create output directory - {error}')
-        self._event = Clock.schedule_interval(self._emit, self.interval)
-        # update check: soon after start, then periodically (off the main thread)
-        Clock.schedule_once(self._check_version, 8)
-        self._ver_event = Clock.schedule_interval(self._check_version, VERSION_CHECK_INTERVAL)
-        # air quality: after the USB wifi has settled post-boot, then periodically
-        Clock.schedule_once(self._check_aqi, 30)
-        self._aqi_event = Clock.schedule_interval(self._check_aqi, AQI_CHECK_INTERVAL)
-        # weather alerts: staggered a little after AQI, then periodically
-        Clock.schedule_once(self._check_alerts, 40)
-        self._alerts_event = Clock.schedule_interval(self._check_alerts, ALERTS_CHECK_INTERVAL)
-        # 7-day outlook: staggered after alerts, then hourly
-        Clock.schedule_once(self._check_forecast, 50)
-        self._fc_event = Clock.schedule_interval(self._check_forecast, FORECAST_CHECK_INTERVAL)
-        return self._event
+        """ Schedule the periodic emit and the provider polls. Idempotent -
+        calling twice (e.g. if add_panels() is re-invoked by a PanelCount
+        change) cancels every handle from the previous run rather than
+        stacking a second set of timers. """
+        with self._life_lock:
+            self.stop()
+            self._running = True
+            try:
+                os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
+            except OSError as error:
+                Logger.warning(f'almanac_emit: could not create output directory - {error}')
+            self._event = self._schedule(self._emit, self.interval, interval=True)
+            # update check: soon after start, then periodically (off the main thread)
+            self._schedule(self._check_version, 8)
+            self._schedule(self._check_version, VERSION_CHECK_INTERVAL, interval=True)
+            # air quality: after the USB wifi has settled post-boot, then periodically
+            self._schedule(self._check_aqi, 30)
+            self._schedule(self._check_aqi, AQI_CHECK_INTERVAL, interval=True)
+            # weather alerts: staggered a little after AQI, then periodically
+            self._schedule(self._check_alerts, 40)
+            self._schedule(self._check_alerts, ALERTS_CHECK_INTERVAL, interval=True)
+            # 7-day outlook: staggered after alerts, then hourly
+            self._schedule(self._check_forecast, 50)
+            self._schedule(self._check_forecast, FORECAST_CHECK_INTERVAL, interval=True)
+            return self._event
 
     def stop(self):
-        if self._event is not None:
-            self._event.cancel()
+        """ Cancel every scheduled handle, including the boot one-shots and any
+        pending provider retry, and fence the callbacks that are already due.
+        Held under the lifecycle lock so a worker thread that is mid-way through
+        arming a retry cannot slip a handle in after the registry is cleared. """
+        with self._life_lock:
+            self._running = False
+            for handle in self._events:
+                try:
+                    handle.cancel()
+                except Exception:                                             # noqa: BLE001
+                    pass
+            self._events = []
+            self._retries.clear()
             self._event = None
-        if self._ver_event is not None:
-            self._ver_event.cancel()
-            self._ver_event = None
-        if self._aqi_event is not None:
-            self._aqi_event.cancel()
-            self._aqi_event = None
-        if self._alerts_event is not None:
-            self._alerts_event.cancel()
-            self._alerts_event = None
+
+    def _schedule(self, callback, timeout, interval=False):
+        """ Schedule through the registry, so stop() reaches every handle. The
+        callback is fenced: a stopped instance's timer does nothing and (by
+        returning False) unschedules itself, and a fired one-shot leaves the
+        registry so a long run cannot accumulate dead handles. """
+        handles = []
+
+        def _fenced(dt):
+            if not interval and handles:
+                try:
+                    self._events.remove(handles[0])
+                except ValueError:
+                    pass
+            if not self._running:
+                return False
+            return callback(dt)
+
+        with self._life_lock:
+            if not self._running:
+                return None                      # stopped between the caller's check and here
+            handle = (Clock.schedule_interval if interval else Clock.schedule_once)(_fenced, timeout)
+            handles.append(handle)
+            self._events.append(handle)
+            return handle
+
+    def _spawn(self, key, worker):
+        """ Run a provider fetch on a daemon thread, at most ONE per provider: a
+        slow or hung request must not stack a second behind it, and the poll
+        interval must not overtake a retry that is already running. """
+        if not self._running or key in self._inflight:
+            return
+        self._inflight.add(key)
+
+        def _run():
+            try:
+                worker()
+            finally:
+                self._inflight.discard(key)
+
+        try:
+            threading.Thread(target=_run, daemon=True).start()
+        except Exception:                                                 # noqa: BLE001
+            self._inflight.discard(key)
+
+    def _schedule_retry(self, key, callback, timeout):
+        """ Arm the ONE pending retry a provider is allowed. Without this, every
+        failure of a periodic poll starts its own retry chain and the chains
+        multiply for as long as the network is down. """
+        def _retry(dt):
+            self._retries.pop(key, None)
+            callback(dt)
+
+        with self._life_lock:
+            if not self._running or self._retries.get(key) is not None:
+                return
+            handle = self._schedule(_retry, timeout)
+            if handle is not None:
+                self._retries[key] = handle
 
     def _check_version(self, _dt=None):
         """ Kick off a non-blocking GitHub version check on a daemon thread so a
         slow/failed request never stalls the Kivy main loop or the emit tick. """
-        try:
-            import threading
-            threading.Thread(target=self._do_version_check, daemon=True).start()
-        except Exception:                                                 # noqa: BLE001
-            pass
+        self._spawn('version', self._do_version_check)
 
     def _do_version_check(self):
         """ Compare the installed version to the latest GitHub release tag and
@@ -378,21 +507,15 @@ class AlmanacEmitter:
             if not github_api.verify_response(resp, 'tag_name'):
                 return
             latest = resp.json()['tag_name']
-            self._latest_version  = latest
-            self._current_version = current
-            if current and latest:
-                self._update_available = (
-                    _v.parse(str(latest).lstrip('vV')) > _v.parse(str(current).lstrip('vV')))
+            available = bool(current and latest) and (
+                _v.parse(str(latest).lstrip('vV')) > _v.parse(str(current).lstrip('vV')))
+            self._ver_result = _VerResult(available, latest, current)
         except Exception:                                                 # noqa: BLE001
             pass
 
     def _check_forecast(self, _dt=None):
         """ Kick off a non-blocking 7-day forecast fetch on a daemon thread. """
-        try:
-            import threading
-            threading.Thread(target=self._do_forecast, daemon=True).start()
-        except Exception:                                                 # noqa: BLE001
-            pass
+        self._spawn('forecast', self._do_forecast)
 
     def _do_forecast(self):
         """ Fetch the 7-day daily outlook from Open-Meteo for the station's
@@ -423,8 +546,7 @@ class AlmanacEmitter:
                 data = json.loads(resp.read().decode('utf-8'))
             days = self._fc_daily_from(data.get('daily') or {})
             if days:
-                self._fc_daily = days
-                self._fc_ts    = time.time()
+                self._fc_result = _FcResult(days, time.time())
         except Exception as error:                                        # noqa: BLE001
             Logger.warning(f'almanac_emit: forecast fetch failed - {error}')
         finally:
@@ -432,12 +554,10 @@ class AlmanacEmitter:
             # from a failed FIRST fetch (the USB wifi is often still settling
             # when the t+50s attempt fires - the same failure AQI's delayed
             # start works around). Until one fetch has succeeded, retry every
-            # 2 minutes; after that the hourly cadence is plenty.
+            # 2 minutes; after that the hourly cadence is plenty. One chain
+            # only - _schedule_retry drops the request if one is already armed.
             if self._fc_ts is None:
-                try:
-                    Clock.schedule_once(self._check_forecast, 120)
-                except Exception:                                         # noqa: BLE001
-                    pass
+                self._schedule_retry('forecast', self._check_forecast, FORECAST_RETRY_SEC)
 
     @staticmethod
     def _fc_daily_from(daily):
@@ -456,23 +576,23 @@ class AlmanacEmitter:
         gusts = daily.get('wind_gusts_10m_max') or []
         out = []
         for i, t in enumerate(times[:7]):
-            hi = his[i]  if i < len(his)  else None
-            lo = los[i]  if i < len(los)  else None
+            hi = _num(his[i]) if i < len(his) else None
+            lo = _num(los[i]) if i < len(los) else None
             if hi is None or lo is None:
                 continue
             try:
                 day = datetime.fromisoformat(t).strftime('%a').upper()
             except (ValueError, TypeError):
                 continue
-            code = codes[i] if i < len(codes) else None
-            pp   = pps[i]   if i < len(pps)   else None
+            code = _num(codes[i]) if i < len(codes) else None
+            pp   = _num(pps[i])   if i < len(pps)   else None
             qpf  = _num(qpfs[i]) if i < len(qpfs) else None   # _num: never raises on junk
-            gust = gusts[i] if i < len(gusts) else None
+            gust = _num(gusts[i]) if i < len(gusts) else None
             out.append({'day':  day,
                         'date': t[:10],
                         'hi':   int(round(hi)),
                         'lo':   int(round(lo)),
-                        'code': int(code) if code is not None else None,
+                        'code': int(round(code)) if code is not None else None,
                         'pp':   int(round(pp)) if pp is not None else None,
                         # two decimals covers both units; the board hides
                         # anything below what the unit can print
@@ -487,12 +607,27 @@ class AlmanacEmitter:
         """ One quiet line about tomorrow, only when tomorrow is a story:
         "Thunderstorms tomorrow" / "Snow tomorrow" / "Rain tomorrow" /
         "Windy tomorrow" / "Fog tomorrow". Ordinary days say nothing -
-        absence is information. Requires row 0 to be flagged today so
-        row 1 is provably tomorrow. Never raises. """
+        absence is information. Selects the tomorrow row by its station-local
+        calendar date, never its position in a partially shaped array. Never raises. """
         try:
-            if len(fc_rows) < 2 or not fc_rows[0].get('today'):
+            today = next((row for row in fc_rows if row.get('today')), None)
+            if today is None:
                 return None
-            t = fc_rows[1]
+            today_date = today.get('date')
+            if today_date:
+                tomorrow_date = (datetime.fromisoformat(today_date).date() + timedelta(days=1)).isoformat()
+                t = next((row for row in fc_rows if row.get('date') == tomorrow_date), None)
+            else:
+                # Compatibility for callers that predate the date field: select
+                # by weekday label, not adjacent list position.
+                names = ('MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN')
+                try:
+                    tomorrow_day = (names.index(today.get('day')) + 1) % len(names)
+                except ValueError:
+                    return None
+                t = next((row for row in fc_rows if row.get('day') == names[tomorrow_day]), None)
+            if t is None:
+                return None
             code, gust = t.get('code'), t.get('gust')
             if code is not None and code >= 95:
                 return 'Thunderstorms tomorrow'
@@ -608,12 +743,14 @@ class AlmanacEmitter:
                     r['lo'], r['hi'] = hi, lo
         return fc_rows
 
-    def _fc_daily_current(self, today_iso):
+    def _fc_daily_current(self, today_iso, fc_daily=None):
         """ The stored outlook with any already-past days dropped, so a stale
         forecast (wifi out for a day+) can never mislabel yesterday as TODAY.
         As rows age out the band naturally shrinks below the HTML's 3-day
-        minimum and hides itself - no separate staleness flag needed. """
-        rows = [dict(r) for r in self._fc_daily
+        minimum and hides itself - no separate staleness flag needed.
+        `fc_daily` defaults to the live snapshot; the emit tick passes the one
+        it already read so the rows and the staleness flag agree. """
+        rows = [dict(r) for r in (self._fc_daily if fc_daily is None else fc_daily)
                 if not r.get('date') or r['date'] >= today_iso]
         for r in rows:
             r['today'] = (r.get('date') == today_iso)
@@ -621,11 +758,7 @@ class AlmanacEmitter:
 
     def _check_aqi(self, _dt=None):
         """ Kick off a non-blocking air-quality fetch on a daemon thread. """
-        try:
-            import threading
-            threading.Thread(target=self._do_aqi, daemon=True).start()
-        except Exception:                                                 # noqa: BLE001
-            pass
+        self._spawn('aqi', self._do_aqi)
 
     @staticmethod
     def _aqi_cat(aqi):
@@ -665,19 +798,17 @@ class AlmanacEmitter:
                                    f'msg={data.get("data")}')
                     return
                 d   = data.get('data') or {}
-                aqi = d.get('aqi')
-                if not isinstance(aqi, (int, float)):
+                aqi = _num(d.get('aqi'))
+                if aqi is None:
                     return                  # station reports '-' when sensor is offline
                 aqi = int(round(aqi))
-                iaqi = d.get('iaqi') or {}
-                self._aqi          = aqi
-                self._aqi_category = self._aqi_cat(aqi)
-                self._aqi_pm25     = (iaqi.get('pm25') or {}).get('v')   # PM2.5 µg/m³
-                self._aqi_ts       = time.time()
                 fc_pm25 = ((d.get('forecast') or {}).get('daily') or {}).get('pm25') or []
-                (self._aqi_forecast, self._aqi_peak, self._aqi_peak_time,
-                 self._aqi_trend, self._aqi_trend_text, self._aqi_fc_cat) = \
-                    self._waqi_trend(aqi, fc_pm25)
+                series, peak, peak_time, trend, trend_text, fc_cat = \
+                    self._waqi_trend(aqi, fc_pm25, self._station_today(config))
+                # WAQI's iaqi.pm25.v is a pollutant AQI, not a concentration, so
+                # there is no PM2.5 reading to publish from this provider.
+                self._aqi_result = _AqiResult(aqi, self._aqi_cat(aqi), None, time.time(),
+                                              series, peak, peak_time, fc_cat, trend, trend_text)
             else:
                 # Open-Meteo fallback: CAMS model, no token required
                 url = ('https://air-quality-api.open-meteo.com/v1/air-quality'
@@ -687,18 +818,16 @@ class AlmanacEmitter:
                 with urllib.request.urlopen(req, timeout=25) as resp:
                     data = json.loads(resp.read().decode('utf-8'))
                 cur = data.get('current') or {}
-                aqi = cur.get('us_aqi')
+                aqi = _num(cur.get('us_aqi'))
                 if aqi is None:
                     return
                 aqi = int(round(aqi))
-                self._aqi          = aqi
-                self._aqi_category = self._aqi_cat(aqi)
-                self._aqi_pm25     = cur.get('pm2_5')
-                self._aqi_ts       = time.time()
-                (self._aqi_forecast, self._aqi_peak, self._aqi_peak_time,
-                 self._aqi_trend, self._aqi_trend_text, self._aqi_fc_cat) = \
+                series, peak, peak_time, trend, trend_text, fc_cat = \
                     self._aqi_forecast_summary(data.get('hourly') or {}, time.time(),
                                                self._station_tz(config), aqi)
+                self._aqi_result = _AqiResult(aqi, self._aqi_cat(aqi), _num(cur.get('pm2_5')),
+                                              time.time(), series, peak, peak_time,
+                                              fc_cat, trend, trend_text)
         except Exception as error:                                        # noqa: BLE001
             Logger.warning(f'almanac_emit: air-quality fetch failed - {error}')
 
@@ -719,6 +848,7 @@ class AlmanacEmitter:
         vals  = hourly.get('us_aqi') or []
         pts = []
         for t, v in zip(times, vals):
+            v = _num(v)
             if v is None:
                 continue
             try:
@@ -751,21 +881,25 @@ class AlmanacEmitter:
         return series, peak, peak_time, trend, trend_text, peak_cat
 
     @staticmethod
-    def _waqi_trend(aqi_now, fc_pm25_daily):
-        """ Derive rising/falling/steady from WAQI's daily PM2.5 forecast.
+    def _waqi_trend(aqi_now, fc_pm25_daily, today_iso):
+        """ Derive rising/falling/steady from WAQI's dated daily PM2.5 forecast.
         Returns the same 6-tuple as _aqi_forecast_summary so callers are
         unchanged.  No hourly series, so aqiForecast sparkline is empty. """
-        if not fc_pm25_daily or aqi_now is None:
+        if not fc_pm25_daily or aqi_now is None or not today_iso:
             return [], None, None, None, None, None
-        today    = fc_pm25_daily[0] if fc_pm25_daily else {}
-        tomorrow = fc_pm25_daily[1] if len(fc_pm25_daily) > 1 else {}
-        peak_raw = today.get('max')
+        try:
+            tomorrow_iso = (datetime.fromisoformat(today_iso).date() + timedelta(days=1)).isoformat()
+        except (TypeError, ValueError):
+            return [], None, None, None, None, None
+        today = next((row for row in fc_pm25_daily if row.get('day') == today_iso), {})
+        tomorrow = next((row for row in fc_pm25_daily if row.get('day') == tomorrow_iso), {})
+        peak_raw = _num(today.get('max'))
         if peak_raw is None:
             return [], None, None, None, None, None
         peak     = int(round(peak_raw))
         peak_cat = AlmanacEmitter._aqi_cat(peak)
         cur_cat  = AlmanacEmitter._aqi_cat(aqi_now)
-        nxt_avg  = tomorrow.get('avg')
+        nxt_avg  = _num(tomorrow.get('avg'))
         if peak - aqi_now >= 5 and peak_cat != cur_cat:
             return [], peak, None, 'rising',  f'{peak_cat} today', peak_cat
         if nxt_avg is not None:
@@ -779,11 +913,7 @@ class AlmanacEmitter:
     # --------------------------------------------------------------------
     def _check_alerts(self, _dt=None):
         """ Kick off a non-blocking NWS alerts fetch on a daemon thread. """
-        try:
-            import threading
-            threading.Thread(target=self._do_alerts, daemon=True).start()
-        except Exception:                                                 # noqa: BLE001
-            pass
+        self._spawn('alerts', self._do_alerts)
 
     def _do_alerts(self):
         """ Fetch active NWS alerts for the station's lat/lon. Off-thread, never
@@ -815,13 +945,13 @@ class AlmanacEmitter:
             except urllib.error.HTTPError as http_error:
                 if http_error.code in (400, 404):
                     # outside NWS coverage (non-US) — benign: no alerts here
-                    self._alerts    = []
-                    self._alerts_ts = time.time()
+                    self._alerts_result = _AlertsResult([], [], time.time())
                     return
                 raise
             feats = [f.get('properties') or {} for f in (data.get('features') or [])]
-            self._alerts    = self._process_alerts(feats, time.time(), self._station_tz(config))
-            self._alerts_ts = time.time()
+            now = time.time()
+            self._alerts_result = _AlertsResult(
+                feats, self._process_alerts(feats, now, self._station_tz(config)), now)
         except Exception as error:                                        # noqa: BLE001
             Logger.warning(f'almanac_emit: alerts fetch failed - {error}')
 
@@ -1037,8 +1167,12 @@ class AlmanacEmitter:
                 factor, places = self._SLP_FROM_MB.get(unit, (1.0, 1))
                 for t, p in raw:
                     slp = derive.SLP([p, 'mb'], device, config)[0]
-                    if slp is not None and slp == slp:   # not None, not NaN (NaN breaks allow_nan=False)
-                        series.append([int(t), round(slp * factor, places)])
+                    slp = _num(slp)
+                    timestamp = _num(t)
+                    if slp is not None and timestamp is not None:
+                        value = _num(slp * factor)
+                        if value is not None:
+                            series.append([int(timestamp), round(value, places)])
                 target = 48
                 if len(series) > target:
                     step   = (len(series) - 1) / (target - 1)
@@ -1100,17 +1234,28 @@ class AlmanacEmitter:
         rain_eff_mm = self._rain_win.effective(time.time(), rain_raw_mm)
         fc_low    = _num(_idx(Met.get('lowTemp'), 0))
         fc_high   = _num(_idx(Met.get('highTemp'), 0))
+        # One read of each provider snapshot per tick: every field below comes
+        # from the same fetch, so the payload can never mix old and new.
+        aqi_snap    = self._aqi_result
+        fc_snap     = self._fc_result
+        alerts_snap = self._alerts_result
+        ver_snap    = self._ver_result
         fc_rows   = self._unify_today(
-                        self._fc_daily_current(now_local.strftime('%Y-%m-%d')),
+                        self._fc_daily_current(now_local.strftime('%Y-%m-%d'), fc_snap.daily),
                         fc_low, fc_high)
 
-        return {
+        # Alerts expire between fetches, so the last-good raw features are
+        # re-filtered here rather than trusted as processed at fetch time.
+        alerts = (alerts_snap.alerts if alerts_snap.features is None
+                  else self._process_alerts(alerts_snap.features, time.time(), tz))
+
+        payload = {
             'ts':      int(time.time()),
             'station': _text(_cfg(config, 'Station', 'Name')),
             'locationLine': self._location_line(config),
-            'updateAvailable': self._update_available,
-            'latestVersion':   self._latest_version,
-            'currentVersion':  self._current_version,
+            'updateAvailable': ver_snap.available,
+            'latestVersion':   ver_snap.latest,
+            'currentVersion':  ver_snap.current,
             'date':    now_local.strftime('%a, %d %b %Y'),
             'time':    now_local.strftime('%H:%M'),
 
@@ -1138,7 +1283,7 @@ class AlmanacEmitter:
             'fcPrecipPct':     _num(_idx(Met.get('PrecipPercnt'), 0)),
             'fcDailyPct':      _num(_idx(Met.get('PrecipDay'), 0)),
             'fcDaily':         fc_rows,   # outlook, past days dropped at emit time
-            'fcStale':         (self._fc_ts is None) or (time.time() - self._fc_ts) > FC_STALE_SEC,
+            'fcStale':         (fc_snap.ts is None) or (time.time() - fc_snap.ts) > FC_STALE_SEC,
 
             # Wind
             'windSpd':      _num(_idx(Obs.get('WindSpd'), 0)),
@@ -1193,23 +1338,23 @@ class AlmanacEmitter:
             'peakSun':   _num(_idx(Obs.get('peakSun'), 0)),
 
             # Air quality (US AQI from Open-Meteo, by station lat/lon; off-thread)
-            'aqi':         self._aqi,
-            'aqiCategory': self._aqi_category,
-            'aqiPm25':     _num(self._aqi_pm25),
-            'aqiForecast':    self._aqi_forecast,
-            'aqiPeak':        self._aqi_peak,
-            'aqiPeakTime':    self._aqi_peak_time,
-            'aqiForecastCat': self._aqi_fc_cat,
-            'aqiTrend':       self._aqi_trend,
-            'aqiTrendText':   self._aqi_trend_text,
-            'aqiStale':       (self._aqi_ts is None) or (time.time() - self._aqi_ts) > AQI_STALE_SEC,
+            'aqi':         aqi_snap.aqi,
+            'aqiCategory': aqi_snap.category,
+            'aqiPm25':     _num(aqi_snap.pm25),
+            'aqiForecast':    aqi_snap.forecast,
+            'aqiPeak':        aqi_snap.peak,
+            'aqiPeakTime':    aqi_snap.peak_time,
+            'aqiForecastCat': aqi_snap.fc_cat,
+            'aqiTrend':       aqi_snap.trend,
+            'aqiTrendText':   aqi_snap.trend_text,
+            'aqiStale':       (aqi_snap.ts is None) or (time.time() - aqi_snap.ts) > AQI_STALE_SEC,
 
             # Weather alerts (NWS, by station lat/lon)
-            'alerts':      self._alerts,
-            'alertCount':  len(self._alerts),
-            'alertsStale': (self._alerts_ts is None) or (time.time() - self._alerts_ts) > ALERT_STALE_SEC,
-            'alertsAsOf':  (datetime.fromtimestamp(self._alerts_ts, tz).strftime('%H:%M')
-                            if (self._alerts_ts and tz) else None),
+            'alerts':      alerts,
+            'alertCount':  len(alerts),
+            'alertsStale': (alerts_snap.ts is None) or (time.time() - alerts_snap.ts) > ALERT_STALE_SEC,
+            'alertsAsOf':  (datetime.fromtimestamp(alerts_snap.ts, tz).strftime('%H:%M')
+                            if (alerts_snap.ts and tz) else None),
 
             # Moon
             'moonPhase':  _text(_idx(Astro.get('Phase'), 1)),
@@ -1240,6 +1385,7 @@ class AlmanacEmitter:
             'sagerWind':     None,   # not sourced
             'sagerSky':      None,   # not sourced
         }
+        return _json_safe(payload)
 
     # --------------------------------------------------------------------
     @staticmethod
@@ -1249,6 +1395,12 @@ class AlmanacEmitter:
             return pytz.timezone(tzname) if tzname else None
         except Exception:                                                 # noqa: BLE001
             return None
+
+    @classmethod
+    def _station_today(cls, config):
+        tz = cls._station_tz(config)
+        now = datetime.now(pytz.utc).astimezone(tz) if tz else datetime.now()
+        return now.strftime('%Y-%m-%d')
 
     @staticmethod
     def _lightning_active(config, since_sec):

@@ -31,8 +31,9 @@ UDD="/tmp/almanac_chrome"                            # chromium profile (wiped e
 HTTP_LOG="/tmp/almanac_http.log"
 
 # real session env — chromium needs the exact session bus to map a window + touch.
-export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
+USER_ID=$(id -u)
+export XDG_RUNTIME_DIR="/run/user/$USER_ID"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus"
 
 # The on-screen half below (backend detection, cold-boot display gate, chromium)
 # is skipped entirely when MODE=headless — there is no local screen to drive.
@@ -53,14 +54,39 @@ find_wayland_display(){                                # sets WAYLAND_DISPLAY if
   return 1
 }
 BACKEND="${WFP_BACKEND:-auto}"
-if [ "$BACKEND" = auto ]; then
-  if { [ "${XDG_SESSION_TYPE:-}" = wayland ] || pgrep -x labwc >/dev/null 2>&1 \
-       || pgrep -x wayfire >/dev/null 2>&1; } && find_wayland_display; then
-    BACKEND=wayland
-  else
-    BACKEND=x11
-  fi
-fi
+wait_for_backend(){
+  local requested="$1" candidate
+  for _ in $(seq 1 60); do
+    case "$requested" in
+      wayland)
+        if { pgrep -x labwc >/dev/null 2>&1 || pgrep -x wayfire >/dev/null 2>&1; } && find_wayland_display; then
+          BACKEND=wayland; return 0
+        fi
+        ;;
+      x11)
+        if pgrep -x openbox >/dev/null 2>&1 && DISPLAY=:0 xset q >/dev/null 2>&1; then
+          BACKEND=x11; return 0
+        fi
+        ;;
+      auto)
+        # A declared session type is intent, even while its compositor is still
+        # creating a socket. Never fall back to X11 during that interval.
+        candidate="${XDG_SESSION_TYPE:-}"
+        if [ "$candidate" = wayland ] || pgrep -x labwc >/dev/null 2>&1 || pgrep -x wayfire >/dev/null 2>&1; then
+          if find_wayland_display; then BACKEND=wayland; return 0; fi
+        elif [ "$candidate" = x11 ] || { pgrep -x openbox >/dev/null 2>&1 && DISPLAY=:0 xset q >/dev/null 2>&1; }; then
+          if pgrep -x openbox >/dev/null 2>&1 && DISPLAY=:0 xset q >/dev/null 2>&1; then BACKEND=x11; return 0; fi
+        fi
+        ;;
+      *) echo "invalid WFP_BACKEND: $requested" >&2; return 1 ;;
+    esac
+    sleep 1
+  done
+  echo "timed out waiting for $requested display backend" >&2
+  return 1
+}
+
+wait_for_backend "$BACKEND" || exit 1
 if [ "$BACKEND" = wayland ]; then
   export WAYLAND_DISPLAY; unset DISPLAY                # chromium maps onto the Wayland compositor, not :0
   CR_OZONE=wayland
@@ -85,13 +111,6 @@ CR_BIN="${CR_BIN:-chromium-browser}"
 #   2) the display is actually answering (X: `xset q`; Wayland: the socket exists),
 #   3) a short settle for the GPU stack.
 # The watchdog below is the belt-and-braces guarantee if the race still slips through.
-if [ "$BACKEND" = wayland ]; then
-  for _ in $(seq 1 60); do { pgrep -x labwc >/dev/null 2>&1 || pgrep -x wayfire >/dev/null 2>&1; } && break; sleep 1; done
-  for _ in $(seq 1 30); do [ -S "$XDG_RUNTIME_DIR/${WAYLAND_DISPLAY:-wayland-0}" ] && break; sleep 1; done
-else
-  for _ in $(seq 1 60); do pgrep -x openbox >/dev/null 2>&1 && break; sleep 1; done
-  for _ in $(seq 1 30); do xset q          >/dev/null 2>&1 && break; sleep 1; done
-fi
 sleep 5
 fi   # end on-screen display setup (skipped when MODE=headless)
 
@@ -110,9 +129,35 @@ mkdir -p "$DATA_DIR" "$WEB"
 cp -f "$APP/design/almanac/console_live.html" "$WEB/index.html"
 ln -sf "$DATA" "$WEB/wx.json"
 
-pids=()
-cleanup(){ kill "${pids[@]}" 2>/dev/null; pkill -9 chromium 2>/dev/null; pkill -f "Xvfb $VDISP" 2>/dev/null; }
-trap cleanup EXIT INT TERM
+# Bounded health probe. No -f: /health answers 503 with a {"status":"stale"}
+# body when the engine wedges, and that body is exactly what the watchdog
+# needs to restart the ENGINE rather than the server.
+health_response(){
+  curl -sS --connect-timeout 2 --max-time 4 "http://127.0.0.1:$PORT/health" 2>/dev/null
+}
+
+STOPPING=0
+XVFB_PID=""; ENGINE_PID=""; SERVE_PID=""; CRPID=""; SLEEP_PID=""
+stop_process(){
+  local pid="$1" name="$2" _
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || return 0
+  kill "$pid" 2>/dev/null || true
+  for _ in $(seq 1 2); do kill -0 "$pid" 2>/dev/null || { wait "$pid" 2>/dev/null || true; return 0; }; sleep 1; done
+  echo "$name did not stop after TERM; killing" >> /tmp/almanac_chrome.log
+  kill -KILL "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+}
+cleanup(){
+  STOPPING=1
+  [ -n "${SLEEP_PID:-}" ] && { kill "$SLEEP_PID" 2>/dev/null; wait "$SLEEP_PID" 2>/dev/null; }
+  stop_process "${CRPID:-}" chromium
+  stop_process "${SERVE_PID:-}" server
+  stop_process "${ENGINE_PID:-}" engine
+  stop_process "${XVFB_PID:-}" Xvfb
+}
+on_signal(){ STOPPING=1; exit 0; }
+trap cleanup EXIT
+trap on_signal INT TERM
 
 # 1) data engine on a virtual display (invisible).
 #    WFP_HEADLESS=1 runs the console's data pipeline with NO GUI panels, so the
@@ -122,11 +167,11 @@ trap cleanup EXIT INT TERM
 # Each critical process is launched via a function so the watchdog can relaunch it.
 launch_xvfb(){
   Xvfb "$VDISP" -screen 0 1024x600x24 -nolisten tcp >/tmp/almanac_xvfb.log 2>&1 &
-  XVFB_PID=$!; pids+=("$XVFB_PID")
+  XVFB_PID=$!
 }
 launch_engine(){
   ( cd "$APP" && DISPLAY="$VDISP" WFP_HEADLESS=1 KCFG_GRAPHICS_MAXFPS=10 "$PY" main.py ) >/tmp/almanac_data.log 2>&1 &
-  ENGINE_PID=$!; pids+=("$ENGINE_PID")
+  ENGINE_PID=$!
   ENGINE_GRACE=6                                   # ~90s warmup before the freshness check judges it
 }
 # 2) local web server (page + live feed + /health endpoint). /health exposes a
@@ -135,7 +180,7 @@ launch_engine(){
 launch_server(){
   ( cd "$WEB" && WFP_PORT="$PORT" WFP_WEB="$WEB" WFP_DATA="$DATA" WFP_BIND="${WFP_BIND:-127.0.0.1}" \
       "$PY" "$APP/design/almanac/kiosk/serve.py" ) >"$HTTP_LOG" 2>&1 &
-  SERVE_PID=$!; pids+=("$SERVE_PID")
+  SERVE_PID=$!
 }
 
 launch_xvfb
@@ -153,7 +198,6 @@ if [ "$MODE" != headless ] && [ "${BACKEND:-}" = x11 ]; then
   xset s off -dpms s noblank 2>/dev/null || true
 fi
 
-CRPID=""                                             # defined even in headless so the watchdog guard is safe
 if [ "$MODE" != headless ]; then
 # ── chromium kiosk, with a self-healing watchdog ──────────────────────────────
 # Flags stay MINIMAL and use the REAL GPU (default). Do NOT add --disable-gpu
@@ -166,7 +210,8 @@ URL="http://127.0.0.1:$PORT/index.html?theme=$THEME"
 
 CRPID=""
 launch_cr(){
-  pkill -9 chromium 2>/dev/null; sleep 2
+  [ "$STOPPING" -eq 0 ] || return 0
+  stop_process "${CRPID:-}" chromium
   rm -rf "$UDD"                                   # fresh profile: no stale SingletonLock
   "$CR_BIN" "${CR_FLAGS[@]}" --user-data-dir="$UDD" "$URL" \
     >/tmp/almanac_chrome.log 2>&1 &
@@ -176,12 +221,18 @@ launch_cr(){
 # A healthy render means the page's JS is polling wx.json (~every 2s). A blank/
 # broken GPU init leaves the renderer unable to run JS -> ZERO new polls. That is
 # our screenshot-free, root-free health check.
-read_polls(){ curl -s "http://127.0.0.1:$PORT/health" 2>/dev/null | sed -n 's/.*"polls": *\([0-9]*\).*/\1/p'; }
+read_polls(){
+  local response polls
+  response=$(health_response) || return 1
+  polls=$(printf '%s\n' "$response" | sed -n 's/.*"polls": *\([0-9][0-9]*\).*/\1/p')
+  [ -n "$polls" ] || return 1
+  printf '%s\n' "$polls"
+}
 polls_growing(){
   local before after
-  before=$(read_polls); before=${before:-0}
+  before=$(read_polls) || return 1
   sleep 8
-  after=$(read_polls); after=${after:-0}
+  after=$(read_polls) || return 1
   [ "$after" -gt "$before" ]
 }
 
@@ -201,9 +252,9 @@ fi   # end chromium kiosk (skipped when MODE=headless)
 # chromium — a dead data engine or server used to leave the screen stale forever),
 # and every ~5 min re-check for a wedged alive-but-blank render.
 CLOG=/tmp/almanac_chrome.log
-loops=0; stale_hits=0
-while true; do
-  pgrep -f "Xvfb $VDISP" >/dev/null 2>&1 || { echo "Xvfb died — relaunching" >> "$CLOG"; launch_xvfb; sleep 2; }
+loops=0; stale_hits=0; health_failures=0
+while [ "$STOPPING" -eq 0 ]; do
+  kill -0 "$XVFB_PID" 2>/dev/null || { echo "Xvfb died — relaunching" >> "$CLOG"; launch_xvfb; sleep 2; }
   kill -0 "$ENGINE_PID" 2>/dev/null || { echo "data engine died — relaunching" >> "$CLOG"; launch_engine; }
   kill -0 "$SERVE_PID"  2>/dev/null || { echo "web server died — relaunching"  >> "$CLOG"; launch_server; }
   if [ "$MODE" != headless ] && ! kill -0 "$CRPID" 2>/dev/null; then
@@ -219,22 +270,35 @@ while true; do
   if [ "${ENGINE_GRACE:-0}" -gt 0 ]; then
     ENGINE_GRACE=$((ENGINE_GRACE - 1)); stale_hits=0
   else
-    st=$(curl -s --max-time 4 "http://127.0.0.1:$PORT/health" | sed -n 's/.*"status": *"\([a-z]*\)".*/\1/p')
-    if [ "$st" = "stale" ] || [ "$st" = "error" ]; then
+    health=$(health_response) || health=""
+    st=$(printf '%s\n' "$health" | sed -n 's/.*"status": *"\([a-z][a-z]*\)".*/\1/p')
+    case "$st" in ok|stale|error) ;; *) st="" ;; esac
+    if [ -z "$st" ]; then
+      stale_hits=0
+      health_failures=$((health_failures + 1))
+      if [ "$health_failures" -ge 2 ]; then
+        echo "web server health check failed — restarting server" >> "$CLOG"
+        stop_process "$SERVE_PID" server; launch_server
+        health_failures=0
+      fi
+    elif [ "$st" = "stale" ] || [ "$st" = "error" ]; then
+      health_failures=0
       stale_hits=$((stale_hits + 1))
       if [ "$stale_hits" -ge 2 ]; then
         echo "data $st — restarting data engine" >> "$CLOG"
-        kill "$ENGINE_PID" 2>/dev/null; sleep 2; launch_engine
+        stop_process "$ENGINE_PID" engine; launch_engine
         stale_hits=0
       fi
     else
-      stale_hits=0
+      health_failures=0; stale_hits=0
     fi
   fi
 
   loops=$((loops + 1))
   if [ "$MODE" != headless ] && [ $((loops % 8)) -eq 0 ]; then   # ~every 2 min (8 × 15s): alive-but-blank render
-    polls_growing || { echo "render wedged — relaunching chromium" >> "$CLOG"; launch_cr; sleep 12; }
+    polls_growing || { [ "$STOPPING" -ne 0 ] || { echo "render wedged — relaunching chromium" >> "$CLOG"; launch_cr; sleep 12; }; }
   fi
-  sleep 15
+  # background sleep + wait: a TERM during the pause reaches the trap at once
+  # instead of after the sleep, keeping shutdown inside TimeoutStopSec
+  sleep 15 & SLEEP_PID=$!; wait "$SLEEP_PID"; SLEEP_PID=""
 done

@@ -314,11 +314,14 @@
 
   /* Air Quality — EPA US-AQI colour bands (Good→Hazardous), mirrors the UV track */
   .aq { margin-top: 0; }
-  /* keep the AQI line on ONE row even for long categories ("Very Unhealthy") */
+  /* keep the AQI line on ONE row even for long categories ("Very Unhealthy") —
+     the label and number hold their size, the category/trend word is the one
+     flexible item and ellipsizes instead of spilling past the tile edge */
   .aq .uv-line { flex-wrap: nowrap; min-width: 0; }
-  .aq .uv-line .k { letter-spacing: 0.05em; white-space: nowrap; }
-  .aq .uv-line .n { font-size: 26px; }
-  .aq .uv-line .w { font-size: 15px; white-space: nowrap; }
+  .aq .uv-line .k { letter-spacing: 0.05em; white-space: nowrap; flex: none; }
+  .aq .uv-line .n { font-size: 26px; flex: none; }
+  .aq .uv-line .w { font-size: 15px; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
   .aqi-bar { position: absolute; left: 0; right: 0; top: 2.5px; height: 8px; border-radius: 4px;
     background: linear-gradient(to right,
       #5FA46A 0%, #5FA46A 16%, #D8BE44 16%, #D8BE44 33%, #E28C33 33%, #E28C33 50%,
@@ -358,7 +361,8 @@
   /* forecast trend replaces the category word on the AQI line when rising — bold,
      no extra row, no overflow (the green value still signals the current band) */
   .aq-fc { font-family: var(--sans); font-size: 13px; font-weight: 800; letter-spacing: 0.02em;
-    white-space: nowrap; display: none; }
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+    flex: 1 1 auto; display: none; }
   .aq.stale { opacity: 0.55; }
 
   /* Rainfall dry-spell block — derived from the station's own accumulation record */
@@ -852,7 +856,7 @@
           <div class="p-head"><span class="p-title">Lightning</span><span class="p-status brass">Active</span></div>
           <div class="p-body">
             <div class="p-col snug">
-              <div class="p-value"><span class="n" id="bolt-dist">6</span><span class="u">mi away</span></div>
+              <div class="p-value"><span class="n" id="bolt-dist">6</span><span class="u" id="bolt-unit">mi away</span></div>
               <div class="p-sub">Last strike <b id="bolt-since">0:00</b> ago</div>
               <div class="ledger">
                 <div class="lrow"><span class="k">Rate</span><span class="dots"></span><span class="v" id="bolt-rate">1</span></div>
@@ -1267,32 +1271,43 @@
     var g = baroGraph, s = data.slpSeries, geo = g.geo;
     if (!s || s.length < 3) { g.svg.style.display = "none"; return; }
     g.svg.style.display = "block";
-    var n = s.length, vals = [];
-    for (var j = 0; j < n; j++) vals.push(s[j][1]);
+    /* the window is the PRODUCER's last 24 h (data.ts), not the browser's: a
+       kiosk whose clock drifts from the Pi must not fold a valid history onto
+       the NOW line. Samples outside the window are dropped before geometry. */
+    var tEnd = isNum(data.ts) ? data.ts : Date.now() / 1000, tStart = tEnd - 24 * 3600;
+    var n = 0, vals = [], times = [];
+    for (var j = 0; j < s.length; j++) {
+      if (isNum(s[j][0]) && isNum(s[j][1]) && s[j][0] >= tStart && s[j][0] <= tEnd) { times.push(s[j][0]); vals.push(s[j][1]); n++; }
+    }
+    if (n < 3) { g.svg.style.display = "none"; return; }
     var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
     var mb = slpToMb(data.slpUnit), places = mb > 20 ? 2 : 1;   /* inHg reads 29.85; mb/mmHg one decimal */
     var pad = Math.max(0.6 / mb, (hi - lo) * 0.18); lo -= pad; hi += pad;
-    function X(i) { return geo.X0 + i / (n - 1) * (geo.X1 - geo.X0); }
+    /* position samples by their own epoch against a wall-clock 24h window, not
+       by array index — a short history occupies only the covered slice of the
+       axis (the rest stays blank) and a stale final sample stops short of the
+       NOW mark instead of being snapped onto it */
+    function X(t) { return geo.X0 + clamp((t - tStart) / (tEnd - tStart), 0, 1) * (geo.X1 - geo.X0); }
     function Y(v) { return geo.YB - (v - lo) / (hi - lo) * (geo.YB - geo.YT); }
-    var d = "M " + X(0).toFixed(1) + " " + Y(vals[0]).toFixed(1);
-    for (var i = 1; i < n; i++) d += " L " + X(i).toFixed(1) + " " + Y(vals[i]).toFixed(1);
+    var d = "M " + X(times[0]).toFixed(1) + " " + Y(vals[0]).toFixed(1);
+    for (var i = 1; i < n; i++) d += " L " + X(times[i]).toFixed(1) + " " + Y(vals[i]).toFixed(1);
     g.line.setAttribute("d", d);
-    g.area.setAttribute("d", d + " L " + X(n - 1).toFixed(1) + " " + geo.YB +
-                              " L " + X(0).toFixed(1) + " " + geo.YB + " Z");
-    var cx = X(n - 1).toFixed(1), cy = Y(vals[n - 1]).toFixed(1);
+    g.area.setAttribute("d", d + " L " + X(times[n - 1]).toFixed(1) + " " + geo.YB +
+                              " L " + X(times[0]).toFixed(1) + " " + geo.YB + " Z");
+    var cx = X(times[n - 1]).toFixed(1), cy = Y(vals[n - 1]).toFixed(1);
     g.dot.setAttribute("cx", cx);  g.dot.setAttribute("cy", cy);
     g.halo.setAttribute("cx", cx); g.halo.setAttribute("cy", cy);
     /* 24h high/low numerals on the trace (x-position is the time). Suppress a
        label when its extreme is essentially "now" — the live value already shows it */
     var iMax = 0, iMin = 0;
     for (var m = 1; m < n; m++) { if (vals[m] > vals[iMax]) iMax = m; if (vals[m] < vals[iMin]) iMin = m; }
-    g.hi.setAttribute("x", clamp(X(iMax), 20, geo.X1 - 20).toFixed(1));
+    g.hi.setAttribute("x", clamp(X(times[iMax]), 20, geo.X1 - 20).toFixed(1));
     g.hi.setAttribute("y", Math.max(9, Y(vals[iMax]) - 4).toFixed(1));
     g.hi.textContent = vals[iMax].toFixed(places);
     g.hi.style.opacity = (n - 1 - iMax) <= 2 ? "0" : "1";
     /* low label sits ABOVE its trough, not below — otherwise a trough near the
        start/end overlaps the −24H / NOW captions on the axis row */
-    g.lo.setAttribute("x", clamp(X(iMin), 20, geo.X1 - 20).toFixed(1));
+    g.lo.setAttribute("x", clamp(X(times[iMin]), 20, geo.X1 - 20).toFixed(1));
     g.lo.setAttribute("y", Math.max(geo.YT + 9, Y(vals[iMin]) - 5).toFixed(1));
     g.lo.textContent = vals[iMin].toFixed(places);
     g.lo.style.opacity = (n - 1 - iMin) <= 2 ? "0" : "1";
@@ -1335,6 +1350,10 @@
   function f2(v) { return v.toFixed(2); }
   function r0(v) { return String(Math.round(v)); }
   function deg0(v) { return Math.round(v) + "°"; }
+  /* inHg's ~0.03/mb resolution needs 2 decimals or a 0.02 rise reads as "0.0";
+     mb/hPa/mmHg are coarse enough that 1 decimal is already meaningful */
+  function slpPlaces() { return slpToMb(lastData && lastData.slpUnit) > 20 ? 2 : 1; }
+  function fSlp(v) { return v.toFixed(slpPlaces()); }
 
   var FMT = {
     date: String, station: String, time: String,
@@ -1349,9 +1368,9 @@
     windStatus: String, windSpd: f1, windUnit: String,
     windCardinal: String, windDir: r0,
     windAvg: f1, windGust: f1, windMax: f1,
-    slpTrendDesc: String, slp: f1, slpUnit: String,
-    slpTrendPerHr: function (v) { return Math.abs(v).toFixed(1); },
-    slp24High: f1, slp24HighTime: String, slp24Low: f1, slp24LowTime: String,
+    slpTrendDesc: String, slp: fSlp, slpUnit: String,
+    slpTrendPerHr: function (v) { return Math.abs(v).toFixed(slpPlaces()); },
+    slp24High: fSlp, slp24HighTime: String, slp24Low: fSlp, slp24LowTime: String,
     slpOutlook: String,
     rainStatus: String, rainToday: f2, rainUnit: String,
     /* a non-number here (an older emitter's "<0.01" string) must not throw:
@@ -2010,6 +2029,7 @@
       if (active) {
         setActive(true);
         $("bolt-dist").textContent  = (dnum !== null) ? Math.round(dnum) : DASH;
+        $("bolt-unit").textContent  = dunit + " away";
         $("bolt-since").textContent = isNum(data.lightningSinceSec) ? fmtSince(data.lightningSinceSec) : DASH;
         $("bolt-rate").textContent  = isNum(data.lightningRate) ? data.lightningRate.toFixed(1) + "/min" : DASH;
         $("bolt-3hr").textContent   = isNum(data.lightning3hr) ? data.lightning3hr : DASH;
@@ -2035,6 +2055,7 @@
       clearMini();
       simRunning = true;
       setActive(true);
+      $("bolt-unit").textContent = "mi away";   /* sim data is always miles */
 
       function tick() {
         var t = (performance.now() - t0) / 1000;
@@ -2106,6 +2127,7 @@
   var _alertList  = [];   /* last-known alert array */
   var _alertIdx   = 0;   /* which alert is currently on screen */
   var _alertTimer = null; /* setInterval handle for rotation */
+  var _alertFadeTimer = null; /* setTimeout handle for the mid-rotation opacity fade */
   var _alertStale = false;
   var _alertsAsOf = "";
 
@@ -2141,8 +2163,11 @@
     _alertIdx   = (_alertIdx + 1) % _alertList.length;
     if (reduced) { _paintAlert(_alertList[_alertIdx]); return; }
     strip.style.opacity = "0";
-    setTimeout(function() {
-      _paintAlert(_alertList[_alertIdx]);
+    if (_alertFadeTimer) clearTimeout(_alertFadeTimer);
+    _alertFadeTimer = setTimeout(function() {
+      _alertFadeTimer = null;
+      if (!_alertList.length) return;   /* alerts cleared mid-fade — nothing left to paint */
+      _paintAlert(_alertList[_alertIdx % _alertList.length]);
       strip.style.opacity = "";   /* clear inline → CSS stale rule applies naturally */
     }, 240);
   }
@@ -2155,6 +2180,7 @@
 
     if (!alerts.length) {
       if (_alertTimer) { clearInterval(_alertTimer); _alertTimer = null; }
+      if (_alertFadeTimer) { clearTimeout(_alertFadeTimer); _alertFadeTimer = null; }
       strip.classList.remove("on", "enter", "stale");
       strip.style.opacity = "";
       _alertShown = false; _alertList = []; _alertIdx = 0;
@@ -2176,12 +2202,20 @@
     _paintAlert(_alertList[_alertIdx]);
     strip.classList.add("on");
     if (!_alertShown) {
-      strip.classList.add("enter");
-      /* remove 'enter' after the slide-in so animation fill-mode: both
-         doesn't block our later opacity fade (animation fill wins over inline style) */
-      strip.addEventListener("animationend", function() {
+      /* under reduced motion the CSS disables the animation entirely, so
+         'animationend' would never fire — listening anyway leaks one
+         registration (it's {once:true} but "once" only means "on fire") per
+         alert-shown transition, forever */
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         strip.classList.remove("enter");
-      }, { once: true });
+      } else {
+        strip.classList.add("enter");
+        /* remove 'enter' after the slide-in so animation fill-mode: both
+           doesn't block our later opacity fade (animation fill wins over inline style) */
+        strip.addEventListener("animationend", function() {
+          strip.classList.remove("enter");
+        }, { once: true });
+      }
       _alertShown = true;
     }
   }
@@ -2189,13 +2223,31 @@
   /* Air Quality — number + category + marker, coloured by US-EPA AQI band; a
      hollow forward marker + trend line preview the 6-h peak so a rising smoke
      event is legible BEFORE the current number degrades. Hidden until a reading. */
+  /* breakpoints double as the .aqi-bar gradient stops (see CSS) — a and pct
+     BOTH must change together, or the marker drifts from its color band */
+  var AQI_BANDS = [
+    { max:  50, pct:  16, cat: "Good",           col: "#5FA46A" },
+    { max: 100, pct:  33, cat: "Moderate",       col: "#D8BE44" },
+    { max: 150, pct:  50, cat: "Sensitive",      col: "#E28C33" },
+    { max: 200, pct:  66, cat: "Unhealthy",      col: "#E0574A" },
+    { max: 300, pct:  88, cat: "Very Unhealthy", col: "#B57BD0" },
+    { max: 500, pct: 100, cat: "Hazardous",      col: "#C65B6E" }
+  ];
   function aqiBand(a) {
-    if (a <=  50) return { cat: "Good",           col: "#5FA46A" };
-    if (a <= 100) return { cat: "Moderate",       col: "#D8BE44" };
-    if (a <= 150) return { cat: "Sensitive",      col: "#E28C33" };
-    if (a <= 200) return { cat: "Unhealthy",      col: "#E0574A" };
-    if (a <= 300) return { cat: "Very Unhealthy", col: "#B57BD0" };
-    return             { cat: "Hazardous",      col: "#C65B6E" };
+    for (var i = 0; i < AQI_BANDS.length; i++) if (a <= AQI_BANDS[i].max) return AQI_BANDS[i];
+    return AQI_BANDS[AQI_BANDS.length - 1];
+  }
+  /* map an AQI value onto the gradient's non-linear percentage scale, interpolating
+     within whichever band it falls in so in-band values aren't all pinned to one stop */
+  function aqiPct(a) {
+    a = clamp(a, 0, 500);
+    var lo = 0, loPct = 0;
+    for (var i = 0; i < AQI_BANDS.length; i++) {
+      var b = AQI_BANDS[i];
+      if (a <= b.max) return loPct + (a - lo) / (b.max - lo) * (b.pct - loPct);
+      lo = b.max; loPct = b.pct;
+    }
+    return 100;
   }
   function hexA(h, a) { var n = parseInt(h.slice(1), 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")"; }
   function renderAir(data) {
@@ -2208,7 +2260,7 @@
     $("aqi-cat").textContent = data.aqiCategory || b.cat;
     $("aqi-val").style.color = b.col;
     $("aqi-cat").style.color = b.col;
-    var nowPct = clamp(a / 300 * 100, 0, 100);
+    var nowPct = aqiPct(a);
     $("aqi-marker").style.left = nowPct.toFixed(1) + "%";
     var elevated = a > 50;
     box.classList.toggle("aq-elevated", elevated);
@@ -2221,7 +2273,7 @@
     var rising = data.aqiTrend === "rising" && isNum(peak);
     var falling = !stale && data.aqiTrend === "falling" && !!data.aqiTrendText;
     if (rising) {
-      var pb = aqiBand(peak), pPct = clamp(peak / 300 * 100, 0, 100);
+      var pb = aqiBand(peak), pPct = aqiPct(peak);
       fwd.style.display = "block"; fwd.style.left = pPct.toFixed(1) + "%"; fwd.style.borderColor = pb.col;
       seg.style.display = "block"; seg.style.left = nowPct + "%"; seg.style.width = Math.max(0, pPct - nowPct) + "%"; seg.style.background = pb.col;
       tr.style.display = "inline"; tr.style.color = pb.col; tr.textContent = "↗ " + (data.aqiTrendText || (pb.cat + " ahead"));

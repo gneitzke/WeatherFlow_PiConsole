@@ -33,3 +33,4 @@ venv-test/
 
 # Live emitter output dumped for debugging (carries the real station location)
 design/almanac/wx.json
+.pytest-tmp/

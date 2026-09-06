@@ -110,3 +110,7 @@ Rules: numbers are numbers (HTML formats). Times are `"HH:MM"` strings. Angles/f
 are numeric so the HTML can drive SVG geometry. The HTML treats any `null`/missing key as
 an em-dash and leaves that gauge at a neutral position. The emitter must never write a
 partial/invalid file (write to a temp path + atomic rename).
+
+`aqiPm25` is PM2.5 concentration in µg/m³ and is populated only by providers that supply a
+concentration. It is `null` for WAQI, whose `iaqi.pm25` value is a pollutant AQI rather than
+a concentration.

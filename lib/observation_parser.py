@@ -102,6 +102,16 @@ class obs_parser():
             return True
         return False
 
+    @staticmethod
+    def _observation(message, key, minimum_length):
+        """ Return a complete websocket observation row, if one is present. """
+        rows = message.get(key)
+        if (not isinstance(rows, (list, tuple)) or not rows
+                or not isinstance(rows[0], (list, tuple))
+                or len(rows[0]) < minimum_length):
+            return None
+        return rows[0]
+
     def parse_obs_st(self, message, config):
 
         """ Parse obs_st Websocket messages from TEMPEST module
@@ -112,9 +122,9 @@ class obs_parser():
         """
 
         # Extract latest TEMPEST Websocket JSON
-        if 'obs' in message:
-            latest_ob = message['obs'][0]
-        else:
+        minimum_length = 21 if bool(int(config['System']['nc_rain'])) else 19
+        latest_ob = self._observation(message, 'obs', minimum_length)
+        if latest_ob is None:
             return
 
         # Extract TEMPEST device_id. Initialise API data dictionary
@@ -122,14 +132,19 @@ class obs_parser():
             device_id = message['device_id']
         elif 'serial_number' in message:
             device_id = message['serial_number']
-        if int(config['System']['rest_api']) and config['Station']['TempestID']:
-            api_device_id = config['Station']['TempestID']
-            self.api_data[device_id] = {'flagAPI': self.flag_api[0]}
-
+        else:
+            return
         # Discard duplicate TEMPEST Websocket messages
         if 'obs_st' in self.display_obs:
             if self.display_obs['obs_st']['obs'][0][0] == latest_ob[0]:
                 return
+
+        if int(config['System']['rest_api']) and config['Station']['TempestID']:
+            api_device_id = config['Station']['TempestID']
+            # a fresh dict per ACCEPTED message (the duplicate guard above already
+            # returned for echoes): a REST seed lives exactly one message, so a
+            # day-old cached 'today' can never re-seed a value that goes missing
+            self.api_data[device_id] = {'flagAPI': self.flag_api[0]}
 
         # Extract required observations from latest TEMPEST Websocket JSON
         self.device_obs['obTime']       = [latest_ob[0],  's']
@@ -167,16 +182,18 @@ class obs_parser():
                     or self.derive_obs['windAvg'][0] is None
                     or self.derive_obs['gustMax'][0] is None
                     or self.derive_obs['peakSun'][0] is None
-                    or self.derive_obs['rainAccum']['today'][0] is None
-                    or self.derive_obs['strikeCount']['today'][0] is None):
+                    or (not int(config['System']['stats_endpoint'])
+                        and (self.derive_obs['rainAccum']['today'][0] is None
+                             or self.derive_obs['strikeCount']['today'][0] is None))):
                     self.api_data[device_id]['today'] = weatherflow_api.today(api_device_id, config)
-                if self.derive_obs['rainAccum']['yesterday'][0] is None:
+                if (not int(config['System']['stats_endpoint'])
+                        and self.derive_obs['rainAccum']['yesterday'][0] is None):
                     self.api_data[device_id]['yesterday'] = weatherflow_api.yesterday(api_device_id, config)
-                if (self.derive_obs['rainAccum']['month'][0] is None
-                    or self.derive_obs['strikeCount']['month'][0] is None):
-                    self.api_data[device_id]['month'] = weatherflow_api.month(api_device_id, config)
                 if int(config['System']['stats_endpoint']):
-                    if (self.derive_obs['rainAccum']['month'][0] is None
+                    if (self.derive_obs['rainAccum']['today'][0] is None
+                        or self.derive_obs['rainAccum']['yesterday'][0] is None
+                        or self.derive_obs['strikeCount']['today'][0] is None
+                        or self.derive_obs['rainAccum']['month'][0] is None
                         or self.derive_obs['strikeCount']['month'][0] is None
                         or self.derive_obs['rainAccum']['year'][0] is None
                         or self.derive_obs['strikeCount']['year'][0] is None):
@@ -206,9 +223,9 @@ class obs_parser():
         """
 
         # Extract latest SKY Websocket JSON
-        if 'obs' in message:
-            latest_ob = message['obs'][0]
-        else:
+        minimum_length = 16 if bool(int(config['System']['nc_rain'])) else 12
+        latest_ob = self._observation(message, 'obs', minimum_length)
+        if latest_ob is None:
             return
 
         # Extract SKY device_id. Initialise API data dictionary
@@ -216,14 +233,19 @@ class obs_parser():
             device_id = message['device_id']
         elif 'serial_number' in message:
             device_id = message['serial_number']
-        if int(config['System']['rest_api']) and config['Station']['SkyID']:
-            api_device_id = config['Station']['SkyID']
-            self.api_data[device_id] = {'flagAPI': self.flag_api[1]}
-
+        else:
+            return
         # Discard duplicate SKY Websocket messages
         if 'obs_sky' in self.display_obs:
             if self.display_obs['obs_sky']['obs'][0][0] == latest_ob[0]:
                 return
+
+        if int(config['System']['rest_api']) and config['Station']['SkyID']:
+            api_device_id = config['Station']['SkyID']
+            # a fresh dict per ACCEPTED message (the duplicate guard above already
+            # returned for echoes): a REST seed lives exactly one message, so a
+            # day-old cached 'today' can never re-seed a value that goes missing
+            self.api_data[device_id] = {'flagAPI': self.flag_api[1]}
 
         # Extract required observations from latest SKY Websocket JSON
         self.device_obs['uvIndex']    = [latest_ob[2],  'index']
@@ -245,10 +267,13 @@ class obs_parser():
                     or self.derive_obs['gustMax'][0] is None
                     or self.derive_obs['peakSun'][0] is None):
                     self.api_data[device_id]['today'] = weatherflow_api.today(api_device_id, config)
-                if self.derive_obs['rainAccum']['yesterday'][0] is None:
+                if (not int(config['System']['stats_endpoint'])
+                        and self.derive_obs['rainAccum']['yesterday'][0] is None):
                     self.api_data[device_id]['yesterday'] = weatherflow_api.yesterday(api_device_id, config)
                 if int(config['System']['stats_endpoint']):
-                    if (self.derive_obs['rainAccum']['month'][0] is None
+                    if (self.derive_obs['rainAccum']['today'][0] is None
+                        or self.derive_obs['rainAccum']['yesterday'][0] is None
+                        or self.derive_obs['rainAccum']['month'][0] is None
                         or self.derive_obs['rainAccum']['year'][0] is None):
                         self.api_data[device_id]['statistics'] = weatherflow_api.statistics(config['Station']['StationID'], config)
                 elif not int(config['System']['stats_endpoint']):
@@ -274,9 +299,8 @@ class obs_parser():
         """
 
         # Extract latest outdoor AIR Websocket JSON
-        if 'obs' in message:
-            latest_ob = message['obs'][0]
-        else:
+        latest_ob = self._observation(message, 'obs', 5)
+        if latest_ob is None:
             return
 
         # Extract outdoor AIR device_id. Initialise API data dictionary
@@ -284,14 +308,19 @@ class obs_parser():
             device_id = message['device_id']
         elif 'serial_number' in message:
             device_id = message['serial_number']
-        if int(config['System']['rest_api']) and config['Station']['OutAirID']:
-            api_device_id = config['Station']['OutAirID']
-            self.api_data[device_id] = {'flagAPI': self.flag_api[2]}
-
+        else:
+            return
         # Discard duplicate outdoor AIR Websocket messages
         if 'obs_out_air' in self.display_obs:
             if self.display_obs['obs_out_air']['obs'][0][0] == latest_ob[0]:
                 return
+
+        if int(config['System']['rest_api']) and config['Station']['OutAirID']:
+            api_device_id = config['Station']['OutAirID']
+            # a fresh dict per ACCEPTED message (the duplicate guard above already
+            # returned for echoes): a REST seed lives exactly one message, so a
+            # day-old cached 'today' can never re-seed a value that goes missing
+            self.api_data[device_id] = {'flagAPI': self.flag_api[2]}
 
         # Extract required observations from latest outdoor AIR Websocket JSON
         self.device_obs['obTime']       = [latest_ob[0], 's']
@@ -315,10 +344,12 @@ class obs_parser():
                     or self.derive_obs['SLPMax'][0] is None
                     or self.derive_obs['outTempMin'][0] is None
                     or self.derive_obs['outTempMax'][0] is None
-                    or self.derive_obs['strikeCount']['today'][0] is None):
+                    or (not int(config['System']['stats_endpoint'])
+                        and self.derive_obs['strikeCount']['today'][0] is None)):
                     self.api_data[device_id]['today'] = weatherflow_api.today(api_device_id, config)
                 if int(config['System']['stats_endpoint']):
-                    if (self.derive_obs['strikeCount']['month'][0] is None
+                    if (self.derive_obs['strikeCount']['today'][0] is None
+                        or self.derive_obs['strikeCount']['month'][0] is None
                         or self.derive_obs['strikeCount']['year'][0] is None):
                         self.api_data[device_id]['statistics'] = weatherflow_api.statistics(config['Station']['StationID'], config)
                 elif not int(config['System']['stats_endpoint']):
@@ -344,9 +375,8 @@ class obs_parser():
         """
 
         # Extract latest indoor AIR Websocket JSON
-        if 'obs' in message:
-            latest_ob = message['obs'][0]
-        else:
+        latest_ob = self._observation(message, 'obs', 3)
+        if latest_ob is None:
             return
 
         # Extract indoor AIR device_id. Initialise API data dictionary
@@ -354,14 +384,19 @@ class obs_parser():
             device_id = message['device_id']
         elif 'serial_number' in message:
             device_id = message['serial_number']
-        if int(config['System']['rest_api']) and config['Station']['InAirID']:
-            api_device_id = config['Station']['InAirID']
-            self.api_data[device_id] = {'flagAPI': self.flag_api[3]}
-
+        else:
+            return
         # Discard duplicate indoor AIR Websocket messages
         if 'obs_in_air' in self.display_obs:
             if self.display_obs['obs_in_air']['obs'][0][0] == latest_ob[0]:
                 return
+
+        if int(config['System']['rest_api']) and config['Station']['InAirID']:
+            api_device_id = config['Station']['InAirID']
+            # a fresh dict per ACCEPTED message (the duplicate guard above already
+            # returned for echoes): a REST seed lives exactly one message, so a
+            # day-old cached 'today' can never re-seed a value that goes missing
+            self.api_data[device_id] = {'flagAPI': self.flag_api[3]}
 
         # Extract required observations from latest indoor AIR Websocket JSON
         self.device_obs['obTime'] = [latest_ob[0], 's']
