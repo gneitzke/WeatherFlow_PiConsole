@@ -1161,13 +1161,19 @@ def rain_accumulation(minute_rain, daily_rain, rain_accum, device, api_data, con
             index_bucket_e = 3
             index_stats    = 28
     elif str(device) in [config['Station']['TempestID'], config['Station']['TempestSN']]:
+        # In the daily (bucket=e) rows the two precipitation columns are the
+        # other way round from the minute rows: [29] is the device's raw
+        # local-day total (it equals the statistics endpoint and the summed
+        # minute obs to six digits) and [28] is the rain-check corrected
+        # figure. Seeding month/year from [28] in raw mode mixed corrected
+        # totals with raw daily ones, so every restart shifted the month.
         if bool(int(config['System']['nc_rain'])):
             index_bucket_a = 19
-            index_bucket_e = 29
+            index_bucket_e = 28
             index_stats    = 29
         else:
             index_bucket_a = 12
-            index_bucket_e = 28
+            index_bucket_e = 29
             index_stats    = 28
 
     # ==========================================================================

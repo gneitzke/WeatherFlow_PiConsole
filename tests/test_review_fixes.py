@@ -81,3 +81,32 @@ def test_retry_armed_after_stop_does_not_register(make_emitter):
     e._schedule_retry('forecast', lambda dt: None, 120)          # worker lost the race with stop()
     assert e._retries == {} and e._events == []
     assert e._schedule(lambda dt: None, 5) is None
+
+
+def test_tempest_daily_buckets_seed_raw_rain_in_raw_mode():
+    # measured on the station: daily-bucket column 29 equals the device's raw
+    # local-day total (and the statistics endpoint); column 28 is rain-check
+    # corrected. Raw mode must seed month/year from 29, nearcast mode from 28.
+    import copy
+    from lib import derived_variables as derive
+    from lib import observation_parser as op
+
+    class R:
+        ok = True
+        def __init__(self, rows): self._rows = rows
+        def json(self): return {'status': {'status_message': 'SUCCESS'}, 'obs': self._rows}
+
+    def day(date, corrected, raw):
+        row = [date] + [0] * 33
+        row[28], row[29] = corrected, raw
+        return row
+    month = R([day('2026-09-01', 0.738, 0.646), day('2026-09-04', 27.27, 20.362)])
+    year = R([day('2026-01-01', 10.0, 8.0), day('2026-09-04', 27.27, 20.362)])
+    for nc, expect_month, expect_year in (('0', 21.008, 28.362), ('1', 28.008, 37.27)):
+        cfg = make_config(System={'rest_api': '1', 'nc_rain': nc, 'stats_endpoint': '0', 'Connection': 'Websocket'},
+                          Station={'SkyID': '', 'SkySN': ''})
+        api = {'111': {'flagAPI': 1, 'month': month, 'year': year}}
+        ra = copy.deepcopy(op.derive_obs['rainAccum'])
+        ra = derive.rain_accumulation([0.0, 'mm'], [0.0, 'mm'], ra, '111', api, cfg)
+        assert abs(ra['month'][0] - expect_month) < 1e-6, (nc, ra['month'])
+        assert abs(ra['year'][0] - expect_year) < 1e-6, (nc, ra['year'])
