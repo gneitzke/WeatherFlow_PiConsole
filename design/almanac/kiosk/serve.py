@@ -2,28 +2,41 @@
 # Tiny static server for the almanac overlay (index.html + wx.json) plus a
 # /health endpoint for monitoring. Replaces `python -m http.server`.
 #
-#   /health -> JSON {status, dataAgeSec, station, temp, updateAvailable}
-#     status: "ok"      data is fresh
-#             "stale"   wx.json older than STALE_SEC (engine likely stuck)
-#             "error"   wx.json missing/unreadable (engine down)
+#   /health -> JSON {status, reason, dataAgeSec, obsAgeSec, renders, polls, ...}
+#     status: "ok"        engine heartbeat AND observation both fresh
+#             "stale"     wx.json older than STALE_SEC (engine stalled)
+#             "degraded"  wx.json fresh, but the newest observation is older
+#                         than OBS_STALE_SEC (sensor silent — the engine is
+#                         faithfully republishing a dead reading)
+#             "error"     wx.json missing/unreadable (engine down)
+#     reason: "engine stalled" | "sensor silent" | the read error
 #   HTTP 200 when ok, 503 otherwise (so a monitor can alert on non-2xx).
 #
 # Bind stays on 127.0.0.1 by default (chromium is local; no data leaves the box).
 # Set WFP_BIND=0.0.0.0 to expose /health (and the page) to the LAN for remote
 # monitoring — note that also makes wx.json LAN-readable.
-import http.server, socketserver, json, os, time, threading
+import http.server, socketserver, json, math, os, time, threading
 
 PORT      = int(os.environ.get("WFP_PORT", "8137"))
 WEB       = os.environ.get("WFP_WEB", ".")
 BIND      = os.environ.get("WFP_BIND", "127.0.0.1")
 DATA      = os.environ.get("WFP_DATA", "/tmp/wfp_data/wx.json")
 STALE_SEC = int(os.environ.get("WFP_STALE_SEC", "20"))
+# A station can go silent for minutes while the engine keeps emitting. Long
+# enough not to trip on one dropped Tempest report (they arrive ~60 s apart).
+OBS_STALE_SEC = int(os.environ.get("WFP_OBS_STALE_SEC", "300"))
 
-# monotonic count of wx.json fetches (the page's render heartbeat). The watchdog
-# reads this via /health instead of grepping the access log, which lets us drop
-# the per-request log churn below.
+LOOPBACK = ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+
+# Two counters, and the difference matters. `polls` counts wx.json REQUESTS
+# from anyone — a LAN viewer, a curl, a renderer that fetched and then threw.
+# `renders` counts frames the KIOSK actually painted: the page reports the
+# previous frame's success by adding r=1 to its next poll, and only a loopback
+# client is believed. The watchdog reads `renders`, because a growing request
+# count never proved anything reached the screen.
 _polls      = 0
-_polls_lock = threading.Lock()
+_renders    = 0
+_count_lock = threading.Lock()
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -31,13 +44,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*a, directory=WEB, **k)
 
     def do_GET(self):
-        p = self.path.split("?")[0]
-        if p == "/health":
+        path, _, query = self.path.partition("?")
+        if path == "/health":
             return self._health()
-        if p == "/wx.json":
-            global _polls
-            with _polls_lock:
+        if path == "/wx.json":
+            global _polls, _renders
+            rendered = "r=1" in query.split("&") and self.client_address[0] in LOOPBACK
+            with _count_lock:
                 _polls += 1
+                if rendered:
+                    _renders += 1
         return super().do_GET()
 
     def log_request(self, code="-", size="-"):
@@ -49,7 +65,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().log_request(code, size)
 
     def _health(self):
-        h = {"status": "ok", "polls": _polls}
+        h = {"status": "ok", "polls": _polls, "renders": _renders}
         try:
             with open(DATA) as f:
                 d = json.load(f)
@@ -58,12 +74,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             h["station"]         = d.get("station")
             h["temp"]            = d.get("temp")
             h["updateAvailable"] = d.get("updateAvailable")
+            obs_age = d.get("obsAgeSec")
+            # a bool is not an age, nor is NaN/inf: treat those as absent
+            if isinstance(obs_age, bool) or not isinstance(obs_age, (int, float)) or not math.isfinite(obs_age):
+                obs_age = None
+            else:
+                obs_age = float(obs_age) + max(age, 0.0)
+            h["obsAgeSec"] = round(obs_age, 1) if obs_age is not None else None
+            # Order matters: a stalled engine is the bigger fault, and its stale
+            # file makes every observation in it look old too.
             if age > STALE_SEC:
-                h["status"] = "stale"
+                h["status"], h["reason"] = "stale", "engine stalled"
+            elif obs_age is not None and obs_age > OBS_STALE_SEC:
+                h["status"], h["reason"] = "degraded", "sensor silent"
         except Exception as e:                                            # noqa: BLE001
             h["status"] = "error"
-            h["error"]  = str(e)
-        body = json.dumps(h).encode()
+            h["reason"] = h["error"] = str(e)
+        try:
+            body = json.dumps(h, allow_nan=False).encode()
+        except ValueError as e:                                          # a non-finite crept in
+            h["status"] = "error"
+            body = json.dumps({"status": "error", "reason": str(e)}).encode()
         self.send_response(200 if h["status"] == "ok" else 503)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))

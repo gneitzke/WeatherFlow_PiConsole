@@ -144,7 +144,8 @@
   .hair { border-bottom: 1px solid var(--rule); }
   /* unobtrusive stale mark — only shows when the feed goes quiet */
   .mast-stale { font-family: var(--sans); font-size: 14px; letter-spacing: 0.16em;
-    text-transform: uppercase; color: var(--accent); opacity: 0; transition: opacity 0.4s ease; }
+    text-transform: uppercase; color: var(--accent); white-space: nowrap;
+    opacity: 0; transition: opacity 0.4s ease; }   /* nowrap: never break into the station line */
   .mast-stale.on { opacity: 0.85; }
 
   /* ———— Screens ———— */
@@ -2107,13 +2108,39 @@
   /* ════════════════════════════════════════════════════════════
      7. Stale mark
   ════════════════════════════════════════════════════════════ */
-  var STALE_SEC = 60;
-  function markStale(on) { $("staleflag").classList.toggle("on", on); }
-  function checkStale(data) {
-    if (!data || !isNum(data.ts)) { markStale(false); return; }
-    var ageSec = Date.now() / 1000 - data.ts;
-    markStale(ageSec > STALE_SEC);
+  /* Two different silences, one mark. "STALE" = nothing new is reaching the
+     screen (the fetch is failing, or the engine stopped writing). "SILENT" =
+     frames keep arriving, but the station behind them stopped reporting, so
+     every number on glass is a cached one. A fresh file is not evidence of a
+     live station, which is why obsAgeSec exists. One word each: .mast-clock is
+     a fixed 250px box shared with the lightning flag, and anything longer
+     overruns the station name. */
+  var STALE_SEC     = 60;    /* no successful render / no new engine frame */
+  var OBS_STALE_SEC = 300;   /* engine emitting, but the sensor has gone quiet */
+  var staleEl = $("staleflag");
+  function markStale(mode) {                      /* null | "stale" | "silent" */
+    if (mode) staleEl.textContent = mode;
+    staleEl.classList.toggle("on", !!mode);
   }
+  /* Judged on the CLOCK, never on a fetch settling: a request that never
+     answers used to leave the page looking live indefinitely. */
+  var loadMs = Date.now();   /* baseline before the first frame, so a slow first
+                                fetch doesn't flash the mark on a cold load */
+  function freshnessState() {
+    if (Date.now() - (lastRenderMs || loadMs) > STALE_SEC * 1000) return "stale";
+    if (failCount >= 2) return "stale";           /* two misses in a row, don't wait out the minute */
+    var d = lastData;
+    if (!d || !isNum(d.ts)) return "stale";
+    var sinceRecv = recvPerf ? (performance.now() - recvPerf) / 1000 : 0;
+    if (recvAgeSec + sinceRecv > STALE_SEC) return "stale";   /* the frame on screen is old */
+    if (isNum(d.obsAgeSec)) {
+      /* measured when the file was written; add the file's age at receipt and
+         the time it has been on screen since */
+      if (d.obsAgeSec + recvAgeSec + sinceRecv > OBS_STALE_SEC) return "silent";
+    }
+    return null;
+  }
+  function updateFreshness() { markStale(freshnessState()); }
 
   /* ════════════════════════════════════════════════════════════
      8. Master render + poll loop
@@ -2296,23 +2323,68 @@
     renderAir(data);
     renderSky(data);
     Light.fromData(data);
-    checkStale(data);
   }
 
-  var POLL_MS = 2000;
-  var failCount = 0;
+  var POLL_MS      = 2000;
+  var FETCH_MS     = 4000;   /* deadline for one request; past it we abandon it */
+  var failCount    = 0;
+  var lastRenderMs = 0;      /* when a frame last reached the screen (not: settled) */
+  var polling      = false;
+  var pollStart    = 0;
+  var pollGen      = 0;      /* an abandoned request's late reply is ignored */
+  var reportRender = false;  /* tell the server the last frame painted (r=1) */
+  var recvAgeSec = 0, recvPerf = 0;   /* payload age when it arrived, and when that was */
+
+  function validPayload(d) {
+    return !!d && typeof d === "object" && !Array.isArray(d) && isNum(d.ts);
+  }
+
   function poll() {
-    fetch("wx.json?_=" + Date.now(), { cache: "no-store" })
-      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-      .then(function (d) { failCount = 0; render(d); })
-      .catch(function () {
-        /* keep the last good frame on screen; flag stale after a couple misses */
-        failCount++;
-        if (failCount >= 2) markStale(true);
+    var started = Date.now();
+    if (polling) {
+      if (started - pollStart < FETCH_MS) return;   /* single flight: never overlap */
+      failCount++;              /* never answered, never aborted — that is a miss */
+      updateFreshness();
+    }
+    var gen = ++pollGen;
+    polling = true; pollStart = started;
+    var ctl  = (typeof AbortController === "function") ? new AbortController() : null;
+    var kill = setTimeout(function () { if (ctl) ctl.abort(); }, FETCH_MS);
+    var opts = { cache: "no-store" };
+    if (ctl) opts.signal = ctl.signal;
+    /* the ack is consumed HERE: it vouches for the previous frame only, and a
+       failed request after it must not re-send it */
+    var ack = reportRender; reportRender = false;
+    fetch("wx.json?_=" + started + (ack ? "&r=1" : ""), opts)
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        var srv = Date.parse(r.headers.get("Date") || "");   /* the producer's clock, 1 s resolution */
+        return r.json().then(function (d) { return { d: d, srvMs: srv }; });
+      })
+      .then(function (x) {
+        if (gen !== pollGen) return;              /* superseded; this one was abandoned */
+        var d = x.d;
+        if (!validPayload(d)) throw new Error("bad payload");
+        render(d);                                /* may throw — book success AFTER it */
+        lastRenderMs = Date.now();
+        /* file age at receipt on the SERVER's clock (falls back to ours), then
+           advanced by a monotonic clock — a viewer whose wall clock is minutes
+           off must not see a live panel as STALE, or a dead one as live */
+        var nowSec = isFinite(x.srvMs) ? x.srvMs / 1000 : Date.now() / 1000;
+        recvAgeSec = Math.max(0, nowSec - d.ts);
+        recvPerf   = performance.now();
+        reportRender = true;
+        failCount = 0;
+      })
+      .catch(function () { if (gen === pollGen) failCount++; })
+      .then(function () {
+        clearTimeout(kill);
+        if (gen === pollGen) { polling = false; updateFreshness(); }
       });
   }
   poll();
   setInterval(poll, POLL_MS);
+  setInterval(updateFreshness, 1000);   /* independent of any fetch ever settling */
 </script>
 </body>
 </html>

@@ -175,8 +175,9 @@ launch_engine(){
   ENGINE_GRACE=6                                   # ~90s warmup before the freshness check judges it
 }
 # 2) local web server (page + live feed + /health endpoint). /health exposes a
-#    "polls" counter (wx.json fetches) — our render heartbeat, replacing the
-#    access-log grep. Bind 127.0.0.1 by default; WFP_BIND=0.0.0.0 exposes it.
+#    "renders" counter (frames the local page confirmed it painted) — our render
+#    heartbeat, replacing the access-log grep. Bind 127.0.0.1 by default;
+#    WFP_BIND=0.0.0.0 exposes it.
 launch_server(){
   ( cd "$WEB" && WFP_PORT="$PORT" WFP_WEB="$WEB" WFP_DATA="$DATA" WFP_BIND="${WFP_BIND:-127.0.0.1}" \
       "$PY" "$APP/design/almanac/kiosk/serve.py" ) >"$HTTP_LOG" 2>&1 &
@@ -218,21 +219,26 @@ launch_cr(){
   CRPID=$!
 }
 
-# A healthy render means the page's JS is polling wx.json (~every 2s). A blank/
-# broken GPU init leaves the renderer unable to run JS -> ZERO new polls. That is
-# our screenshot-free, root-free health check.
-read_polls(){
-  local response polls
+# A healthy render means the page's JS painted a frame (~every 2s). A blank/
+# broken GPU init leaves the renderer unable to run JS -> ZERO new renders. That
+# is our screenshot-free, root-free health check.
+#
+# "renders", NOT "polls": the page marks its NEXT wx.json request with r=1 only
+# after the previous frame actually reached the screen, and the server counts
+# that mark only from loopback. A request that 404s, throws in render(), or
+# comes from a LAN browser therefore proves nothing and is not counted.
+read_renders(){
+  local response renders
   response=$(health_response) || return 1
-  polls=$(printf '%s\n' "$response" | sed -n 's/.*"polls": *\([0-9][0-9]*\).*/\1/p')
-  [ -n "$polls" ] || return 1
-  printf '%s\n' "$polls"
+  renders=$(printf '%s\n' "$response" | sed -n 's/.*"renders": *\([0-9][0-9]*\).*/\1/p')
+  [ -n "$renders" ] || return 1
+  printf '%s\n' "$renders"
 }
-polls_growing(){
+renders_growing(){
   local before after
-  before=$(read_polls) || return 1
+  before=$(read_renders) || return 1
   sleep 8
-  after=$(read_polls) || return 1
+  after=$(read_renders) || return 1
   [ "$after" -gt "$before" ]
 }
 
@@ -240,7 +246,7 @@ polls_growing(){
 for attempt in 1 2 3 4; do
   launch_cr
   sleep 12
-  if polls_growing; then
+  if renders_growing; then
     echo "kiosk healthy on attempt $attempt" >> /tmp/almanac_chrome.log
     break
   fi
@@ -252,7 +258,7 @@ fi   # end chromium kiosk (skipped when MODE=headless)
 # chromium — a dead data engine or server used to leave the screen stale forever),
 # and every ~5 min re-check for a wedged alive-but-blank render.
 CLOG=/tmp/almanac_chrome.log
-loops=0; stale_hits=0; health_failures=0
+loops=0; stale_hits=0; health_failures=0; degraded_hits=0; degraded_acted=0
 while [ "$STOPPING" -eq 0 ]; do
   kill -0 "$XVFB_PID" 2>/dev/null || { echo "Xvfb died — relaunching" >> "$CLOG"; launch_xvfb; sleep 2; }
   kill -0 "$ENGINE_PID" 2>/dev/null || { echo "data engine died — relaunching" >> "$CLOG"; launch_engine; }
@@ -272,7 +278,7 @@ while [ "$STOPPING" -eq 0 ]; do
   else
     health=$(health_response) || health=""
     st=$(printf '%s\n' "$health" | sed -n 's/.*"status": *"\([a-z][a-z]*\)".*/\1/p')
-    case "$st" in ok|stale|error) ;; *) st="" ;; esac
+    case "$st" in ok|stale|degraded|error) ;; *) st="" ;; esac
     if [ -z "$st" ]; then
       stale_hits=0
       health_failures=$((health_failures + 1))
@@ -287,16 +293,29 @@ while [ "$STOPPING" -eq 0 ]; do
       if [ "$stale_hits" -ge 2 ]; then
         echo "data $st — restarting data engine" >> "$CLOG"
         stop_process "$ENGINE_PID" engine; launch_engine
-        stale_hits=0
+        stale_hits=0; degraded_hits=0     # degraded_acted survives: only a fresh observation ends the episode
+      fi
+    elif [ "$st" = "degraded" ]; then
+      # SENSOR SILENT: the engine is emitting fresh files, but the station
+      # behind them stopped reporting. Two possible causes and only one is ours
+      # — a wedged websocket (fixable by a restart) or a dead/offline station
+      # (not). So restart the engine ONCE per episode, then leave it alone
+      # rather than thrash a box whose Tempest battery is simply flat.
+      health_failures=0; stale_hits=0
+      degraded_hits=$((degraded_hits + 1))
+      if [ "$degraded_hits" -ge 4 ] && [ "$degraded_acted" -eq 0 ]; then
+        echo "sensor silent — restarting data engine once" >> "$CLOG"
+        stop_process "$ENGINE_PID" engine; launch_engine
+        degraded_acted=1
       fi
     else
-      health_failures=0; stale_hits=0
+      health_failures=0; stale_hits=0; degraded_hits=0; degraded_acted=0
     fi
   fi
 
   loops=$((loops + 1))
   if [ "$MODE" != headless ] && [ $((loops % 8)) -eq 0 ]; then   # ~every 2 min (8 × 15s): alive-but-blank render
-    polls_growing || { [ "$STOPPING" -ne 0 ] || { echo "render wedged — relaunching chromium" >> "$CLOG"; launch_cr; sleep 12; }; }
+    renders_growing || { [ "$STOPPING" -ne 0 ] || { echo "render wedged — relaunching chromium" >> "$CLOG"; launch_cr; sleep 12; }; }
   fi
   # background sleep + wait: a TERM during the pause reaches the trap at once
   # instead of after the sleep, keeping shutdown inside TimeoutStopSec

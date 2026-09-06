@@ -8,7 +8,18 @@ the HTML shows an em-dash for null. Emitter converts from the app's
 
 ```jsonc
 {
-  "ts": 1750000000,                 // epoch seconds when written (HTML shows "stale" if too old)
+  // ——— Freshness. Three independent clocks, and conflating them is how a dead
+  // station looked healthy: "ts" only proves the emit tick ran, "obsAgeSec"
+  // proves the station is still reporting, and the per-provider ages prove a
+  // network fetch still succeeds. All ages are whole seconds, null = never.
+  "ts": 1750000000,                 // engine heartbeat: epoch seconds when written
+  "obsTs": 1749999940,              // epoch of the newest OUTDOOR observation (obs_st / obs_out_air)
+  "obsAgeSec": 60,                  // now - obsTs; from ENGINE START while obsTs is still null
+                                    // (a never-heard station ages like a silent one). Past ~5 min the console's masthead reads
+                                    // "SILENT" (as against "STALE" for a stalled feed) and
+                                    // /health reports status "degraded" — the numbers are
+                                    // cached, however fresh "ts" looks. An indoor Air is ignored
+                                    // here on purpose: it must not mask a dead Tempest.
   "station": "Seattle",             // [Station] Name
   "date": "Fri, 31 Jul 2026",       // System['date']
   "time": "12:52",                  // System['time']  (HH:MM)
@@ -38,6 +49,7 @@ the HTML shows an em-dash for null. Emitter converts from the app's
   // what the unit can show (0.01 in / 0.1 mm). gust is km/h, a fixed unit.
   "fcDaily": [{"day": "SAT", "date": "2026-08-29", "today": true, "hi": 64, "lo": 54, "code": 95, "pp": 95, "qpf": 0.34, "gust": 38}],
   "fcStale": false,   // true when no successful forecast fetch in 24 h; the console hides the band
+  "fcAgeSec": 1800,   // seconds since the last SUCCESSFUL forecast fetch (null = never)
 
   // Wind  (dir in degrees; cardinal string; needle rotates to dir)
   "windSpd": 0.9, "windUnit": "mph", "windAvg": 0.1, "windGust": 2.9, "windMax": 4.3,
@@ -72,6 +84,8 @@ the HTML shows an em-dash for null. Emitter converts from the app's
   "aqiForecast": [[1754247600, 40], [1754251200, 43]], "aqiPeak": 55, "aqiPeakTime": "5 PM",
   "aqiForecastCat": "Moderate", "aqiTrend": "rising", "aqiTrendText": "Moderate by 5 PM",
   "aqiStale": false,          // true if the last successful AQI fetch is > 1 h old
+  "aqiAgeSec": 420,           // seconds since that fetch (null = never). A provider can serve a
+                              // days-old station reading; this is the age of OUR download.
 
   // Weather alerts  (active NWS alerts by lat/lon; same-type collapsed, capped 3,
   // sorted by product level: warning > watch > advisory > alert > statement)
@@ -85,6 +99,7 @@ the HTML shows an em-dash for null. Emitter converts from the app's
   ],
   "alertCount": 1,            // distinct types; the HTML shows "+N more" = count-1
   "alertsStale": false, "alertsAsOf": "13:52",   // last successful fetch; stale after 1 h
+  "alertsAgeSec": 300,
 
   // Moon
   "moonPhase": "Waning Gibbous", "moonIllum": 78,
@@ -93,8 +108,13 @@ the HTML shows an em-dash for null. Emitter converts from the app's
   // Lightning  (distance only — no bearing; null when quiet)
   // lightningDist is the core's +/-3 km RANGE text ("13-17"); lightningDistNum is
   // its midpoint, which is what the ring geometry and big-number readouts use.
+  // lightningTs is the strike EVENT epoch; lightningSinceSec and lightningLast
+  // are derived from it at emit time. The core's StrikeDeltaT is frozen at the
+  // moment it was calculated, so a payload built an hour later would otherwise
+  // still say the strike was seconds ago. Only used as a fallback when no epoch
+  // is available.
   "lightningActive": false, "lightningDist": null, "lightningDistNum": null,
-  "lightningDistUnit": "miles", "lightningSinceSec": null,
+  "lightningDistUnit": "miles", "lightningTs": null, "lightningSinceSec": null,
   // lightningRate = strikes/min (the core's StrikeFreq); lightning3hr = the
   // rolling 3-hour count. There is no 3-min/30-min bucket in the data path.
   "lightningRate": 0, "lightning3hr": 0, "lightningToday": 0,
@@ -114,3 +134,24 @@ partial/invalid file (write to a temp path + atomic rename).
 `aqiPm25` is PM2.5 concentration in µg/m³ and is populated only by providers that supply a
 concentration. It is `null` for WAQI, whose `iaqi.pm25` value is a pollutant AQI rather than
 a concentration.
+
+## Freshness and /health
+
+`design/almanac/kiosk/serve.py` turns these fields into a status the watchdog and any
+monitor can act on:
+
+| status | meaning | condition |
+|---|---|---|
+| `ok` | engine and station both live | `ts` fresh and `obsAgeSec` under 5 min |
+| `stale` | engine stalled | `ts` older than `WFP_STALE_SEC` (20 s) |
+| `degraded` | sensor silent | `ts` fresh, `obsAgeSec` over `WFP_OBS_STALE_SEC` (300 s) |
+| `error` | engine down | `wx.json` missing or unparsable |
+
+`obsAgeSec` in `/health` is the payload's value plus the file's own age, so it stays
+truthful when the file itself has stopped moving. Anything but `ok` answers HTTP 503.
+
+`/health` also reports two counters. `polls` counts `wx.json` requests from anyone;
+`renders` counts frames the kiosk page confirmed it painted — the page adds `r=1` to
+its next poll only after `render()` returned, and the server credits that mark only
+from a loopback client. The launcher's watchdog reads `renders`, because a request
+count never proved anything reached the screen.

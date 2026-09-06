@@ -148,6 +148,10 @@ class obs_parser():
 
         # Extract required observations from latest TEMPEST Websocket JSON
         self.device_obs['obTime']       = [latest_ob[0],  's']
+        # Raw OUTDOOR observation epoch for the almanac emitter's freshness
+        # (every formatted display value has lost it). Taken from THIS accepted
+        # message, never from the shared obTime slot the indoor Air also writes.
+        self.display_obs['obsTs'] = latest_ob[0]
         self.device_obs['windSpd']      = [latest_ob[2],  'mps']
         self.device_obs['windGust']     = [latest_ob[3],  'mps']
         self.device_obs['windDir']      = [latest_ob[4],  'degrees']
@@ -168,6 +172,7 @@ class obs_parser():
         # "summary" object
         if 'summary' in message:
             self.device_obs['strikeTime'] = [message['summary']['strike_last_epoch'] if 'strike_last_epoch' in message['summary'] else None, 's']
+            self.display_obs['strikeTs']  = self.device_obs['strikeTime'][0]
             self.device_obs['strikeDist'] = [message['summary']['strike_last_dist']  if 'strike_last_dist'  in message['summary'] else None, 'km']
             self.device_obs['strike3hr']  = [message['summary']['strike_count_3h']   if 'strike_count_3h'   in message['summary'] else None, 'count']
 
@@ -324,6 +329,7 @@ class obs_parser():
 
         # Extract required observations from latest outdoor AIR Websocket JSON
         self.device_obs['obTime']       = [latest_ob[0], 's']
+        self.display_obs['obsTs'] = latest_ob[0]          # outdoor epoch, from this message
         self.device_obs['pressure']     = [latest_ob[1], 'mb']
         self.device_obs['outTemp']      = [latest_ob[2], 'c']
         self.device_obs['humidity']     = [latest_ob[3], '%']
@@ -333,6 +339,7 @@ class obs_parser():
         # JSON "Summary" object
         if 'summary' in message:
             self.device_obs['strikeTime'] = [message['summary']['strike_last_epoch'] if 'strike_last_epoch' in message['summary'] else None, 's']
+            self.display_obs['strikeTs']  = self.device_obs['strikeTime'][0]
             self.device_obs['strikeDist'] = [message['summary']['strike_last_dist']  if 'strike_last_dist'  in message['summary'] else None, 'km']
             self.device_obs['strike3hr']  = [message['summary']['strike_count_3h']   if 'strike_count_3h'   in message['summary'] else None, 'count']
 
@@ -496,6 +503,7 @@ class obs_parser():
 
         # Extract required observations from latest evt_strike Websocket JSON
         self.device_obs['strikeTime'] = [latest_evt[0], 's']
+        self.display_obs['strikeTs']  = latest_evt[0]
         self.device_obs['strikeDist'] = [latest_evt[1], 'km']
 
         # Store latest evt_strike JSON message

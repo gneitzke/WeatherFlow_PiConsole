@@ -20,7 +20,8 @@ def Obs():
 
     """ Define the Obs property values """
 
-    return {'outTemp': '--',       'FeelsLike': '----',     'DewPoint': '--',
+    return {'obsTs': None,         'strikeTs': None,        # raw epochs (almanac freshness)
+            'outTemp': '--',       'FeelsLike': '----',     'DewPoint': '--',
             'outTempDiff': '---',  'outTempTrend': '---',   'outTempMax': '---',
             'outTempMin': '---',   'Humidity': '--',        'SLP': '---',
             'SLPTrend': '----',    'SLPMax': '---',         'SLPMin': '---',

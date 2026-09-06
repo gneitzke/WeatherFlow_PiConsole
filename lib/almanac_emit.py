@@ -278,6 +278,31 @@ def _cardinal_from_degrees(deg):
         return None
 
 
+def _age_sec(ts, now):
+    """ Whole seconds since `ts`, or None when that source has never reported.
+    Clamped at 0 - a sensor clock a little ahead of ours must not produce a
+    negative age. Never raises. """
+    if ts is None:
+        return None
+    try:
+        return max(0, int(now - float(ts)))
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _ago_text(sec):
+    """ "just now" / "12 minutes ago" / "5 hours ago" / "3 days ago" from an age
+    in seconds, matching the vocabulary observation_format's 'TimeDelta' uses. """
+    if sec is None:
+        return None
+    sec = int(sec)
+    for span, unit in ((86400, 'day'), (3600, 'hour'), (60, 'minute')):
+        if sec >= span:
+            count = sec // span
+            return f'{count} {unit}{"" if count == 1 else "s"} ago'
+    return 'just now'
+
+
 def _since_ago_text(strike_delta_t):
     """ Build a "3 days ago" / "5 hours ago" / "12 minutes ago" style string
     from the ['d','days','h','hours', epoch] shape that
@@ -360,6 +385,7 @@ class AlmanacEmitter:
         # as an occasional 0.01 in minute with zeros between, so the raw
         # per-minute rate flickers 0 <-> trace and the gauge went dry mid-drizzle
         self._rain_win = _RainWindow(RAIN_WINDOW_SEC)
+        self._started_at = time.time()   # obsAgeSec counts from here until the first observation
 
     # Provider results, each published as ONE snapshot by its worker thread.
     # Class-level so the "no data yet" state needs no instance setup.
@@ -1224,14 +1250,36 @@ class AlmanacEmitter:
                 parts.append(fc_wind_card)
             fc_wind = ' '.join(parts)
 
+        now = time.time()
+        # FRESHNESS. 'ts' below is only the engine heartbeat: it proves the emit
+        # tick ran, nothing about the data it carried. An observation's own
+        # epoch is the only evidence the station is still reporting, and a
+        # strike's epoch the only evidence the lightning readout is current -
+        # the formatted display values carry neither, so they are read here from
+        # the raw epochs the parser publishes alongside them.
+        obs_ts  = _num(Obs.get('obsTs'))
+        # A station that has never reported since the engine started is as
+        # silent as one that stopped: age it from engine start, so a restart
+        # cannot reset a dead sensor to "healthy" (obsTs stays null).
+        obs_age = _age_sec(obs_ts if obs_ts is not None else self._started_at, now)
+
         strike_delta_t = Obs.get('StrikeDeltaT')
-        lightning_since_sec = _num(_idx(strike_delta_t, 4))
+        strike_ts = _num(Obs.get('strikeTs'))
+        if strike_ts is not None:
+            lightning_since_sec = _age_sec(strike_ts, now)
+            lightning_last      = _ago_text(lightning_since_sec)
+        else:
+            # No epoch published (a parser reset, or a build without it): the
+            # core's formatted delta is frozen at the moment it was calculated,
+            # but with no epoch it is the only source there is.
+            lightning_since_sec = _num(_idx(strike_delta_t, 4))
+            lightning_last      = _since_ago_text(strike_delta_t)
         lightning_active = self._lightning_active(config, lightning_since_sec)
 
         temp_val  = _num(_idx(Obs.get('outTemp'), 0))
         temp_unit = _temp_unit(_idx(Obs.get('outTemp'), 1))
         rain_raw_mm = _num(_idx(Obs.get('RainRate'), 3))
-        rain_eff_mm = self._rain_win.effective(time.time(), rain_raw_mm)
+        rain_eff_mm = self._rain_win.effective(now, rain_raw_mm)
         fc_low    = _num(_idx(Met.get('lowTemp'), 0))
         fc_high   = _num(_idx(Met.get('highTemp'), 0))
         # One read of each provider snapshot per tick: every field below comes
@@ -1247,10 +1295,12 @@ class AlmanacEmitter:
         # Alerts expire between fetches, so the last-good raw features are
         # re-filtered here rather than trusted as processed at fetch time.
         alerts = (alerts_snap.alerts if alerts_snap.features is None
-                  else self._process_alerts(alerts_snap.features, time.time(), tz))
+                  else self._process_alerts(alerts_snap.features, now, tz))
 
         payload = {
-            'ts':      int(time.time()),
+            'ts':      int(now),                     # engine heartbeat ONLY - see obsAgeSec
+            'obsTs':     int(obs_ts) if obs_ts is not None else None,
+            'obsAgeSec': obs_age,                    # age of the newest OUTDOOR observation
             'station': _text(_cfg(config, 'Station', 'Name')),
             'locationLine': self._location_line(config),
             'updateAvailable': ver_snap.available,
@@ -1283,7 +1333,8 @@ class AlmanacEmitter:
             'fcPrecipPct':     _num(_idx(Met.get('PrecipPercnt'), 0)),
             'fcDailyPct':      _num(_idx(Met.get('PrecipDay'), 0)),
             'fcDaily':         fc_rows,   # outlook, past days dropped at emit time
-            'fcStale':         (fc_snap.ts is None) or (time.time() - fc_snap.ts) > FC_STALE_SEC,
+            'fcStale':         (fc_snap.ts is None) or (now - fc_snap.ts) > FC_STALE_SEC,
+            'fcAgeSec':        _age_sec(fc_snap.ts, now),   # since the last SUCCESSFUL fetch
 
             # Wind
             'windSpd':      _num(_idx(Obs.get('WindSpd'), 0)),
@@ -1347,12 +1398,14 @@ class AlmanacEmitter:
             'aqiForecastCat': aqi_snap.fc_cat,
             'aqiTrend':       aqi_snap.trend,
             'aqiTrendText':   aqi_snap.trend_text,
-            'aqiStale':       (aqi_snap.ts is None) or (time.time() - aqi_snap.ts) > AQI_STALE_SEC,
+            'aqiStale':       (aqi_snap.ts is None) or (now - aqi_snap.ts) > AQI_STALE_SEC,
+            'aqiAgeSec':      _age_sec(aqi_snap.ts, now),
 
             # Weather alerts (NWS, by station lat/lon)
             'alerts':      alerts,
             'alertCount':  len(alerts),
-            'alertsStale': (alerts_snap.ts is None) or (time.time() - alerts_snap.ts) > ALERT_STALE_SEC,
+            'alertsStale': (alerts_snap.ts is None) or (now - alerts_snap.ts) > ALERT_STALE_SEC,
+            'alertsAgeSec': _age_sec(alerts_snap.ts, now),
             'alertsAsOf':  (datetime.fromtimestamp(alerts_snap.ts, tz).strftime('%H:%M')
                             if (alerts_snap.ts and tz) else None),
 
@@ -1369,14 +1422,15 @@ class AlmanacEmitter:
             'lightningDist':     _text(_idx(Obs.get('StrikeDist'), 0)),   # the core's +/-3 km RANGE text, e.g. "13-17"
             'lightningDistNum':  _range_mid(_idx(Obs.get('StrikeDist'), 0)),  # its midpoint, for ring geometry / big-number readouts
             'lightningDistUnit': _text(_idx(Obs.get('StrikeDist'), 1)),
-            'lightningSinceSec': lightning_since_sec,
+            'lightningSinceSec': lightning_since_sec,   # from the strike EPOCH, not the core's frozen delta
+            'lightningTs':       int(strike_ts) if strike_ts is not None else None,
             # The core tracks strike FREQUENCY (/min) and a rolling 3-HOUR count -
             # there is no 3-min/30-min bucket anywhere in the data path, so the
             # panel reports what the station actually measures.
             'lightningRate':     _num(_idx(Obs.get('StrikeFreq'), 0)),
             'lightning3hr':      _num(_idx(Obs.get('Strikes3hr'), 0)),
             'lightningToday':    _num(_idx(Obs.get('StrikesToday'), 0)),
-            'lightningLast':     _since_ago_text(strike_delta_t),
+            'lightningLast':     lightning_last,
 
             # Sager
             'sagerCode':     None,   # not sourced - no single composite dial code is exposed
