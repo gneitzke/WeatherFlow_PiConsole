@@ -650,6 +650,56 @@
   .tabs .spacer { flex: 1; }
   .foot-station { font-family: var(--sans); font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-soft); }
 
+  /* Tabbed artboard: the page already reserves masthead, outlook and footer
+     as non-shrinking flex siblings. Let the chart yield the missing height,
+     and keep the instrument text within its share of the remaining space. */
+  :root[data-tabs="on"] .hero .range {
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+  }
+  :root[data-tabs="on"] .hero .range .spark {
+    flex: 1; min-height: 0; max-height: 104px;
+  }
+  /* Let the sky's text establish the lower row's height. Its lightning
+     replacement remains overlaid, so live tile swaps cannot shift the grid. */
+  :root[data-tabs="on"] .grid { grid-template-rows: minmax(0, 1fr) auto; }
+  :root[data-tabs="on"] #tile-sky {
+    position: static; flex: 1; margin: 12px 22px 8px 2px;
+  }
+  /* Put pressure and its trend beside each other so both charts retain
+     room when the lower row needs another line of AQI text. */
+  :root[data-tabs="on"] .baro .p-col {
+    min-height: 0; display: grid; column-gap: 8px;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto minmax(0, 48px) minmax(0, 42px) auto;
+    align-content: center;
+  }
+  :root[data-tabs="on"] .baro .p-sub {
+    font-size: 13.5px; margin-top: 0; align-self: center;
+  }
+  :root[data-tabs="on"] #barobar,
+  :root[data-tabs="on"] #barograph {
+    grid-column: 1 / -1; min-height: 0; height: 100%; margin-top: 0;
+  }
+  :root[data-tabs="on"] .baro .ledger { grid-column: 1 / -1; }
+  :root[data-tabs="on"] #sky-day .uv-line { gap: 4px; }
+  :root[data-tabs="on"] #tile-sky .p-head { gap: 8px; }
+  :root[data-tabs="on"] #sky-title { flex: none; white-space: nowrap; }
+  :root[data-tabs="on"] #sky-status {
+    font-size: 11.5px; letter-spacing: 0.04em; text-align: right;
+  }
+  /* Category/trend keeps its natural width and wraps onto a full row when
+     necessary; retain the existing type sizes instead of truncating it. */
+  :root[data-tabs="on"] .aq .uv-line { flex-wrap: wrap; gap: 0 6px; }
+  :root[data-tabs="on"] .aq .uv-line .w,
+  :root[data-tabs="on"] .aq-fc {
+    flex: 1 0 auto; max-width: 100%; white-space: normal;
+    overflow: visible; text-overflow: clip;
+  }
+  :root[data-tabs="on"] .foot { padding-top: 4px; }
+  :root[data-tabs="on"] .tabs { padding-top: 2px; }
+  /* Keep the enlarged touch targets inside the artboard. */
+  :root[data-tabs="on"] .tab::after { top: -25px; bottom: -4px; }
+
   /* ———— Touchscreen kiosk behaviour ———— */
   html { -webkit-text-size-adjust: 100%; }
   body {

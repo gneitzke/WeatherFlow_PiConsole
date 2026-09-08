@@ -208,6 +208,9 @@ CR_FLAGS=(--kiosk --ozone-platform="$CR_OZONE" --touch-events=enabled
   --no-first-run --no-default-browser-check --disable-infobars
   --disable-session-crashed-bubble --noerrdialogs --password-store=basic)
 URL="http://127.0.0.1:$PORT/index.html?theme=$THEME"
+# The page hides navigation unless tabs is present. On-screen touch kiosks
+# need visible targets; WFP_TABS=0 retains the observations-only presentation.
+if [ "${WFP_TABS:-1}" = 1 ]; then URL="$URL&tabs=1"; fi
 
 CRPID=""
 launch_cr(){
