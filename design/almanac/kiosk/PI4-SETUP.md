@@ -112,20 +112,31 @@ scales up. Nothing to configure — it adapts to whatever the compositor reports
   internally — blurrier than native for no gain. Keep the compositor output
   `Scale: 1.000000` (fractional scaling blurs a pixel-art console).
 - **Touch** (e.g. an Elecrow 7" 1024×600 IPS, a USB-HID capacitive panel): udev
-  tags it `ID_INPUT_TOUCHSCREEN=1` and, with a single connected output, labwc
-  maps it there automatically — the console's tab bar responds to taps. The
-  `<touch>` rule in `~/.config/labwc/rc.xml` pins the mapping explicitly:
+  tags it `ID_INPUT_TOUCHSCREEN=1`, and with a single connected output labwc maps
+  it to that output **by default** — no rule required. The console's tab bar
+  responds to taps directly (Chromium runs `--touch-events=enabled` and the tabs
+  listen for `click`/`pointerdown`, both of which a tap fires natively), so
+  compositor mouse-emulation is not needed for them.
+
+  The one thing that will break touch is a **`<touch>` rule in
+  `~/.config/labwc/rc.xml` that doesn't match reality** — labwc matches
+  `deviceName` *exactly* and resolves `mapToOutput` against the live connector.
+  This box once carried a rule for a now-absent `DSI-1` + I2C `ft5x06`; when that
+  panel was replaced, a rule naming the new device as `"QDtech MPI5001"` (from
+  `/proc/bus/input/devices`) still failed, because libinput's real name carries a
+  port suffix — `"QDtech MPI5001 (USB 1-1.1)"`. Get the exact name from
+  `sudo libinput list-devices`. The robust form for a single-output kiosk names
+  the device only and lets the default output mapping stand:
 
   ```xml
-  <touch deviceName="QDtech MPI5001" mapToOutput="HDMI-A-1" mouseEmulation="yes"/>
+  <touch deviceName="QDtech MPI5001 (USB 1-1.1)" mouseEmulation="yes"/>
   ```
 
-  `deviceName` is the libinput name (`/proc/bus/input/devices`, or
-  `libinput list-devices`); `mapToOutput` is the `wlr-randr` connector.
-  **Both must match the hardware actually attached.** A rule pinned to a
-  connector or device that is later swapped out (this box once mapped touch to
-  a now-absent `DSI-1` + I2C `ft5x06`) silently maps taps nowhere. After editing
-  rc.xml, reload without dropping the session: `kill -HUP "$(pgrep -x labwc)"`.
+  Note the `(USB 1-1.1)` is the physical port — moving the panel to another USB
+  socket changes it, so if touch dies after a re-plug, re-check the name. After
+  editing rc.xml, reload without dropping the session:
+  `kill -HUP "$(pgrep -x labwc)"` (`labwc --reconfigure` fails over SSH — it needs
+  `LABWC_PID` from inside the session).
 
 ## Why a Pi 4/5 over the old Pi 3
 
