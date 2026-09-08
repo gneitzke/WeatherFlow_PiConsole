@@ -1,7 +1,9 @@
 [Unit]
-Description=Re-associate wifi when the LAN gateway stops answering
+Description=Check LAN peer reachability and recover wifi after sustained failure
 After=network.target NetworkManager.service
 
 [Service]
 Type=oneshot
+EnvironmentFile=-/etc/default/wifi-keepalive
 ExecStart=/usr/local/sbin/wifi-keepalive.sh
+TimeoutStartSec=120
