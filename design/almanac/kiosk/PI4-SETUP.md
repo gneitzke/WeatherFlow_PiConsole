@@ -95,6 +95,38 @@ until a power-cycle. Two things guard against it:
    persistent (`Storage=persistent` in `/etc/systemd/journald.conf.d/`) so the
    NetworkManager log from a drop survives the reboot that follows it.
 
+## Display and touch
+
+The console is a fixed **1024×600 artboard**. On a native-1024×600 panel it
+renders 1:1 — the page's `--fit` computes `min(vw/1024, vh/600) = 1.0`, and it
+uses CSS `zoom` (which re-rasterizes) rather than `transform: scale`, so text
+stays crisp. A smaller panel (e.g. an 800×480 DSI) fits at ~0.78; a larger one
+scales up. Nothing to configure — it adapts to whatever the compositor reports.
+
+- **Driver:** `dtoverlay=vc4-kms-v3d` in `config.txt` (the real KMS GPU, with
+  `disable_fw_kms_setup=1` so the firmware doesn't pre-set a mode). Confirm with
+  `lsmod | grep -E 'vc4|v3d'` and `ls /dev/dri` (expect `card*` + `renderD128`).
+- **Mode:** let the panel's EDID pick its native mode; check with `wlr-randr`
+  (Wayland) — the "(preferred, current)" line is native. **Do not force a higher
+  mode.** A 1024×600 panel that also advertises 1920×1080 will *downscale* it
+  internally — blurrier than native for no gain. Keep the compositor output
+  `Scale: 1.000000` (fractional scaling blurs a pixel-art console).
+- **Touch** (e.g. an Elecrow 7" 1024×600 IPS, a USB-HID capacitive panel): udev
+  tags it `ID_INPUT_TOUCHSCREEN=1` and, with a single connected output, labwc
+  maps it there automatically — the console's tab bar responds to taps. The
+  `<touch>` rule in `~/.config/labwc/rc.xml` pins the mapping explicitly:
+
+  ```xml
+  <touch deviceName="QDtech MPI5001" mapToOutput="HDMI-A-1" mouseEmulation="yes"/>
+  ```
+
+  `deviceName` is the libinput name (`/proc/bus/input/devices`, or
+  `libinput list-devices`); `mapToOutput` is the `wlr-randr` connector.
+  **Both must match the hardware actually attached.** A rule pinned to a
+  connector or device that is later swapped out (this box once mapped touch to
+  a now-absent `DSI-1` + I2C `ft5x06`) silently maps taps nowhere. After editing
+  rc.xml, reload without dropping the session: `kill -HUP "$(pgrep -x labwc)"`.
+
 ## Why a Pi 4/5 over the old Pi 3
 
 - Wired Ethernet. Avoids the dead-onboard-radio / flaky-dongle trouble the Pi 3
