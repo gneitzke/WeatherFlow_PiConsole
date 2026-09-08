@@ -121,6 +121,21 @@ class sager_forecast():
         self.app.Sched.sager.cancel()
         self.app.Sched.sager = Clock.schedule_once(self.fetch_forecast, secondsSched)
 
+    # METAR sky groups the present-weather parser understands, clear skies
+    # (CLR/SKC/CAVOK/NCD/NSC) included - CheckWX carries these in raw_text even
+    # when it omits the parsed 'clouds' array.
+    SKY_CODES = ('CAVOK', 'CLR', 'NCD', 'NSC', 'SKC', 'FEW', 'SCT', 'BKN', 'OVC', 'VV')
+
+    @classmethod
+    def _closest_sky_metar(cls, metar_data):
+        """ raw_text of the nearest station (list pre-sorted by distance) that
+        reports a sky condition, or None. Never raises on a malformed entry. """
+        for metar in metar_data or []:
+            raw = metar.get('raw_text') if isinstance(metar, dict) else None
+            if raw and any(code in raw for code in cls.SKY_CODES):
+                return raw
+        return None
+
     def generate_forecast(self):
 
         ''' Generates the Sager Weathercaster forecast based on the current 
@@ -264,11 +279,12 @@ class sager_forecast():
         if checkwx_api.verify_response(data, 'data'):
             METAR_data = data.json()['data']
             METAR_data.sort(key=lambda data: data['position']['distance']['miles'])
-            self.sager_data['METAR'] = None
-            for METAR in METAR_data:
-                if 'clouds' in METAR:
-                    self.sager_data['METAR'] = METAR['raw_text']
-                    break
+            # Pick the closest station that reports a sky condition. CheckWX
+            # omits the 'clouds' array on a clear sky (CLR/SKC/CAVOK), so keying
+            # on it discarded valid clear reports and the forecast failed on
+            # clear days; the sky group in raw_text is what the parser below
+            # actually reads, and it recognises the clear codes too.
+            self.sager_data['METAR'] = self._closest_sky_metar(METAR_data)
         else:
             self.sager_data['Forecast'] = '[color=f05e40ff]ERROR:[/color] Missing METAR information. Forecast will be regenerated in 60 minutes'
             self.sager_data['Issued']   = sched_time.strftime(time_format)

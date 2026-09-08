@@ -990,7 +990,7 @@
 
   <!-- ═════════ SCREEN: SAGER ═════════ -->
   <main class="screen sc" id="s-sager">
-    <div class="sc-head"><span class="sc-title">Sager Weathercaster</span><span class="sc-status">Issued <span data-k="time">09:06</span></span></div>
+    <div class="sc-head"><span class="sc-title">Sager Weathercaster</span><span class="sc-status">Issued <span data-k="sagerIssued">09:06</span></span></div>
     <div class="sc-body">
       <div class="bulletin">
         <div class="bul-cap">Forecast Bulletin</div>
@@ -1436,7 +1436,7 @@
     moonrise: String, moonset: String, nextFull: String, nextNew: String,
     lightningRate: function (v) { return v.toFixed(1) + "/min"; },
     lightning3hr: r0, lightningToday: r0, lightningLast: String,
-    sagerSky: String
+    sagerSky: String, sagerIssued: String
   };
 
   /* live values that change often — count up/down between updates instead of

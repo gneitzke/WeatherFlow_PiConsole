@@ -1495,9 +1495,11 @@ class AlmanacEmitter:
             'lightningToday':    _num(_idx(Obs.get('StrikesToday'), 0)),
             'lightningLast':     lightning_last,
 
-            # Sager
+            # Sager (the Weathercaster forecast text + when it was issued; the
+            # module exposes only these two, so the card's other slots stay null)
             'sagerCode':     None,   # not sourced - no single composite dial code is exposed
             'sagerText':     _text(Sager.get('Forecast')),
+            'sagerIssued':   _text(Sager.get('Issued')),
             'sagerPressure': None,   # not sourced - no composed "<value> <trend>" string exists
             'sagerWind':     None,   # not sourced
             'sagerSky':      None,   # not sourced

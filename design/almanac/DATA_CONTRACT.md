@@ -133,6 +133,7 @@ the HTML shows an em-dash for null. Emitter converts from the app's
 
   // Sager
   "sagerCode": "G·2·3·D", "sagerText": "Fair, little temperature change...",
+  "sagerIssued": "09:06",           // when the Sager forecast was generated (Sager['Issued']); sagerCode/Pressure/Wind/Sky are not sourced (null)
   "sagerPressure": "1022.1 rising", "sagerWind": "SSW backing", "sagerSky": "Clear"
 }
 ```
