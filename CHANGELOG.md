@@ -4,6 +4,34 @@ Changes in this fork's Almanac work, newest first. The upstream WeatherFlow
 PiConsole keeps its own release notes; entries under **Core** below are fixes
 to shared upstream code that the classic console benefits from too.
 
+## 2026-09-08
+
+The Pi 4's DSI panel was replaced with a 1024×600 HDMI **capacitive
+touchscreen** (Elecrow 7"), which surfaced a set of touch/layout issues.
+
+### Console
+- Navigation tabs (Observations / Moon & Sky / Lightning / Sager) can be
+  enabled for a touch kiosk. The tab bar is hidden by default; the launcher
+  adds `tabs=1` (env `WFP_TABS=0` opts out).
+- When the tab bar is shown, the Observations screen now fits the panel: the
+  forecast chart yields its slack height, the barometer panel reflows so the
+  value/trend and both charts keep room, and the AQI category/trend wraps to a
+  full line instead of truncating ("Moderate to…"). All of it is scoped to the
+  tabbed mode, so the default single-dashboard layout is unchanged.
+
+### Kiosk
+- WiFi keepalive now probes a stable LAN **peer** (the other Pi) instead of the
+  default gateway. The gateway stays reachable while the box is isolated from
+  the rest of the LAN, so the old probe never fired during an hour-long dropout.
+  Adds a recovery cooldown, run serialization, and a post-recovery check that
+  only clears the failure count once the peer actually answers.
+- Display/touch setup documented for the new panel: 1024×600 is the console's
+  native artboard (fit 1.0), the `vc4-kms-v3d` driver and native-mode rule
+  (never force a higher mode a small panel only downscales), and the labwc
+  touch mapping — labwc matches the libinput device name exactly, and a rule
+  pinned to a connector or device that is later swapped out silently breaks
+  touch.
+
 ## 2026-09-06
 
 Two independent audits of the fork (an initial one, then an adversarial review
