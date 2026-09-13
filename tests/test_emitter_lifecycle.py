@@ -124,11 +124,11 @@ def _response(payload):
 def test_start_is_idempotent_and_stop_cancels_every_handle(make_emitter, clock):
     emitter = make_emitter(scn.all_none())
     emitter.start()
-    # 5 intervals (emit, version, aqi, alerts, forecast) + 4 boot one-shots
-    assert len(clock.events) == 9
+    # 6 intervals (emit, version, aqi, alerts, forecast, radar) + 5 boot one-shots
+    assert len(clock.events) == 11
 
     emitter.start()
-    assert len(clock.events) == 9        # re-armed, not stacked
+    assert len(clock.events) == 11       # re-armed, not stacked
 
     emitter.stop()
     assert clock.events == []            # one-shots included
@@ -173,8 +173,10 @@ def test_a_day_of_forecast_failures_stays_one_retry_chain(make_emitter, clock, m
     # a chain per failure.
     ceiling = 24 * 3600 // ae.FORECAST_RETRY_SEC + 24 + 2
     assert 600 < len(attempts) <= ceiling         # still retrying, not multiplying
-    assert list(emitter._retries) == ['forecast']
-    assert len(clock.events) == 6                 # 5 intervals + the one live retry
+    # one retry chain PER provider, never a chain per failure: with the network
+    # down, radar (also fetched) legitimately keeps its own single retry too
+    assert sorted(emitter._retries) == ['forecast', 'radar']
+    assert len(clock.events) == 8                 # 6 intervals + forecast retry + radar retry
 
     emitter.stop()
     assert clock.events == [] and emitter._retries == {}

@@ -167,3 +167,109 @@ truthful when the file itself has stopped moving. Anything but `ok` answers HTTP
 its next poll only after `render()` returned, and the server credits that mark only
 from a loopback client. The launcher's watchdog reads `renders`, because a request
 count never proved anything reached the screen.
+
+## Radar — Phase 1
+
+The nested `radar` sibling is an independent RainViewer side artifact. It never
+changes `ts`, `obsAgeSec`, or `/health`. Missing `radar` or `available:false` hides
+the Radar tab and returns an active Radar screen to Observations.
+
+```jsonc
+"radar": {
+  "available": true,
+  "reason": null, // unavailable: "no location", "compositor unavailable", "no data yet"
+  "attribution": "RainViewer", "provider": "rainviewer",
+  "center": {"lat": 47.61, "lon": -122.33}, // station coordinates
+  "zoom": 7, "viewport": {"w": 480, "h": 480},
+  "bounds": {"n": 49.36, "s": 45.80, "e": -119.69, "w": -124.97},
+  "marker": {"x": 0.5, "y": 0.5}, // normalized within the viewport
+  "metersPerPixel": 824.5, // center-latitude Web Mercator ground resolution
+  "scaleBar": {"distDisp": "50 mi", "meters": 80467.2, "pixels": 97.59, "unit": "mi"},
+  "rings": [{"label": "50 mi", "px": 97.59}, {"label": "100 mi", "px": 195.18}],
+  "frames": [
+    {"id": "1789243200", "ts": 1789243200, "url": "radar/1789243200.png", "complete": true}
+  ], // complete past frames only, oldest -> newest; nowcast ignored
+  "latest": "1789243200", "frameCount": 1,
+  "observedAt": "13:00", // emitter-formatted station-local HH:MM, via _station_tz
+  "observedTs": 1789243200, "ageSec": 300, "stale": false,
+  "fetchedAt": 1789243500, // successful manifest fetch that produced this snapshot
+  "legend": {
+    "colorId": 2, "colorName": "Universal Blue",
+    "rain": [
+      {"dbz": 5, "hex": "#92887164", "label": "Light"},
+      {"dbz": 20, "hex": "#00a3e0ff", "label": ""},
+      {"dbz": 30, "hex": "#005588ff", "label": "Moderate"},
+      {"dbz": 40, "hex": "#ffaa00ff", "label": ""},
+      {"dbz": 50, "hex": "#c10000ff", "label": "Heavy"},
+      {"dbz": 60, "hex": "#ff77ffff", "label": ""},
+      {"dbz": 65, "hex": "#ffffffff", "label": "Intense"}
+    ],
+    "snow": {"hex": "#7fbfffff", "label": "Snow"}
+  },
+  "nexrad": {"id": "KATX", "name": "Seattle", "distanceDisp": "41 mi", "bearing": "N"}
+}
+```
+
+Geometry numbers above are illustrative. `center` is the station, and `marker`
+is generally normalized even though Phase 1 centers it at `(0.5,0.5)`. Geographic
+bounds use inverse Mercator; `e < w` denotes an antimeridian crossing. Tile x
+wraps and tile y clamps at the poles. All frame timestamps and `fetchedAt` are UTC
+epoch seconds. `ageSec` is recomputed each emit from the **frame** timestamp;
+`stale` is true strictly after 1200 seconds. No browser timezone conversion.
+
+Distance units follow `Units/Distance`, as lightning does: `mi` (also legacy
+`miles`) becomes `mi`, otherwise `km`. The scale chooses the largest of
+`5,10,20,25,50,100,150,200,250` station units fitting 40% of the plate; rings use
+that distance and twice it, omitting radii beyond the half-diagonal. At extreme
+polar latitudes where none fits, the scale is zero and rings empty. `nexrad` is
+the closest of 160 bundled WSR-88D sites within 285 miles, with station-to-radar
+8-point bearing; otherwise null. This caption never gates availability.
+
+Palette RGBA values were verified against the
+[RainViewer Universal Blue CSV](https://www.rainviewer.com/files/rainviewer_api_colors_table.csv).
+The first 128 rows are rain, the second 128 snow. The single Snow key represents
+20 dBZ on the provider's separate snow ramp; snow pixels retain all their actual
+intensity-dependent colors. In particular the 5 dBZ rain stop is translucent
+`#92887164`; its alpha is preserved in both tiles and legend. The online test
+asserts every rain stop occurs in one real fetched Universal Blue tile histogram.
+
+The worker starts after 60 seconds, polls every 300 seconds, and retries failures
+after 120 seconds through the lifecycle registry. It requests 256px tiles at
+zoom 7 with palette 2 and options `1_1` (smooth, snow). PNGs are transparent
+outside echoes and atomically written into `WFP_RADAR_DIR` (default
+`~/almanac_web/radar`). That directory must be under `WFP_WEB`; the kiosk launcher
+already serves `~/almanac_web` with a `wx.json` symlink to `/tmp/wfp_data/wx.json`.
+No custom radar server route is needed.
+
+Existing timestamp-named PNGs are cache hits. Incomplete composites are withheld
+and **not persisted**, so missing tiles are retried rather than cached forever.
+Only complete frames enter the published list. Obsolete numeric PNGs are pruned
+after a replacement is ready; a total failure preserves the entire last-good
+snapshot and its files. Cold builds run sequentially with 50ms spacing and a
+rolling ceiling of 90 tile GETs/minute. Each cycle logs actual tile GET count,
+complete frames, and failed tiles; steady state downloads only new frames.
+Latitude/longitude or Pillow missing publishes the respective unavailable reason;
+no successful frame yet uses `no data yet`. Geometry/observation fields are null
+and frames/rings empty before a first successful build.
+
+The console shows a themed schematic graticule beneath the true-color PNG,
+with token-colored range rings, station marker and geodesic scale above it.
+It decodes only the latest image, replacing the displayed source only after
+success. Loading shows the basemap and “Fetching radar”; all-transparent pixels
+mean “No echoes shown” (Phase 1 does not distinguish no coverage). Stale frames
+remain visible at 0.55 opacity with their observation time and age. Image errors
+retain the previously decoded image, mark stale, and retry after 120 seconds.
+The palette and PNG are identical in light and dark modes.
+
+**Exact Phase 2 seam:** in `console_live.html`, consume the already-emitted
+complete, oldest-to-newest `frames[]`, preload their URLs, and add a
+`requestAnimationFrame` loop swapping `#rad-echo.src` (or canvas) approximately
+600ms/frame, with approximately 250ms hold on newest. Run only while `#s-radar`
+is active **and** echoes are present; otherwise idle. No emitter or contract
+change is needed. Phase 1 has no animation loop.
+
+The 480px plate requires a compact masthead while Radar is active: its repeated
+station subtitle is omitted, and an active alert banner also compacts masthead
+text. The alert remains visible. Other screens keep their existing masthead and
+layout. Headless verification uses a 1024×600 viewport at device scale factor 2,
+with all Radar content inside the 1024×568 area above the tabs.

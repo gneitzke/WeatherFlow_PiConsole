@@ -547,6 +547,55 @@
   .sun-times b { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
 
   /* ═════════ SECONDARY SCREENS ═════════ */
+
+  /* Reserve the full 480px instrument below the masthead; its station subtitle
+     is repeated in the radar rail. Other screens retain the original masthead. */
+  .page[data-screen="s-radar"] .mast-station .sub { display: none; }
+  .page[data-screen="s-radar"] .mast-row { padding-top: 2px; padding-bottom: 2px; line-height: 1; }
+  .page[data-screen="s-radar"][data-radar-alerts="on"] .mast-row { padding-top: 0; padding-bottom: 0; }
+  .page[data-screen="s-radar"][data-radar-alerts="on"] .mast-station,
+  .page[data-screen="s-radar"][data-radar-alerts="on"] .mast-clock { font-size: 18px; }
+  .page[data-screen="s-radar"][data-radar-alerts="on"] .mast-date { font-size: 13px; }
+  #s-radar .sc-head { flex-shrink: 0; }
+  .page[data-radar-alerts="on"] #s-radar .sc-head { padding-bottom: 0; }
+  #s-radar .sc-body { gap: 56px; justify-content: flex-start; }
+  .rad-plate { position: relative; flex: 0 0 480px; width: 480px; height: 480px;
+    margin: 0; border: 1px solid var(--rule); background: var(--paper); }
+  .rad-plate::before { content: ""; position: absolute; inset: 4px;
+    border: 1px solid var(--rule-faint); pointer-events: none; z-index: 3; }
+  :root:not([data-theme="night"]) .rad-plate { box-shadow: inset 0 0 0 480px rgba(38,34,24,0.035); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="paper"]):not([data-theme="light"]) .rad-plate { box-shadow: none; }
+  }
+  .rad-base, .rad-echo, .rad-over { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .rad-base { z-index: 0; }
+  .rad-echo { z-index: 1; }
+  .rad-over { z-index: 2; }
+  .rad-echo[hidden], #rad-nexrad-row[hidden], .tab[hidden] { display: none; }
+  .rad-plate[data-state="stale"] .rad-echo { opacity: .55; }
+  #rad-status[data-state="stale"] { color: var(--accent); }
+  .rad-attrib { position: absolute; right: 12px; bottom: 9px; z-index: 2;
+    font: 11.5px var(--sans); color: var(--ink-soft); }
+  .rad-base line { stroke: var(--rule-faint); stroke-width: 1; }
+  .rad-over text { fill: var(--ink-soft); font: 11.5px var(--sans); }
+  .rad-over .rad-cross { stroke: var(--rule); stroke-width: 1; }
+  .rad-over .rad-station { fill: var(--paper); stroke: var(--ink); stroke-width: 3; }
+  .rad-over .rad-dot { fill: var(--ink); }
+  .rad-over .rad-scale { fill: none; stroke: var(--ink-soft); stroke-width: 2; }
+  .rad-rail { flex: 1; min-width: 0; }
+  .rad-place { font-size: 26px; font-weight: 800; overflow-wrap: anywhere; }
+  .rad-ledger { width: 100%; }
+  .rad-ledger .lrow { flex-wrap: wrap; gap: 0 4px; }
+  .rad-ledger .lrow .k { font-size: 11.5px; letter-spacing: .07em; }
+  .rad-ledger .lrow .v { font-size: 15px; }
+  .rad-legend { margin-top: 22px; font: 13px var(--sans); }
+  .rad-legend-title { color: var(--ink-soft); font-size: 11.5px; letter-spacing: .1em;
+    text-transform: uppercase; margin-bottom: 8px; }
+  .rad-legend-row { display: flex; align-items: center; gap: 12px; min-height: 24px; }
+  .rad-swatch { width: 14px; height: 14px; border: 1px solid var(--rule); flex: 0 0 14px; }
+  .rad-dbz { width: 24px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .rad-snow { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--rule-faint); }
+
   .sc { flex-direction: column; }
   .sc-head { display: flex; justify-content: space-between; align-items: baseline;
     border-bottom: 1px solid var(--rule); padding-bottom: 6px; }
@@ -1007,6 +1056,29 @@
     </div>
   </main>
 
+  <!-- ═════════ SCREEN: RADAR ═════════ -->
+  <main class="screen sc" id="s-radar">
+    <div class="sc-head"><span class="sc-title">Radar · Reflectivity</span><span class="sc-status" id="rad-status">As of <span id="rad-asof"></span></span></div>
+    <div class="sc-body">
+      <figure class="rad-plate" id="rad-plate" data-state="loading">
+        <svg class="rad-base" id="rad-base" viewBox="0 0 480 480" aria-hidden="true"></svg>
+        <img class="rad-echo" id="rad-echo" decoding="async" alt="" hidden>
+        <svg class="rad-over" id="rad-over" viewBox="0 0 480 480" aria-label="Station, range rings and distance scale"></svg>
+        <figcaption class="rad-attrib">Radar mosaic · RainViewer</figcaption>
+      </figure>
+      <div class="rad-rail">
+        <div class="rad-place" id="rad-place"></div>
+        <div class="rad-sub sc-sub">Centered on your station</div>
+        <div class="sc-ledger rad-ledger">
+          <div class="lrow"><span class="k">Range</span><span class="dots"></span><span class="v" id="rad-range"></span></div>
+          <div class="lrow" id="rad-nexrad-row" hidden><span class="k">Nearest NEXRAD</span><span class="dots"></span><span class="v" id="rad-nexrad"></span></div>
+          <div class="lrow"><span class="k">Observed</span><span class="dots"></span><span class="v" id="rad-observed"></span></div>
+        </div>
+        <div class="rad-legend" id="rad-legend"></div>
+      </div>
+    </div>
+  </main>
+
   <!-- ————— 7-DAY OUTLOOK (Open-Meteo; hidden until fcDaily arrives) ————— -->
   <div class="outlook" id="outlook" hidden>
     <div class="ol-rule"></div>
@@ -1021,6 +1093,7 @@
       <button class="tab" data-screen="s-moon">Moon &amp; Sky</button>
       <button class="tab" data-screen="s-lightning">Lightning</button>
       <button class="tab" data-screen="s-sager">Sager</button>
+      <button class="tab" data-screen="s-radar" hidden>Radar</button>
       <span class="spacer"></span>
       <button class="tab" id="simbtn" title="Demonstrate the live lightning panel">
         <svg class="bolt-ic" width="6" height="9" viewBox="0 0 8 12" style="vertical-align:-1px"><path d="M4.6 0 L0 7 h2.8 L1.8 12 L8 4.6 H4.8 L6.2 0 Z"/></svg>
@@ -1069,6 +1142,9 @@
      1. Screen switching  (touch + click)
   ════════════════════════════════════════════════════════════ */
   function activate(id) {
+    document.querySelector(".page").dataset.screen = id;
+    var ol = $("outlook");
+    if (ol) ol.style.display = id === "s-obs" ? "" : "none";
     document.querySelectorAll(".screen").forEach(function (m) {
       m.classList.toggle("active", m.id === id);
     });
@@ -2440,6 +2516,121 @@
     catEl.style.display = (rising || falling) ? "none" : "";
   }
 
+  /* Phase 1: decode just the latest static frame. Phase 2 can preload the
+     complete oldest->newest frames here, with an active-screen-only RAF loop. */
+  var radarView = { geometry: null, colorId: null, good: null, pending: null,
+                    failed: false, clear: false, retryAt: 0, data: null };
+  function radarState() {
+    var r = radarView.data;
+    if (!r || !r.available) return;
+    var hasFrame = (r.frames || []).some(function(f) { return f.id === r.latest; });
+    var decoded = radarView.good && (radarView.good.id === r.latest || radarView.failed);
+    var state = !hasFrame || (!decoded && !radarView.failed) ? "loading" :
+                r.stale || radarView.failed ? "stale" : radarView.clear ? "clear" : "live";
+    $("rad-echo").hidden = !hasFrame || !decoded;
+    var stamp = radarView.failed && radarView.good ? radarView.good.at : r.observedAt;
+    $("rad-observed").textContent = stamp || "—";
+    var age = r.ageSec || 0;
+    if (radarView.failed && radarView.good) age += Math.max(0, r.observedTs - radarView.good.ts);
+    var status = $("rad-status");
+    status.dataset.state = state;
+    $("rad-plate").dataset.state = state;
+    status.replaceChildren();
+    if (state === "loading" || state === "clear") {
+      status.append(document.createTextNode(state === "clear" ? "No echoes shown" : "Fetching radar"));
+      var hiddenStamp = document.createElement("span");
+      hiddenStamp.id = "rad-asof"; hiddenStamp.hidden = true; hiddenStamp.textContent = stamp || "";
+      status.append(hiddenStamp);
+    } else {
+      status.append(document.createTextNode("As of "));
+      var asof = document.createElement("span"); asof.id = "rad-asof"; asof.textContent = stamp || "—";
+      status.append(asof);
+      if (state === "stale") status.append(document.createTextNode(" · " + Math.floor(age / 60) + " min old"));
+    }
+  }
+  function renderRadar(d) {
+    var r = d.radar, tab = document.querySelector('.tab[data-screen="s-radar"]');
+    tab.hidden = !(r && r.available);
+    radarView.data = r;
+    document.querySelector(".page").dataset.radarAlerts = d.alerts && d.alerts.length ? "on" : "off";
+    if (tab.hidden) {
+      if ($("s-radar").classList.contains("active")) activate("s-obs");
+      radarView.pending = null;
+      return;
+    }
+    var key = JSON.stringify([r.zoom, r.metersPerPixel, r.bounds, r.marker, r.rings, r.scaleBar]);
+    if (radarView.geometry !== key) {
+      radarView.geometry = key;
+      var base = $("rad-base"), over = $("rad-over"); base.replaceChildren(); over.replaceChildren();
+      for (var i = 80; i < 480; i += 80) {
+        el("line", {x1:i, y1:0, x2:i, y2:480}, base);
+        el("line", {x1:0, y1:i, x2:480, y2:i}, base);
+      }
+      var x = r.marker.x * 480, y = r.marker.y * 480;
+      (r.rings || []).forEach(function (ring) {
+        el("circle", {class:"ring", cx:x, cy:y, r:ring.px}, over);
+        if (y - ring.px > 14) el("text", {x:x+8, y:y-ring.px-5}, over).textContent = ring.label;
+      });
+      el("path", {class:"rad-cross", d:"M"+(x-18)+","+y+"h36 M"+x+","+(y-18)+"v36"}, over);
+      el("circle", {class:"rad-station", cx:x, cy:y, r:6}, over);
+      el("circle", {class:"rad-dot", cx:x, cy:y, r:2}, over);
+      if (r.scaleBar && r.scaleBar.pixels) {
+        var end = 20 + r.scaleBar.pixels;
+        el("path", {class:"rad-scale", d:"M20,432v8H"+end+"v-8"}, over);
+        el("text", {x:20, y:457}, over).textContent = r.scaleBar.distDisp;
+      }
+    }
+    $("rad-place").textContent = d.station || "—";
+    var rings = r.rings || [];
+    $("rad-range").textContent = rings.length ? rings[rings.length-1].label : r.scaleBar.distDisp;
+    $("rad-observed").textContent = r.observedAt || "—";
+    $("rad-nexrad-row").hidden = !r.nexrad;
+    if (r.nexrad) $("rad-nexrad").textContent = r.nexrad.id + " · " + r.nexrad.distanceDisp + " " + r.nexrad.bearing;
+    if (r.legend && radarView.colorId !== r.legend.colorId) {
+      radarView.colorId = r.legend.colorId;
+      var legend = $("rad-legend"); legend.replaceChildren();
+      var title = document.createElement("div"); title.className = "rad-legend-title";
+      title.textContent = "Reflectivity · dBZ"; legend.append(title);
+      function legendRow(stop, snow) {
+        var row = document.createElement("div"); row.className = "rad-legend-row" + (snow ? " rad-snow" : "");
+        var swatch = document.createElement("span"); swatch.className = "rad-swatch"; swatch.style.backgroundColor = stop.hex;
+        var dbz = document.createElement("span"); dbz.className = "rad-dbz"; dbz.textContent = snow ? "" : stop.dbz;
+        var label = document.createElement("span"); label.textContent = stop.label;
+        row.append(swatch, dbz, label); legend.append(row);
+      }
+      r.legend.rain.forEach(function(stop) { legendRow(stop, false); });
+      legendRow(r.legend.snow, true);
+    }
+    var frame = (r.frames || []).find(function (f) { return f.id === r.latest; });
+    if (frame && (!radarView.good || radarView.good.id !== frame.id) &&
+        radarView.pending !== frame.id && Date.now() >= radarView.retryAt) {
+      var id = frame.id, image = new Image();
+      radarView.pending = id;
+      image.decoding = "async";
+      image.onload = function () {
+        if (radarView.pending !== id) return;
+        // Inspect alpha once per decoded frame. All transparent means clear,
+        // not no coverage. Nothing is recolored or filtered.
+        var canvas = document.createElement("canvas"); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+        var ctx = canvas.getContext("2d", {willReadFrequently:true}); ctx.drawImage(image, 0, 0);
+        var pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data, clear = true;
+        for (var a = 3; a < pixels.length; a += 4) if (pixels[a]) { clear = false; break; }
+        var current = radarView.data;
+        radarView.good = {id:id, url:frame.url, ts:frame.ts, at:current.observedAt};
+        radarView.clear = clear; radarView.failed = false; radarView.pending = null; radarView.retryAt = 0;
+        var echo = $("rad-echo"); echo.src = frame.url; echo.hidden = false;
+        radarState();
+      };
+      image.onerror = function () {
+        if (radarView.pending !== id) return;
+        radarView.pending = null; radarView.failed = true; radarView.retryAt = Date.now() + 120000;
+        radarState();  // displayed img keeps its previously decoded source
+      };
+      image.src = frame.url;
+    }
+    radarState();
+  }
+
   function render(data) {
     lastData = data;
     renderText(data);
@@ -2448,6 +2639,7 @@
     renderGauges(data);
     renderAir(data);
     renderSky(data);
+    renderRadar(data);
     Light.fromData(data);
   }
 

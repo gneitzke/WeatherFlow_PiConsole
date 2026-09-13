@@ -31,6 +31,7 @@ from kivy.clock  import Clock
 from collections import namedtuple
 from datetime import datetime, timedelta, timezone
 import json
+import io
 import math
 import os
 import re
@@ -53,6 +54,26 @@ AQI_CHECK_INTERVAL     = 600   # seconds (10 min) — refresh air quality; short
 ALERTS_CHECK_INTERVAL  = 900   # seconds (15 min) — NWS alerts change slowly; be gentle on api.weather.gov
 FORECAST_CHECK_INTERVAL = 3600 # seconds (1 h) — the daily outlook barely moves intra-hour
 FORECAST_RETRY_SEC      = 120  # seconds — boot retry cadence until the FIRST forecast succeeds
+RADAR_CHECK_INTERVAL = 300
+RADAR_RETRY_SEC = 120
+RADAR_STALE_SEC = 1200
+RADAR_ZOOM = 7
+RADAR_VIEWPORT_PX = 480
+RADAR_COLOR = 2
+RADAR_TILE_OPTS = "1_1"
+RADAR_MANIFEST_URL = "https://api.rainviewer.com/public/weather-maps.json"
+RADAR_DIR = os.environ.get("WFP_RADAR_DIR", os.path.expanduser("~/almanac_web/radar"))
+# Verified against https://www.rainviewer.com/files/rainviewer_api_colors_table.csv
+# RGBA, including the translucent 5 dBZ stop. Snow key represents 20 dBZ;
+# the provider uses a separate intensity-dependent blue ramp for snow.
+_RADAR_LEGEND = {
+    'colorId': 2, 'colorName': 'Universal Blue',
+    'rain': ((5, '#92887164', 'Light'), (20, '#00a3e0ff', ''),
+             (30, '#005588ff', 'Moderate'), (40, '#ffaa00ff', ''),
+             (50, '#c10000ff', 'Heavy'), (60, '#ff77ffff', ''),
+             (65, '#ffffffff', 'Intense')),
+    'snow': ('#7fbfffff', 'Snow'),
+}
 FC_STALE_SEC           = 86400 # seconds (24 h) without a successful forecast fetch -> fcStale (band hides)
 RAIN_WINDOW_SEC        = 600   # seconds (10 min) — light rain is bridged across the sensor's dry minutes
 ALERTS_TIMEOUT         = 20    # seconds — socket timeout for the alerts fetch
@@ -314,6 +335,233 @@ def _since_ago_text(strike_delta_t):
     return f'{n1} {u1} ago'
 
 
+# NOAA NCEI HOMR station inventory, verified 2026-09-12:
+# https://www.ncei.noaa.gov/access/homr/file/nexrad-stations.txt
+# 160 WSR-88D sites; excludes TDWR, test radars KCRI/KOUN, retired KLIX (KHDC replaces it).
+_NEXRAD_SITES = {
+    'KABR': (45.455833, -98.413333, 'Aberdeen'),
+    'KABX': (35.149722, -106.82388, 'Albuquerque'),
+    'KAKQ': (36.98405, -77.007361, 'Norfolk Rich'),
+    'KAMA': (35.233333, -101.70927, 'Amarillo'),
+    'KAMX': (25.611083, -80.412667, 'Miami'),
+    'KAPX': (44.90635, -84.719533, 'Gaylord'),
+    'KARX': (43.822778, -91.191111, 'La Crosse'),
+    'KATX': (48.194611, -122.49569, 'Seattle'),
+    'KBBX': (39.495639, -121.63161, 'Beale Afb'),
+    'KBGM': (42.199694, -75.984722, 'Binghamton'),
+    'KBHX': (40.498583, -124.29216, 'Eureka'),
+    'KBIS': (46.770833, -100.76055, 'Bismarck'),
+    'KBLX': (45.853778, -108.6068, 'Billings'),
+    'KBMX': (33.172417, -86.770167, 'Birmingham'),
+    'KBOX': (41.955778, -71.136861, 'Boston'),
+    'KBRO': (25.916, -97.418967, 'Brownsville'),
+    'KBUF': (42.948789, -78.736781, 'Buffalo'),
+    'KBYX': (24.5975, -81.703167, 'Key West'),
+    'KCAE': (33.948722, -81.118278, 'Columbia'),
+    'KCBW': (46.03925, -67.806431, 'Houlton'),
+    'KCBX': (43.490217, -116.23603, 'Boise'),
+    'KCCX': (40.923167, -78.003722, 'State College'),
+    'KCLE': (41.413217, -81.859867, 'Cleveland'),
+    'KCLX': (32.655528, -81.042194, 'Charleston'),
+    'KCRP': (27.784017, -97.51125, 'Corpus Christi'),
+    'KCXX': (44.511, -73.166431, 'Burlington'),
+    'KCYS': (41.151919, -104.80603, 'Cheyenne'),
+    'KDAX': (38.501111, -121.67783, 'Sacramento'),
+    'KDDC': (37.760833, -99.968889, 'Dodge City'),
+    'KDFX': (29.273139, -100.28033, 'Laughlin Afb'),
+    'KDGX': (32.279944, -89.984444, 'Jackson Brandon'),
+    'KDIX': (39.947089, -74.410731, 'Philadelphia'),
+    'KDLH': (46.836944, -92.209722, 'Duluth'),
+    'KDMX': (41.7312, -93.722869, 'Des Moines'),
+    'KDOX': (38.825767, -75.440117, 'Dover Afb'),
+    'KDTX': (42.7, -83.471667, 'Detroit'),
+    'KDVN': (41.611667, -90.580833, 'Davenport'),
+    'KDYX': (32.5385, -99.254333, 'Dyess Afb'),
+    'KEAX': (38.81025, -94.264472, 'Kansas City'),
+    'KEMX': (31.89365, -110.63025, 'Tucson'),
+    'KENX': (42.586556, -74.064083, 'Albany'),
+    'KEOX': (31.460556, -85.459389, 'Fort Rucker'),
+    'KEPZ': (31.873056, -106.698, 'El Paso'),
+    'KESX': (35.70135, -114.89165, 'Las Vegas'),
+    'KEVX': (30.565033, -85.921667, 'Eglin Afb'),
+    'KEWX': (29.704056, -98.028611, 'Austin San Antonio'),
+    'KEYX': (35.09785, -117.56075, 'Edwards'),
+    'KFCX': (37.0244, -80.273969, 'Roanoke'),
+    'KFDR': (34.362194, -98.976667, 'Altus Afb'),
+    'KFDX': (34.634167, -103.61888, 'Cannon Afb'),
+    'KFFC': (33.36355, -84.56595, 'Atlanta'),
+    'KFSD': (43.587778, -96.729444, 'Sioux Falls'),
+    'KFSX': (34.574333, -111.19844, 'Flagstaff'),
+    'KFTG': (39.786639, -104.5458, 'Denver Front Range Ap'),
+    'KFWS': (32.573, -97.30315, 'Dallas'),
+    'KGGW': (48.206361, -106.62469, 'Glasgow'),
+    'KGJX': (39.062169, -108.21376, 'Grand Junction'),
+    'KGLD': (39.366944, -101.70027, 'Goodland'),
+    'KGRB': (44.498633, -88.111111, 'Green Bay'),
+    'KGRK': (30.721833, -97.382944, 'Fort Hood'),
+    'KGRR': (42.893889, -85.544889, 'Grand Rapids'),
+    'KGSP': (34.883306, -82.219833, 'Greer'),
+    'KGWX': (33.896917, -88.329194, 'Columbus Afb'),
+    'KGYX': (43.891306, -70.256361, 'Portland'),
+    'KHDC': (30.5193, -90.4074, 'Hammond Municipal Airport'),
+    'KHDX': (33.077, -106.12003, 'Holloman Afb'),
+    'KHGX': (29.4719, -95.078733, 'Houston'),
+    'KHNX': (36.314181, -119.63213, 'San Joaquin Valley'),
+    'KHPX': (36.736972, -87.285583, 'Fort Campbell'),
+    'KHTX': (34.930556, -86.083611, 'Huntsville'),
+    'KICT': (37.654444, -97.443056, 'Wichita'),
+    'KICX': (37.59105, -112.86218, 'Cedar City'),
+    'KILN': (39.420483, -83.82145, 'Cincinnati'),
+    'KILX': (40.1505, -89.336792, 'Lincoln'),
+    'KIND': (39.7075, -86.280278, 'Indianapolis'),
+    'KINX': (36.175131, -95.564161, 'Tulsa'),
+    'KIWA': (33.289233, -111.66991, 'Phoenix'),
+    'KIWX': (41.358611, -85.7, 'Fort Wayne'),
+    'KJAX': (30.484633, -81.7019, 'Jacksonville'),
+    'KJGX': (32.675683, -83.350833, 'Robins Afb'),
+    'KJKL': (37.590833, -83.313056, 'Jackson'),
+    'KLBB': (33.654139, -101.81416, 'Lubbock'),
+    'KLCH': (30.125306, -93.215889, 'Lake Charles'),
+    'KLGX': (47.116944, -124.10666, 'Langley Hill Nw Washington'),
+    'KLNX': (41.957944, -100.57622, 'North Platte'),
+    'KLOT': (41.604444, -88.084444, 'Chicago'),
+    'KLRX': (40.73955, -116.8027, 'Elko'),
+    'KLSX': (38.698611, -90.682778, 'St Louis'),
+    'KLTX': (33.98915, -78.429108, 'Wilmington'),
+    'KLVX': (37.975278, -85.943889, 'Louisville'),
+    'KLWX': (38.976111, -77.4875, 'Sterling'),
+    'KLZK': (34.8365, -92.262194, 'Little Rock'),
+    'KMAF': (31.943461, -102.18925, 'Midland Odessa'),
+    'KMAX': (42.081169, -122.71736, 'Medford'),
+    'KMBX': (48.393056, -100.86444, 'Minot Afb'),
+    'KMHX': (34.775908, -76.876189, 'Morehead City'),
+    'KMKX': (42.9679, -88.550667, 'Milwaukee'),
+    'KMLB': (28.113194, -80.654083, 'Melbourne'),
+    'KMOB': (30.679444, -88.24, 'Mobile'),
+    'KMPX': (44.848889, -93.565528, 'Minneapolis'),
+    'KMQT': (46.531111, -87.548333, 'Marquette'),
+    'KMRX': (36.168611, -83.401944, 'Knoxville'),
+    'KMSX': (47.041, -113.98622, 'Missoula'),
+    'KMTX': (41.262778, -112.44777, 'Salt Lake City'),
+    'KMUX': (37.155222, -121.89844, 'San Francisco'),
+    'KMVX': (47.527778, -97.325556, 'Grand Forks'),
+    'KMXX': (32.53665, -85.78975, 'Maxwell Afb'),
+    'KNKX': (32.919017, -117.0418, 'San Diego'),
+    'KNQA': (35.344722, -89.873333, 'Memphis'),
+    'KOAX': (41.320369, -96.366819, 'Omaha'),
+    'KOHX': (36.247222, -86.5625, 'Nashville'),
+    'KOKX': (40.865528, -72.863917, 'New York City'),
+    'KOTX': (47.680417, -117.62677, 'Spokane'),
+    'KPAH': (37.068333, -88.771944, 'Paducah'),
+    'KPBZ': (40.531717, -80.217967, 'Pittsburgh'),
+    'KPDT': (45.69065, -118.85293, 'Pendleton'),
+    'KPOE': (31.155278, -92.976111, 'Fort Polk'),
+    'KPUX': (38.45955, -104.18135, 'Pueblo'),
+    'KRAX': (35.665519, -78.48975, 'Raleigh Durham'),
+    'KRGX': (39.754056, -119.46202, 'Reno'),
+    'KRIW': (43.066089, -108.4773, 'Riverton'),
+    'KRLX': (38.311111, -81.722778, 'Charleston'),
+    'KRTX': (45.715039, -122.965, 'Portland'),
+    'KSFX': (43.1056, -112.68613, 'Pocatello'),
+    'KSGF': (37.235239, -93.400419, 'Springfield'),
+    'KSHV': (32.450833, -93.84125, 'Shreveport'),
+    'KSJT': (31.371278, -100.4925, 'San Angelo'),
+    'KSOX': (33.817733, -117.636, 'Santa Ana Mountains'),
+    'KSRX': (35.290417, -94.361889, 'Fort Smith'),
+    'KTBW': (27.7055, -82.401778, 'Tampa'),
+    'KTFX': (47.459583, -111.38533, 'Great Falls'),
+    'KTLH': (30.397583, -84.328944, 'Tallahassee'),
+    'KTLX': (35.333361, -97.277761, 'Oklahoma City'),
+    'KTWX': (38.99695, -96.23255, 'Topeka'),
+    'KTYX': (43.755694, -75.679861, 'Fort Drum'),
+    'KUDX': (44.124722, -102.83, 'Rapid City'),
+    'KUEX': (40.320833, -98.441944, 'Hastings'),
+    'KVAX': (30.890278, -83.001806, 'Moody Afb'),
+    'KVBX': (34.83855, -120.39791, 'Vandenberg Afb'),
+    'KVNX': (36.740617, -98.127717, 'Vance Afb'),
+    'KVTX': (34.412017, -119.17875, 'Los Angeles'),
+    'KVWX': (38.26025, -87.724528, 'Evansville'),
+    'KYUX': (32.495281, -114.65671, 'Yuma'),
+    'LPLA': (38.73028, -27.32167, 'Lajes Ab'),
+    'PABC': (60.791944, -161.87638, 'Bethel Faa'),
+    'PACG': (56.852778, -135.52916, 'Sitka'),
+    'PAEC': (64.511389, -165.295, 'Nome'),
+    'PAHG': (60.725914, -151.35146, 'Anchorage'),
+    'PAIH': (59.460767, -146.30344, 'Middleton Island'),
+    'PAKC': (58.679444, -156.62944, 'King Salmon'),
+    'PAPD': (65.035114, -147.50143, 'Fairbanks'),
+    'PGUA': (13.455833, 144.811111, 'Andersen Afb Agana'),
+    'PHKI': (21.893889, -159.5525, 'South Kauai'),
+    'PHKM': (20.125278, -155.77777, 'Kamuela'),
+    'PHMO': (21.132778, -157.18027, 'Molokai'),
+    'PHWA': (19.095, -155.56888, 'South Shore'),
+    'RKJK': (35.924167, 126.622222, 'Kunsan'),
+    'RKSG': (37.207569, 127.285561, 'Camp Humphreys'),
+    'RODN': (26.3078, 127.903469, 'Kadena'),
+    'TJUA': (18.115667, -66.078167, 'San Juan'),
+}
+
+
+def _radar_viewport(lat, lon, zoom, size):
+    """Pure Web Mercator crop geometry; offsets refer to unwrapped world pixels."""
+    lat = max(-85.05112878, min(85.05112878, lat))
+    n = 2 ** zoom
+    world = n * 256
+    cx = (lon + 180) / 360 * world
+    cy = (1 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2 * world
+    left, top = cx - size / 2, cy - size / 2
+    tiles = [(tx % n, ty, int(tx * 256 - left), int(ty * 256 - top))
+             for ty in range(max(0, math.floor(top / 256)),
+                             min(n, math.ceil((top + size) / 256)))
+             for tx in range(math.floor(left / 256), math.ceil((left + size) / 256))]
+    def latitude(y):
+        return math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / world))))
+    def longitude(x):
+        return (x / world * 360) % 360 - 180
+    bounds = dict(n=latitude(top), s=latitude(top + size),
+                  e=longitude(left + size), w=longitude(left))
+    return tiles, 156543.03392 * math.cos(math.radians(lat)) / n, bounds, (cx - left, cy - top)
+
+
+def _radar_distance_unit(config):
+    # Same Units/Distance setting used by observation_format.units for lightning.
+    return 'mi' if str(_cfg(config, 'Units', 'Distance') or '').lower() in ('mi', 'miles') else 'km'
+
+
+def _radar_scale(mpp, size, unit):
+    factor = 1609.344 if unit == 'mi' else 1000
+    choices = [d for d in (5, 10, 20, 25, 50, 100, 150, 200, 250)
+               if d * factor / mpp <= size * .4]
+    if not choices:  # extreme polar latitudes: no listed distance fits
+        return dict(distDisp='0 ' + unit, meters=0, pixels=0, unit=unit), ()
+    dist = max(choices)
+    pixels = dist * factor / mpp
+    bar = dict(distDisp=f'{dist} {unit}', meters=dist * factor, pixels=pixels, unit=unit)
+    rings = tuple(dict(label=f'{dist * multiple} {unit}', px=pixels * multiple)
+                  for multiple in (1, 2) if pixels * multiple <= size / math.sqrt(2))
+    return bar, rings
+
+
+def _radar_nexrad(lat, lon, unit):
+    """Nearest WSR-88D, caption only; bearing is station -> radar."""
+    nearest = None
+    a = math.radians(lat)
+    for ident, (site_lat, site_lon, name) in _NEXRAD_SITES.items():
+        b, dl = math.radians(site_lat), math.radians(site_lon - lon)
+        h = math.sin((b - a) / 2) ** 2 + math.cos(a) * math.cos(b) * math.sin(dl / 2) ** 2
+        meters = 6371008.8 * 2 * math.asin(math.sqrt(min(1, h)))
+        if nearest is None or meters < nearest[0]:
+            bearing = math.degrees(math.atan2(math.sin(dl) * math.cos(b),
+                                  math.cos(a) * math.sin(b) - math.sin(a) * math.cos(b) * math.cos(dl))) % 360
+            nearest = meters, ident, name, bearing
+    if nearest is None or nearest[0] > 285 * 1609.344:
+        return None
+    meters, ident, name, bearing = nearest
+    dist = round(meters / (1609.344 if unit == 'mi' else 1000))
+    return dict(id=ident, name=name, distanceDisp=f'{dist} {unit}',
+                bearing=('N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW')[int((bearing + 22.5) / 45) % 8])
+
+
 # ==============================================================================
 # PROVIDER SNAPSHOTS
 # ==============================================================================
@@ -323,6 +571,11 @@ def _since_ago_text(strike_delta_t):
 # previous peak/trend). Each worker therefore builds one COMPLETE immutable
 # result locally and publishes it with a single attribute assignment, and the
 # tick reads that one reference once.
+_RadarResult = namedtuple('_RadarResult',
+    'available reason frames latest ts_frame center zoom mpp bounds scalebar rings nexrad ts_fetch')
+_RADAR_NONE = _RadarResult(False, 'no data yet', (), None, None, None, None, None,
+                           None, None, None, None, None)
+
 _AqiResult = namedtuple('_AqiResult',
                         'aqi category pm25 ts forecast peak peak_time fc_cat trend trend_text')
 _AQI_NONE = _AqiResult(None, None, None, None, (), None, None, None, None, None)
@@ -368,6 +621,8 @@ class AlmanacEmitter:
         self.output_path = output_path
         self.interval    = interval
         self._event      = None
+        self._radar_result = _RADAR_NONE
+        self._radar_tile_times = []  # rolling rate limit, also shared across retries
         # scheduling registry: EVERY handle we hand to Clock (intervals and
         # one-shots alike) so stop() can cancel all of them, plus the guards
         # that keep one failing provider from stacking work.
@@ -395,6 +650,19 @@ class AlmanacEmitter:
     _ver_result    = _VER_NONE      # GitHub release check
 
     # Snapshot fields, readable/writable one at a time (see _snapshot_field).
+    _radar_available = _snapshot_field('_radar_result', 'available')
+    _radar_reason = _snapshot_field('_radar_result', 'reason')
+    _radar_frames = _snapshot_field('_radar_result', 'frames')
+    _radar_latest = _snapshot_field('_radar_result', 'latest')
+    _radar_ts_frame = _snapshot_field('_radar_result', 'ts_frame')
+    _radar_center = _snapshot_field('_radar_result', 'center')
+    _radar_zoom = _snapshot_field('_radar_result', 'zoom')
+    _radar_mpp = _snapshot_field('_radar_result', 'mpp')
+    _radar_bounds = _snapshot_field('_radar_result', 'bounds')
+    _radar_scalebar = _snapshot_field('_radar_result', 'scalebar')
+    _radar_rings = _snapshot_field('_radar_result', 'rings')
+    _radar_nexrad = _snapshot_field('_radar_result', 'nexrad')
+    _radar_ts_fetch = _snapshot_field('_radar_result', 'ts_fetch')
     _aqi            = _snapshot_field('_aqi_result', 'aqi')
     _aqi_category   = _snapshot_field('_aqi_result', 'category')
     _aqi_pm25       = _snapshot_field('_aqi_result', 'pm25')
@@ -440,6 +708,8 @@ class AlmanacEmitter:
             # 7-day outlook: staggered after alerts, then hourly
             self._schedule(self._check_forecast, 50)
             self._schedule(self._check_forecast, FORECAST_CHECK_INTERVAL, interval=True)
+            self._schedule(self._check_radar, 60)
+            self._schedule(self._check_radar, RADAR_CHECK_INTERVAL, interval=True)
             return self._event
 
     def stop(self):
@@ -516,6 +786,116 @@ class AlmanacEmitter:
             handle = self._schedule(_retry, timeout)
             if handle is not None:
                 self._retries[key] = handle
+
+    def _check_radar(self, _dt=None):
+        self._spawn('radar', self._do_radar)
+
+    def _do_radar(self):
+        """Build complete, self-versioned PNGs off-thread; keep last-good on failure."""
+        try:
+            import urllib.request
+            import urllib.error
+            config = getattr(self.app, 'config', {}) or {}
+            lat = _num(_cfg(config, 'Station', 'Latitude'))
+            lon = _num(_cfg(config, 'Station', 'Longitude'))
+            if lat is None or lon is None or not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                self._radar_result = _RADAR_NONE._replace(reason='no location')
+                return
+            try:
+                from PIL import Image
+            except ImportError:
+                self._radar_result = _RADAR_NONE._replace(reason='compositor unavailable')
+                return
+            def fetch(url):
+                req = urllib.request.Request(url, headers={'User-Agent': 'WeatherFlow-PiConsole-almanac'})
+                with urllib.request.urlopen(req, timeout=25) as response:
+                    return response.read()
+            manifest = json.loads(fetch(RADAR_MANIFEST_URL))
+            host = manifest['host'].rstrip('/')
+            past = sorted({int(f['time']): f['path'] for f in manifest['radar']['past']}.items())
+            fetched = time.time()
+            tiles, mpp, bounds, _ = _radar_viewport(lat, lon, RADAR_ZOOM, RADAR_VIEWPORT_PX)
+            unit = _radar_distance_unit(config)
+            bar, rings = _radar_scale(mpp, RADAR_VIEWPORT_PX, unit)
+            os.makedirs(RADAR_DIR, exist_ok=True)
+            frames, tile_gets, failures = [], 0, 0
+            for ts, path in past:
+                ident = str(ts)
+                target = os.path.join(RADAR_DIR, ident + '.png')
+                if not os.path.isfile(target):
+                    with Image.new('RGBA', (RADAR_VIEWPORT_PX, RADAR_VIEWPORT_PX), (0, 0, 0, 0)) as composite:
+                        complete = True
+                        for tx, ty, x, y in tiles:
+                            # Cold starts can need 117 tiles. Keep even that burst
+                            # below 100 GETs/minute; steady-state needs only 9-18.
+                            now = time.monotonic()
+                            self._radar_tile_times = [t for t in self._radar_tile_times if now - t < 60]
+                            if len(self._radar_tile_times) >= 90:
+                                time.sleep(max(0, 60 - (now - self._radar_tile_times[0])))
+                                now = time.monotonic()
+                                self._radar_tile_times = [t for t in self._radar_tile_times if now - t < 60]
+                            self._radar_tile_times.append(now)
+                            tile_gets += 1
+                            try:
+                                raw = fetch(f'{host}{path}/256/{RADAR_ZOOM}/{tx}/{ty}/{RADAR_COLOR}/{RADAR_TILE_OPTS}.png')
+                            except (urllib.error.URLError, TimeoutError, OSError):
+                                complete = False
+                                failures += 1
+                                continue
+                            finally:
+                                time.sleep(.05)
+                            with Image.open(io.BytesIO(raw)) as tile:
+                                if tile.size != (256, 256):
+                                    raise ValueError('unexpected radar tile size')
+                                # No alpha mask: preserve provider RGBA, don't square alpha.
+                                composite.paste(tile.convert('RGBA'), (x, y))
+                        if not complete:
+                            continue  # incomplete crops must never become permanent cache hits
+                        tmp = f'{target}.tmp.{os.getpid()}'
+                        try:
+                            composite.save(tmp, format='PNG')
+                            os.replace(tmp, target)  # same atomic publication pattern as _write_atomic
+                        finally:
+                            if os.path.exists(tmp):
+                                os.unlink(tmp)
+                frames.append(dict(id=ident, ts=ts, url=f'radar/{ident}.png', complete=True))
+            Logger.info(f'almanac_emit: radar cycle tile_GETs={tile_gets} complete={len(frames)} failed_tiles={failures}')
+            if failures:
+                Logger.warning(f'almanac_emit: radar missing {failures} tiles; incomplete frames withheld')
+                self._schedule_retry('radar', self._check_radar, RADAR_RETRY_SEC)
+            if not frames:
+                if not failures:
+                    raise ValueError('no complete radar frames')
+                return
+            # Retain last-good files during total outages; only prune after a
+            # replacement is ready, and only numeric PNGs owned by this provider.
+            current_ids = {str(ts) for ts, _ in past}
+            for name in os.listdir(RADAR_DIR):
+                if re.fullmatch(r'[0-9]+\.png', name) and name[:-4] not in current_ids:
+                    os.unlink(os.path.join(RADAR_DIR, name))
+            newest = frames[-1]
+            self._radar_result = _RadarResult(True, None, tuple(frames), newest['id'], newest['ts'],
+                dict(lat=lat, lon=lon), RADAR_ZOOM, mpp, bounds, bar, rings,
+                _radar_nexrad(lat, lon, unit), fetched)
+        except Exception as error:  # radar is a side artifact, never engine health
+            Logger.warning(f'almanac_emit: radar fetch failed - {error}')
+            self._schedule_retry('radar', self._check_radar, RADAR_RETRY_SEC)
+
+    @staticmethod
+    def _radar_payload(snap, now, tz):
+        age = int(now - snap.ts_frame) if snap.ts_frame is not None else None
+        return dict(available=snap.available, reason=snap.reason,
+            attribution='RainViewer', provider='rainviewer', center=snap.center,
+            zoom=snap.zoom or RADAR_ZOOM, viewport=dict(w=RADAR_VIEWPORT_PX, h=RADAR_VIEWPORT_PX),
+            bounds=snap.bounds, marker=dict(x=.5, y=.5), metersPerPixel=snap.mpp,
+            scaleBar=snap.scalebar, rings=list(snap.rings or ()), frames=list(snap.frames),
+            latest=snap.latest, frameCount=len(snap.frames),
+            observedAt=datetime.fromtimestamp(snap.ts_frame, tz).strftime('%H:%M') if snap.ts_frame is not None else None,
+            observedTs=snap.ts_frame, ageSec=age, stale=snap.ts_frame is not None and now - snap.ts_frame > RADAR_STALE_SEC,
+            fetchedAt=snap.ts_fetch, nexrad=snap.nexrad,
+            legend=dict(colorId=_RADAR_LEGEND['colorId'], colorName=_RADAR_LEGEND['colorName'],
+                rain=[dict(dbz=d, hex=h, label=l) for d, h, l in _RADAR_LEGEND['rain']],
+                snow=dict(zip(('hex', 'label'), _RADAR_LEGEND['snow']))))
 
     def _check_version(self, _dt=None):
         """ Kick off a non-blocking GitHub version check on a daemon thread so a
@@ -1342,6 +1722,7 @@ class AlmanacEmitter:
         aqi_snap    = self._aqi_result
         fc_snap     = self._fc_result
         alerts_snap = self._alerts_result
+        radar_snap  = self._radar_result
         ver_snap    = self._ver_result
         fc_rows   = self._unify_today(
                         self._fc_daily_current(now_local.strftime('%Y-%m-%d'), fc_snap.daily),
@@ -1353,6 +1734,7 @@ class AlmanacEmitter:
                   else self._process_alerts(alerts_snap.features, now, tz))
 
         payload = {
+            'radar': self._radar_payload(radar_snap, now, tz),
             'ts':      int(now),                     # engine heartbeat ONLY - see obsAgeSec
             'obsTs':     int(obs_ts) if obs_ts is not None else None,
             'obsAgeSec': obs_age,                    # age of the newest OUTDOOR observation
