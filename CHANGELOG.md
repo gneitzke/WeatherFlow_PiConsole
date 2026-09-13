@@ -4,6 +4,28 @@ Changes in this fork's Almanac work, newest first. The upstream WeatherFlow
 PiConsole keeps its own release notes; entries under **Core** below are fixes
 to shared upstream code that the classic console benefits from too.
 
+## 2026-09-12
+
+### Console
+- **New Radar tab.** A regional radar mosaic from RainViewer, centered on the
+  station so it works anywhere on Earth (not just the US). The echoes keep
+  RainViewer's true reflectivity colors with a real dBZ scale and snow shown
+  distinctly from rain — the one deliberately bordered exception inside the
+  four-pigment console — framed as an instrument with a console-drawn basemap
+  (range rings, scale bar, station marker), light and dark both first-class.
+  Honest states: fetching / no echoes shown / stale; the tab hides where there
+  is no location. Zoom adapts to hold a consistent ~256 km view at any latitude
+  (clamped to the free tier). The emitter keeps only the latest frame current
+  when the tab is unwatched and builds the full history only when it's been
+  viewed — an idle radar tab costs one frame's fetch, not thirteen. Radar runs
+  off-thread and never affects engine health. (Animated loop is a Phase 2 add.)
+
+### Core (shared with the classic console)
+- Sager Weathercaster no longer fails on a clear sky: it keyed on CheckWX's
+  parsed `clouds` array, which is omitted for CLR/SKC, so on a clear day the
+  forecast errored with "Missing METAR cloud information." It now selects the
+  nearest station whose raw METAR carries a sky group (clear codes included).
+
 ## 2026-09-08
 
 The Pi 4's DSI panel was replaced with a 1024×600 HDMI **capacitive
