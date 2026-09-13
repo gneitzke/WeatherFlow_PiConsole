@@ -168,7 +168,7 @@ its next poll only after `render()` returned, and the server credits that mark o
 from a loopback client. The launcher's watchdog reads `renders`, because a request
 count never proved anything reached the screen.
 
-## Radar — Phase 1
+## Radar — Phase 1.5
 
 The nested `radar` sibling is an independent RainViewer side artifact. It never
 changes `ts`, `obsAgeSec`, or `/health`. Missing `radar` or `available:false` hides
@@ -187,9 +187,10 @@ the Radar tab and returns an active Radar screen to Observations.
   "scaleBar": {"distDisp": "50 mi", "meters": 80467.2, "pixels": 97.59, "unit": "mi"},
   "rings": [{"label": "50 mi", "px": 97.59}, {"label": "100 mi", "px": 195.18}],
   "frames": [
+    {"id": "1789242600", "ts": 1789242600, "complete": false},
     {"id": "1789243200", "ts": 1789243200, "url": "radar/1789243200.png", "complete": true}
-  ], // complete past frames only, oldest -> newest; nowcast ignored
-  "latest": "1789243200", "frameCount": 1,
+  ], // all manifest past frames, oldest -> newest; nowcast ignored
+  "latest": "1789243200", "frameCount": 2, // count includes incomplete frames
   "observedAt": "13:00", // emitter-formatted station-local HH:MM, via _station_tz
   "observedTs": 1789243200, "ageSec": 300, "stale": false,
   "fetchedAt": 1789243500, // successful manifest fetch that produced this snapshot
@@ -235,7 +236,14 @@ asserts every rain stop occurs in one real fetched Universal Blue tile histogram
 
 The worker starts after 60 seconds, polls every 300 seconds, and retries failures
 after 120 seconds through the lifecycle registry. It requests 256px tiles at
-zoom 7 with palette 2 and options `1_1` (smooth, snow). PNGs are transparent
+the station's chosen zoom with palette 2 and options `1_1` (smooth, snow). Zoom
+targets 256 km across the 480px plate:
+`round(log2(156543.03392*cos(radians(lat))/(256000/480)))`, clamped to
+`RADAR_MIN_ZOOM=4` through `RADAR_MAX_ZOOM=7` (free-tier cap). The pure helper
+`_radar_zoom_for(lat)` is cached per emitter until latitude changes. Integer zoom
+rounding approximates the target; the cap produces wider coverage at low
+latitudes. `metersPerPixel` and the scale report actual center-latitude distance.
+PNGs are transparent
 outside echoes and atomically written into `WFP_RADAR_DIR` (default
 `~/almanac_web/radar`). That directory must be under `WFP_WEB`; the kiosk launcher
 already serves `~/almanac_web` with a `wx.json` symlink to `/tmp/wfp_data/wx.json`.
@@ -243,11 +251,35 @@ No custom radar server route is needed.
 
 Existing timestamp-named PNGs are cache hits. Incomplete composites are withheld
 and **not persisted**, so missing tiles are retried rather than cached forever.
-Only complete frames enter the published list. Obsolete numeric PNGs are pruned
+Every manifest frame enters the published list; incomplete frames have
+`complete:false` and no `url`. `latest` always names a complete frame.
+Obsolete numeric PNGs are pruned
 after a replacement is ready; a total failure preserves the entire last-good
 snapshot and its files. Cold builds run sequentially with 50ms spacing and a
 rolling ceiling of 90 tile GETs/minute. Each cycle logs actual tile GET count,
 complete frames, and failed tiles; steady state downloads only new frames.
+
+History is demand gated. While `#s-radar` is active, the console appends
+`&view=radar` to its existing `wx.json` poll, independently of the unchanged
+`r=1` render acknowledgement. Only a loopback client's signal is trusted by
+`serve.py`; it atomically writes the current epoch to
+`<dirname(WFP_DATA)>/radar_viewed` (default `/tmp/wfp_data/radar_viewed`). The
+emitter reads `radar_viewed` beside its own output path, so both processes must
+point at the same data directory. Marker write failures never block polling or
+change the poll/render counters.
+
+With marker age in `[0, RADAR_VIEW_TTL)` (`RADAR_VIEW_TTL=900` seconds), the worker
+builds the full history using the existing PNG cache. Otherwise it only ensures
+the manifest's latest PNG exists and marks all older entries incomplete. After
+a successful replacement it prunes to that single PNG, including previously
+warmed history. Missing, unreadable, invalid, non-finite, future or stale markers
+mean not viewed; a failed replacement preserves the last-good snapshot/files.
+Opening Radar displays the maintained latest frame immediately and warms history
+on the next scheduled cycle (no new endpoint or immediate fetch trigger). For a
+nine-tile crop and 13 frames, cold unviewed/viewed cycles cost 9/117 tile GETs and
+keep 1/13 PNGs, plus one manifest GET in either case. An unchanged cached latest
+needs no tile GETs.
+
 Latitude/longitude or Pillow missing publishes the respective unavailable reason;
 no successful frame yet uses `no data yet`. Geometry/observation fields are null
 and frames/rings empty before a first successful build.
@@ -262,7 +294,8 @@ retain the previously decoded image, mark stale, and retry after 120 seconds.
 The palette and PNG are identical in light and dark modes.
 
 **Exact Phase 2 seam:** in `console_live.html`, consume the already-emitted
-complete, oldest-to-newest `frames[]`, preload their URLs, and add a
+oldest-to-newest `frames[]`, wait for history entries to be `complete:true`,
+preload their URLs, and add a
 `requestAnimationFrame` loop swapping `#rad-echo.src` (or canvas) approximately
 600ms/frame, with approximately 250ms hold on newest. Run only while `#s-radar`
 is active **and** echoes are present; otherwise idle. No emitter or contract

@@ -50,10 +50,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == "/wx.json":
             global _polls, _renders
             rendered = "r=1" in query.split("&") and self.client_address[0] in LOOPBACK
+            viewed_radar = "view=radar" in query.split("&") and self.client_address[0] in LOOPBACK
             with _count_lock:
                 _polls += 1
                 if rendered:
                     _renders += 1
+                if viewed_radar:
+                    # Share only a timestamp with the emitter. Serialize writers
+                    # and replace atomically so it never reads a partial epoch.
+                    marker = os.path.join(os.path.dirname(DATA), "radar_viewed")
+                    tmp = f"{marker}.tmp.{os.getpid()}"
+                    try:
+                        with open(tmp, "w") as f:
+                            f.write(str(time.time()))
+                        os.replace(tmp, marker)
+                    except OSError:
+                        pass  # an optional demand hint must never break polling
+                    finally:
+                        try:
+                            os.unlink(tmp)
+                        except OSError:
+                            pass
         return super().do_GET()
 
     def log_request(self, code="-", size="-"):

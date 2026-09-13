@@ -147,3 +147,53 @@ def test_only_loopback_clients_can_credit_a_render(serve_at):
     # the credit is gated on the client address, not on the query string alone
     source = SERVE.read_text()
     assert 'self.client_address[0] in LOOPBACK' in source
+
+
+def test_radar_view_marker_from_real_poll_preserves_counters(serve_at, tmp_path):
+    module, url = serve_at(_payload())
+    marker = tmp_path / 'radar_viewed'
+    _get(url + '/wx.json?_=1&r=1')
+    assert not marker.exists()
+    before = time.time()
+    assert _get(url + '/wx.json?_=2&r=1&view=radar')[0] == 200
+    assert before <= float(marker.read_text()) <= time.time()
+    assert not list(tmp_path.glob('radar_viewed.tmp.*'))
+    previous = marker.read_text()
+    _get(url + '/wx.json?_=3')
+    assert marker.read_text() == previous
+    assert (module._polls, module._renders) == (3, 2)
+
+
+@pytest.mark.parametrize('address,query,viewed,renders', [
+    ('127.0.0.1', 'r=1&view=radar', True, 1),
+    ('::1', 'view=radar', True, 0),
+    ('::ffff:127.0.0.1', 'r=1&view=radar', True, 1),
+    ('192.168.1.2', 'r=1&view=radar', False, 0),
+    ('127.0.0.1', 'r=1', False, 1),
+    ('127.0.0.1', 'r=1&view=radar-extra', False, 1),
+])
+def test_view_marker_trusts_only_loopback(monkeypatch, tmp_path, address, query, viewed, renders):
+    module = _load_serve(monkeypatch, tmp_path, _payload())
+    # Exercise do_GET with a synthetic peer; the static response is orthogonal.
+    served = []
+    monkeypatch.setattr(module.http.server.SimpleHTTPRequestHandler, 'do_GET', lambda self: served.append(self.path))
+    handler = object.__new__(module.Handler)
+    handler.client_address = (address, 12345)
+    handler.path = '/wx.json?_=1&' + query
+    before = time.time()
+    handler.do_GET()
+    assert (tmp_path / 'radar_viewed').exists() == viewed
+    if viewed:
+        assert before <= float((tmp_path / 'radar_viewed').read_text()) <= time.time()
+    assert (module._polls, module._renders) == (1, renders)
+    assert served == [handler.path]
+
+
+def test_marker_write_failure_does_not_break_polling(serve_at, tmp_path, monkeypatch):
+    module, url = serve_at(_payload())
+    def fail(*args):
+        raise OSError('read-only marker')
+    monkeypatch.setattr(module.os, 'replace', fail)
+    assert _get(url + '/wx.json?r=1&view=radar')[0] == 200
+    assert (module._polls, module._renders) == (1, 1)
+    assert not list(tmp_path.glob('radar_viewed*'))

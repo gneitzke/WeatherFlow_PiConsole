@@ -42,7 +42,7 @@ def radar_net(monkeypatch):
             return io.BytesIO(json.dumps(dict(host='https://tiles.example', radar=dict(
                 past=[dict(time=t, path=f'/v2/{t}') for t in reversed(state['times'])],
                 nowcast=[dict(time=1999999999, path='/never')]))).encode())
-        assert url.endswith('/2/1_1.png') and '/256/7/' in url
+        assert url.endswith('/2/1_1.png') and int(url.split('/256/')[1].split('/')[0]) in range(4, 8)
         return io.BytesIO(state['tile'])
 
     monkeypatch.setattr(urllib.request, 'urlopen', fetch)
@@ -52,6 +52,83 @@ def radar_net(monkeypatch):
 
 def tile_calls(state):
     return [u for u in state['calls'] if u != ae.RADAR_MANIFEST_URL]
+
+
+@pytest.fixture
+def radar_viewed(tmp_path):
+    marker = tmp_path / 'radar_viewed'
+    marker.write_text(str(ae.time.time()))
+    return marker
+
+
+@pytest.mark.parametrize('lat,expected', [(0, 7), (47.6, 7), (60, 7), (78, 6),
+                                         (-78, 6), (85, 5), (90, 4), (-90, 4)])
+def test_zoom_targets_coverage_with_clamps(lat, expected):
+    zoom = ae._radar_zoom_for(lat)
+    assert zoom == expected
+    assert ae.RADAR_MIN_ZOOM <= zoom <= ae.RADAR_MAX_ZOOM
+    raw = math.log2(156543.03392 * math.cos(math.radians(lat)) / (256000 / 480))
+    if 4 <= round(raw) <= 7:
+        coverage = ae._radar_viewport(lat, 0, zoom, 480)[1] * 480
+        assert 256000 / math.sqrt(2) <= coverage <= 256000 * math.sqrt(2)
+    assert ae._radar_zoom_for(0) > ae._radar_zoom_for(78)
+
+
+def test_zoom_cached_until_latitude_changes(make_emitter, radar_net, monkeypatch):
+    calls = []
+    original = ae._radar_zoom_for
+    def zoom_for(lat):
+        calls.append(lat)
+        return original(lat)
+    monkeypatch.setattr(ae, '_radar_zoom_for', zoom_for)
+    emitter = make_emitter()
+    emitter._do_radar(); emitter._do_radar()
+    assert calls == [47.61]
+    emitter.app.config = make_config(Station={'Latitude': '78'})
+    radar_net['times'] = [1800001200]
+    radar_net['calls'].clear()
+    emitter._do_radar()
+    assert calls == [47.61, 78]
+    assert emitter._build_payload()['radar']['zoom'] == 6
+    assert all('/256/6/' in url for url in tile_calls(radar_net))
+
+
+@pytest.mark.parametrize('marker', [None, 'old', 'boundary', 'garbage', '', 'nan', 'inf', '-inf', 'future', b'\xff'])
+def test_unviewed_builds_only_latest(make_emitter, radar_net, radar_dir, tmp_path, marker):
+    if marker is not None:
+        marker = {'old': str(ae.time.time() - 901), 'boundary': str(ae.time.time() - 900),
+                  'future': str(ae.time.time() + 3600)}.get(marker, marker)
+        (tmp_path / 'radar_viewed').write_bytes(marker if isinstance(marker, bytes) else marker.encode())
+    radar_net['times'] = [1800000000 + i * 600 for i in range(13)]
+    emitter = make_emitter(); emitter._do_radar()
+    frames = emitter._radar_frames
+    assert [f['ts'] for f in frames] == radar_net['times']
+    assert all(not f['complete'] and 'url' not in f for f in frames[:-1])
+    assert frames[-1]['complete'] and emitter._radar_latest == frames[-1]['id']
+    assert len(list(radar_dir.glob('*.png'))) == 1
+    assert len(tile_calls(radar_net)) == 9
+    assert len(radar_net['calls']) == 10
+
+
+def test_viewing_warms_history_then_expiry_prunes_it(make_emitter, radar_net, radar_dir, tmp_path):
+    radar_net['times'] = [1800000000 + i * 600 for i in range(13)]
+    emitter = make_emitter(); emitter._do_radar()
+    marker = tmp_path / 'radar_viewed'
+    marker.write_text(str(ae.time.time()))
+    radar_net['calls'].clear(); emitter._do_radar()
+    assert len(tile_calls(radar_net)) == 12 * 9
+    assert all(f['complete'] for f in emitter._radar_frames)
+    assert len(list(radar_dir.glob('*.png'))) == 13
+    marker.write_text(str(ae.time.time() - ae.RADAR_VIEW_TTL - 1))
+    # Two new manifest frames: even an uncached intermediate frame is skipped.
+    radar_net['times'] = radar_net['times'][2:] + [1800007800, 1800008400]
+    radar_net['calls'].clear(); emitter._do_radar()
+    assert len(tile_calls(radar_net)) == 9
+    assert len(list(radar_dir.glob('*.png'))) == 1
+    assert emitter._radar_latest == '1800008400'
+    assert all(not f['complete'] for f in emitter._radar_frames[:-1])
+    radar_net['calls'].clear(); emitter._do_radar()
+    assert not tile_calls(radar_net)  # unchanged latest remains a cache hit
 
 
 @pytest.mark.parametrize('lat,lon', [(47.61, -122.33), (0, 0), (-33.8, 151.2)])
@@ -102,7 +179,7 @@ def test_nexrad_is_caption_only_and_uses_station_unit():
     assert ae._radar_nexrad(47.61, -122.33, 'km')['distanceDisp'].endswith(' km')
 
 
-def test_composite_and_one_snapshot(make_emitter, radar_net, radar_dir, monkeypatch):
+def test_composite_and_one_snapshot(make_emitter, radar_net, radar_dir, monkeypatch, radar_viewed):
     emitter = make_emitter()
     previous = emitter._radar_result
     publications = []
@@ -135,7 +212,7 @@ def test_composite_and_one_snapshot(make_emitter, radar_net, radar_dir, monkeypa
     assert payload['observedAt'] == datetime.fromtimestamp(result.ts_frame, ae.AlmanacEmitter._station_tz(emitter.app.config)).strftime('%H:%M')
 
 
-def test_cache_and_prune(make_emitter, radar_net, radar_dir):
+def test_cache_and_prune(make_emitter, radar_net, radar_dir, radar_viewed):
     emitter = make_emitter(); emitter._do_radar()
     radar_net['calls'].clear(); emitter._do_radar()
     assert not tile_calls(radar_net)
@@ -258,7 +335,7 @@ def test_legend_fidelity_real_universal_blue_tile():
         assert tuple(bytes.fromhex(hexa[1:])) in colors, f'{dbz} dBZ {hexa} absent from real tile'
 
 
-def test_cold_start_rate_limit_covers_all_frames(make_emitter, radar_net, monkeypatch):
+def test_cold_start_rate_limit_covers_all_frames(make_emitter, radar_net, monkeypatch, radar_viewed, radar_dir):
     clock = [0.0]
     starts = []
     original_fetch = urllib.request.urlopen
@@ -272,5 +349,8 @@ def test_cold_start_rate_limit_covers_all_frames(make_emitter, radar_net, monkey
     radar_net['times'] = [1800000000 + i * 600 for i in range(13)]
     emitter = make_emitter(); emitter._do_radar()
     assert len(emitter._radar_frames) == 13
+    assert all(f['complete'] for f in emitter._radar_frames)
+    assert len(list(radar_dir.glob('*.png'))) == 13
+    assert len(radar_net['calls']) == 118
     assert len(starts) == 13 * len(ae._radar_viewport(47.61, -122.33, 7, 480)[0])
     assert all(sum(t <= v < t + 60 for v in starts) <= 90 for t in starts)

@@ -57,7 +57,10 @@ FORECAST_RETRY_SEC      = 120  # seconds — boot retry cadence until the FIRST 
 RADAR_CHECK_INTERVAL = 300
 RADAR_RETRY_SEC = 120
 RADAR_STALE_SEC = 1200
-RADAR_ZOOM = 7
+RADAR_MIN_ZOOM = 4
+RADAR_MAX_ZOOM = 7
+RADAR_TARGET_METERS = 256000
+RADAR_VIEW_TTL = 900
 RADAR_VIEWPORT_PX = 480
 RADAR_COLOR = 2
 RADAR_TILE_OPTS = "1_1"
@@ -502,6 +505,13 @@ _NEXRAD_SITES = {
 }
 
 
+def _radar_zoom_for(lat):
+    """Target 256 km across the plate, bounded by useful/free-tier zooms."""
+    zoom = round(math.log2(156543.03392 * math.cos(math.radians(lat)) /
+                          (RADAR_TARGET_METERS / RADAR_VIEWPORT_PX)))
+    return max(RADAR_MIN_ZOOM, min(RADAR_MAX_ZOOM, zoom))
+
+
 def _radar_viewport(lat, lon, zoom, size):
     """Pure Web Mercator crop geometry; offsets refer to unwrapped world pixels."""
     lat = max(-85.05112878, min(85.05112878, lat))
@@ -623,6 +633,7 @@ class AlmanacEmitter:
         self._event      = None
         self._radar_result = _RADAR_NONE
         self._radar_tile_times = []  # rolling rate limit, also shared across retries
+        self._radar_zoom_cache = None  # (latitude, zoom), independent of fetch success
         # scheduling registry: EVERY handle we hand to Clock (intervals and
         # one-shots alike) so stop() can cancel all of them, plus the guards
         # that keep one failing provider from stacking work.
@@ -814,13 +825,26 @@ class AlmanacEmitter:
             host = manifest['host'].rstrip('/')
             past = sorted({int(f['time']): f['path'] for f in manifest['radar']['past']}.items())
             fetched = time.time()
-            tiles, mpp, bounds, _ = _radar_viewport(lat, lon, RADAR_ZOOM, RADAR_VIEWPORT_PX)
+            if self._radar_zoom_cache is None or self._radar_zoom_cache[0] != lat:
+                self._radar_zoom_cache = (lat, _radar_zoom_for(lat))
+            zoom = self._radar_zoom_cache[1]
+            tiles, mpp, bounds, _ = _radar_viewport(lat, lon, zoom, RADAR_VIEWPORT_PX)
+            try:
+                with open(os.path.join(os.path.dirname(self.output_path), 'radar_viewed')) as marker:
+                    viewed_age = fetched - float(marker.read(128))
+                viewed_recently = 0 <= viewed_age < RADAR_VIEW_TTL
+            except (OSError, ValueError, UnicodeError):
+                viewed_recently = False
             unit = _radar_distance_unit(config)
             bar, rings = _radar_scale(mpp, RADAR_VIEWPORT_PX, unit)
             os.makedirs(RADAR_DIR, exist_ok=True)
             frames, tile_gets, failures = [], 0, 0
             for ts, path in past:
                 ident = str(ts)
+                frame = dict(id=ident, ts=ts, complete=False)
+                frames.append(frame)
+                if not viewed_recently and ts != past[-1][0]:
+                    continue
                 target = os.path.join(RADAR_DIR, ident + '.png')
                 if not os.path.isfile(target):
                     with Image.new('RGBA', (RADAR_VIEWPORT_PX, RADAR_VIEWPORT_PX), (0, 0, 0, 0)) as composite:
@@ -837,7 +861,7 @@ class AlmanacEmitter:
                             self._radar_tile_times.append(now)
                             tile_gets += 1
                             try:
-                                raw = fetch(f'{host}{path}/256/{RADAR_ZOOM}/{tx}/{ty}/{RADAR_COLOR}/{RADAR_TILE_OPTS}.png')
+                                raw = fetch(f'{host}{path}/256/{zoom}/{tx}/{ty}/{RADAR_COLOR}/{RADAR_TILE_OPTS}.png')
                             except (urllib.error.URLError, TimeoutError, OSError):
                                 complete = False
                                 failures += 1
@@ -858,24 +882,25 @@ class AlmanacEmitter:
                         finally:
                             if os.path.exists(tmp):
                                 os.unlink(tmp)
-                frames.append(dict(id=ident, ts=ts, url=f'radar/{ident}.png', complete=True))
-            Logger.info(f'almanac_emit: radar cycle tile_GETs={tile_gets} complete={len(frames)} failed_tiles={failures}')
+                frame.update(url=f'radar/{ident}.png', complete=True)
+            complete_frames = [f for f in frames if f['complete']]
+            Logger.info(f'almanac_emit: radar cycle tile_GETs={tile_gets} complete={len(complete_frames)} failed_tiles={failures}')
             if failures:
                 Logger.warning(f'almanac_emit: radar missing {failures} tiles; incomplete frames withheld')
                 self._schedule_retry('radar', self._check_radar, RADAR_RETRY_SEC)
-            if not frames:
+            if not complete_frames:
                 if not failures:
                     raise ValueError('no complete radar frames')
                 return
             # Retain last-good files during total outages; only prune after a
             # replacement is ready, and only numeric PNGs owned by this provider.
-            current_ids = {str(ts) for ts, _ in past}
+            newest = complete_frames[-1]
+            current_ids = {str(ts) for ts, _ in past} if viewed_recently else {newest['id']}
             for name in os.listdir(RADAR_DIR):
                 if re.fullmatch(r'[0-9]+\.png', name) and name[:-4] not in current_ids:
                     os.unlink(os.path.join(RADAR_DIR, name))
-            newest = frames[-1]
             self._radar_result = _RadarResult(True, None, tuple(frames), newest['id'], newest['ts'],
-                dict(lat=lat, lon=lon), RADAR_ZOOM, mpp, bounds, bar, rings,
+                dict(lat=lat, lon=lon), zoom, mpp, bounds, bar, rings,
                 _radar_nexrad(lat, lon, unit), fetched)
         except Exception as error:  # radar is a side artifact, never engine health
             Logger.warning(f'almanac_emit: radar fetch failed - {error}')
@@ -886,7 +911,7 @@ class AlmanacEmitter:
         age = int(now - snap.ts_frame) if snap.ts_frame is not None else None
         return dict(available=snap.available, reason=snap.reason,
             attribution='RainViewer', provider='rainviewer', center=snap.center,
-            zoom=snap.zoom or RADAR_ZOOM, viewport=dict(w=RADAR_VIEWPORT_PX, h=RADAR_VIEWPORT_PX),
+            zoom=snap.zoom or RADAR_MAX_ZOOM, viewport=dict(w=RADAR_VIEWPORT_PX, h=RADAR_VIEWPORT_PX),
             bounds=snap.bounds, marker=dict(x=.5, y=.5), metersPerPixel=snap.mpp,
             scaleBar=snap.scalebar, rings=list(snap.rings or ()), frames=list(snap.frames),
             latest=snap.latest, frameCount=len(snap.frames),

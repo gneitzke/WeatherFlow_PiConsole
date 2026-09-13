@@ -2673,7 +2673,8 @@
     /* the ack is consumed HERE: it vouches for the previous frame only, and a
        failed request after it must not re-send it */
     var ack = reportRender; reportRender = false;
-    fetch("wx.json?_=" + started + (ack ? "&r=1" : ""), opts)
+    var radarActive = $("s-radar").classList.contains("active");
+    fetch("wx.json?_=" + started + (ack ? "&r=1" : "") + (radarActive ? "&view=radar" : ""), opts)
       .then(function (r) {
         if (!r.ok) throw new Error("HTTP " + r.status);
         var srv = Date.parse(r.headers.get("Date") || "");   /* the producer's clock, 1 s resolution */
