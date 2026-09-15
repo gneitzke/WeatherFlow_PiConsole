@@ -7,6 +7,12 @@ to shared upstream code that the classic console benefits from too.
 ## 2026-09-15
 
 ### Radar
+- **Local failures back off.** A dead route or resolver is never the provider's
+  fault, so it never opens a host breaker, and each failed pass retried after a
+  flat two seconds for as long as the network stayed down. Consecutive local
+  failures now double the retry from 2 s up to 60 s; any other outcome or a
+  completed pass resets it. Ambiguous stalls on a reused socket keep the
+  two-second retry, and the fallback chain is unchanged.
 - **Radar v6.0 carries closest-site evidence into the picker.** `nexrad` adds
   `reporting`, `newestTs`, `ageSec`, `reason`, `checkedTs`, `checkedAt`,
   `nextCheckTs` and `nextCheckAt` from the last listing and existing discovery

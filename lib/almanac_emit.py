@@ -72,6 +72,7 @@ ALERTS_CHECK_INTERVAL  = 900   # seconds (15 min) — NWS alerts change slowly; 
 FORECAST_CHECK_INTERVAL = 3600 # seconds (1 h) — the daily outlook barely moves intra-hour
 FORECAST_RETRY_SEC      = 120  # seconds — boot retry cadence until the FIRST forecast succeeds
 RADAR_RETRY_SEC = 120
+RADAR_LOCAL_RETRY_MAX_SEC = 60  # ceiling for the doubling retry after consecutive local failures
 RADAR_HISTORY_SEC = 3600
 RADAR_IEM_FRAME_INTERVAL_SEC = 120
 RADAR_RAINVIEWER_FRAME_INTERVAL_SEC = 600
@@ -986,6 +987,7 @@ class AlmanacEmitter:
         self._radar_emit_pending = None
         self._radar_cooldowns = {}
         self._radar_transport_failures = {}
+        self._radar_local_failure_streak = 0  # consecutive local-failure passes, for retry backoff
         self._radar_source_since = time.monotonic()
         self._radar_switch_reason = None
         self._radar_transport_retries = 0
@@ -2704,11 +2706,20 @@ class AlmanacEmitter:
             self._radar_transport_failures.pop(source, None)
         else:
             self._radar_transport_failures[source] = self._radar_transport_failures.get(source, 0)+1
+        # A dead route or resolver never opens a host breaker (HostHealth.record
+        # returns before sampling), so without its own backoff a network outage
+        # would rerun a doomed pass every two seconds for as long as it lasts.
+        # Ambiguous failures (a reused socket that got no bytes) may be the
+        # provider stalling, so they keep the prompt two-second retry.
+        truly_local = (failure_class(error) == 'local' or ctx.get('local_failure')
+                       or self._radar_health.local_failures > ctx.get('local_failure_start', self._radar_health.local_failures))
+        self._radar_local_failure_streak = self._radar_local_failure_streak+1 if truly_local else 0
         if not local and self._radar_transport_failures[source] >= 3:
             return True
         self._radar_retained_refresh('failed')
         probe = self._radar_health.probe_delay({source}) or 0
-        self._radar_budget_retry(source, 1, min_delay=max(2, probe))
+        backoff = min(RADAR_LOCAL_RETRY_MAX_SEC, 2 ** min(self._radar_local_failure_streak, 6)) if truly_local else 2
+        self._radar_budget_retry(source, 1, min_delay=max(backoff, probe))
         return False
 
     def _radar_refuse_dark_site(self, ctx):
@@ -2976,6 +2987,7 @@ class AlmanacEmitter:
                         return
                     if not ctx.get('retained_failed'):
                         self._radar_transport_failures.pop(source, None)
+                        self._radar_local_failure_streak = 0
                     try:
                         self._radar_prune(previous)
                     except OSError as error:
@@ -2991,6 +3003,7 @@ class AlmanacEmitter:
                     return
                 except _RadarUnchanged:
                     self._radar_transport_failures.pop(source, None)
+                    self._radar_local_failure_streak = 0
                     self._radar_retained_refresh('idle')
                     return
                 except _RadarSuperseded:
