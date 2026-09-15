@@ -96,6 +96,7 @@ RADAR_SOURCE_DEADLINE_SEC = 16
 RADAR_PRIMARY_DEADLINE_SEC = 25
 RADAR_BUILD_DEADLINE_SEC = RADAR_PRIMARY_DEADLINE_SEC
 RADAR_TILE_CACHE_SIZE = 400
+RADAR_METADATA_CACHE_SIZE = 32
 RADAR_TILE_WORKERS = 4
 RADAR_NEWEST_TILE_WORKERS = 6
 RADAR_PREFETCH_HEADROOM = 60
@@ -939,7 +940,7 @@ class AlmanacEmitter:
         self._radar_discovery_event = None
         self._radar_discovery_pending = False
         self._radar_probe_reuse = {}
-        self._radar_metadata = {}
+        self._radar_metadata = OrderedDict()
         self._radar_zoom_stamp = None
         self._radar_refresh = dict(state='idle', frameIndex=0, frameTotal=0)
         self._radar_restart = False
@@ -1543,7 +1544,13 @@ class AlmanacEmitter:
                     for name, request_name in [('ETag', 'If-None-Match'), ('Last-Modified', 'If-Modified-Since')]:
                         if response_headers.get(name):
                             validators[request_name] = response_headers[name]
-                    self._radar_metadata[url] = (raw, validators)
+                    # Site listings carry a start/end window, so each pass is a new URL;
+                    # without a bound every listing ever fetched stays in memory.
+                    with self._radar_lock:
+                        self._radar_metadata[url] = (raw, validators)
+                        self._radar_metadata.move_to_end(url)
+                        while len(self._radar_metadata) > RADAR_METADATA_CACHE_SIZE:
+                            self._radar_metadata.popitem(last=False)
                 if attempt is not None:
                     attempt.check()
                     self._radar_validate_tile(raw, source)

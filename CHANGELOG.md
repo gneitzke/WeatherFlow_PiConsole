@@ -7,6 +7,12 @@ to shared upstream code that the classic console benefits from too.
 ## 2026-09-15
 
 ### Radar
+- **The metadata cache keeps the newest 32 responses.** NEXRAD site listings
+  put a start/end window in the URL, so every discovery pass stored a new entry
+  under a new key and nothing ever removed one; a long-running kiosk kept every
+  listing it had fetched. Entries now evict oldest first under the radar lock,
+  like the tile cache. A fixed URL that falls out costs one full response
+  instead of a 304.
 - **Radar v5.3 uses one settled camera intent.** Activity reports supply runtime
   zoom and centre; durable zoom follows after a debounce and is used only for
   cold start. Stepper, pinch and restored cameras share this path. Provider zoom
